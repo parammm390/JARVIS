@@ -884,7 +884,7 @@ export const works = pgTable(
     sessionId: text("session_id"),
     initialChannel: text("initial_channel", { enum: ["voice", "text", "console"] }).notNull(),
     initialInstruction: text("initial_instruction").notNull(),
-    executionModel: text("execution_model", { enum: ["query", "atomic_effect", "objective"] }),
+    executionModel: text("execution_model", { enum: ["query", "conversation", "atomic_effect", "objective"] }),
     createdBy: uuid("created_by").references(() => users.id),
     currentOwnerId: uuid("current_owner_id").references(() => users.id),
     assignedTo: uuid("assigned_to").references(() => users.id),

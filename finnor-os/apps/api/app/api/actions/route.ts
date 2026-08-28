@@ -1,6 +1,6 @@
 // POST /api/actions — submit a new instruction (voice transcript or text) (§8).
 
-import { SubmitInstructionSchema } from "@finnor/policy-schema";
+import { InstructionSubmissionResponseSchema, SubmitInstructionSchema } from "@finnor/policy-schema";
 import { requireContext, errorResponse, enforceRouteRateLimit } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
@@ -64,6 +64,34 @@ type ProjectionWarning = {
   stage: string;
   code: "projection_persistence_failed" | "projection_missing_on_replay";
 };
+
+type CanonicalExecutionModel = "QUERY" | "CONVERSATION" | "ATOMIC_EFFECT" | "OBJECTIVE";
+
+function executionModelForResult(
+  result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>,
+): CanonicalExecutionModel {
+  if (result.objective) return "OBJECTIVE";
+  if (result.query) return "QUERY";
+  if (result.answer) return "CONVERSATION";
+  return "ATOMIC_EFFECT";
+}
+
+function assistantSemanticKind(
+  result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>,
+): "ANSWER" | "ACKNOWLEDGEMENT" | "CLARIFICATION" {
+  if (result.answer) return "ANSWER";
+  if (result.actions.some((action) => action.actionType === "clarification_request")) return "CLARIFICATION";
+  return "ACKNOWLEDGEMENT";
+}
+
+function legacyResponseAliases(response: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...response,
+    // Kept for older browser clients and release probes. The discriminated
+    // executionModel/actions fields above remain canonical and authoritative.
+    planned: response.actions ?? response.planned,
+  };
+}
 
 function reportAncillaryProjectionFailure(warnings: ProjectionWarning[], stage: string, error: unknown): void {
   console.error(`[POST /api/actions] ${stage} projection failed`, error instanceof Error ? error.message : String(error));
@@ -196,7 +224,7 @@ export async function POST(req: Request): Promise<Response> {
         duplicate: true,
       };
       const replayQuery = (replayResponse as Record<string, unknown>).query as { metadata?: { durationMs?: number } } | undefined;
-      return Response.json(replayResponse, {
+      return Response.json(legacyResponseAliases(replayResponse), {
         status: received.status === "completed" || received.status === "failed" || received.status === "cancelled" ? 200 : 202,
         headers: replayQuery?.metadata?.durationMs === undefined ? undefined : { "Server-Timing": `query;dur=${Number(replayQuery.metadata.durationMs).toFixed(1)}` },
       });
@@ -310,27 +338,26 @@ export async function POST(req: Request): Promise<Response> {
     // messages, conversation links, and the exact response replay are ancillary
     // projections: a failure in one must be visible in logs but cannot turn a
     // successful Work into an HTTP/core failure or relabel it failed.
-    const response = {
-      planned: result.actions,
-      ...(result.answer ? { answer: result.answer } : {}),
-      ...(result.query ? { query: result.query } : {}),
-      ...(result.objective ? { objective: result.objective } : {}),
+    const executionModel = executionModelForResult(result);
+    const semanticKind = assistantSemanticKind(result);
+    const common = {
       workId: received.workId,
       workInputId: received.workInputId,
       instructionId: received.instructionId,
       threadId: prepared.threadId,
-      projectionWarnings,
     };
     const responseText = assistantText(result);
     const outcomeRefs: Array<Record<string, unknown>> = [
       { kind: "work", id: received.workId },
       { kind: "work_input", id: received.workInputId },
+      { kind: "assistant_semantic", semanticKind },
       ...result.actions.map((action) => ({ kind: "domain_action", id: action.id, status: action.status })),
       ...(result.objective ? [{ kind: "objective_loop", id: result.objective.objectiveLoopId, state: result.objective.state }] : []),
       ...(result.query ? [{ kind: "work_query", intent: result.query.request.intent, asOf: result.query.result.asOf }] : []),
     ];
+    let persistedAssistant: { id: string; originalText: string; createdAt: string } | null = null;
     try {
-      const assistantMessage = await persistEmployeeAssistantTurn({
+      persistedAssistant = await persistEmployeeAssistantTurn({
         tenantId: ctx.tenantId,
         employeeId: prepared.employeeId,
         threadId: prepared.threadId,
@@ -341,10 +368,40 @@ export async function POST(req: Request): Promise<Response> {
         workInputId: received.workInputId,
         outcomeRefs,
       });
-      Object.assign(response, { assistantMessage });
     } catch (error) {
       reportAncillaryProjectionFailure(projectionWarnings, "assistant message", error);
     }
+    // The assistant projection is ancillary to the durable Work result. If it is
+    // unavailable, keep the core response successful but issue a response-local
+    // message with an explicit warning; never claim the missing row was persisted.
+    const assistantMessage = {
+      id: persistedAssistant?.id ?? randomUUID(),
+      originalText: persistedAssistant?.originalText ?? responseText,
+      createdAt: persistedAssistant?.createdAt ?? new Date().toISOString(),
+      semanticKind,
+    };
+    let response: Record<string, unknown>;
+    switch (executionModel) {
+      case "QUERY":
+        if (!result.query) throw new Error("Instruction contract violation: QUERY has no query result");
+        response = { executionModel, actions: [], query: result.query, ...(result.answer ? { answer: result.answer } : {}), ...common, assistantMessage };
+        break;
+      case "CONVERSATION":
+        if (!result.answer) throw new Error("Instruction contract violation: CONVERSATION has no answer");
+        response = { executionModel, actions: [], answer: result.answer, ...common, assistantMessage };
+        break;
+      case "OBJECTIVE":
+        if (!result.objective) throw new Error("Instruction contract violation: OBJECTIVE has no durable loop identity");
+        response = { executionModel, actions: [], objectiveLoopId: result.objective.objectiveLoopId, objectiveState: result.objective.state, ...common, assistantMessage };
+        break;
+      case "ATOMIC_EFFECT":
+        response = { executionModel, actions: result.actions, ...common, assistantMessage };
+        break;
+    }
+    if (!InstructionSubmissionResponseSchema.safeParse(response).success) {
+      throw new Error("Instruction contract violation: response failed the canonical discriminated schema");
+    }
+    if (projectionWarnings.length > 0) response.projectionWarnings = projectionWarnings;
     try {
       await linkEmployeeConversationTurnToWork({
         tenantId: ctx.tenantId,
@@ -363,8 +420,8 @@ export async function POST(req: Request): Promise<Response> {
     } catch (error) {
       reportAncillaryProjectionFailure(projectionWarnings, "response", error);
     }
-    return Response.json(response, {
-      status: result.objective ? 202 : 201,
+    return Response.json(legacyResponseAliases({ ...response, projectionWarnings }), {
+      status: executionModel === "OBJECTIVE" ? 202 : 201,
       headers: result.query ? { "Server-Timing": `query;dur=${result.query.metadata.durationMs.toFixed(1)}` } : undefined,
     });
   } catch (err) {

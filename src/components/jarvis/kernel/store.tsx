@@ -49,6 +49,10 @@ import type { CancelableInstructionState, InstructionState, JarvisMode, Presence
 import { looksLikeFollowUpReference, UNRESOLVED_REFERENCE_MESSAGE, UNRESOLVED_REFERENCE_CONTEXT } from "./followup-reference"
 import { isOperationalQueryExecution, type OperationalQueryExecution } from "../workspaces/contracts"
 import { operatingInteractionFromWorkAggregate, useOperatingInteractionActions, type OperatingInteractionContextValue } from "./operating-interaction"
+import { jarvisClient, type AssistantSemanticKind, type InstructionExecutionModel, type WorkCaseProjection } from "@/lib/jarvis-client"
+import { useBusinessProjection } from "../lib/business-projections"
+import { businessProjections } from "../lib/projection-definitions"
+import { applyWorkToThread, type CanonicalWorkPosture } from "./work-projector"
 
 // ---------------------------------------------------------------------------
 // Thread shape
@@ -224,8 +228,8 @@ function submissionFromWorkAggregate(value: unknown): DurableSubmissionSnapshot 
     ? finalOutcome.response as Record<string, unknown>
     : null
   if (!response) return empty
-  const planned = Array.isArray(response.planned)
-    ? response.planned.filter((row): row is PlannedActionResponse => {
+  const planned = response.executionModel === "ATOMIC_EFFECT" && Array.isArray(response.actions)
+    ? response.actions.filter((row): row is PlannedActionResponse => {
         if (!row || typeof row !== "object" || Array.isArray(row)) return false
         const candidate = row as Record<string, unknown>
         return typeof candidate.id === "string"
@@ -235,7 +239,13 @@ function submissionFromWorkAggregate(value: unknown): DurableSubmissionSnapshot 
           && !Array.isArray(candidate.payload)
       })
     : []
-  return { answer: parseSubmissionAnswer(response.answer, response.query), planned }
+  const assistant = response.assistantMessage && typeof response.assistantMessage === "object" && !Array.isArray(response.assistantMessage)
+    ? response.assistantMessage as Record<string, unknown>
+    : null
+  const answer = assistant?.semanticKind === "ANSWER" && (response.executionModel === "QUERY" || response.executionModel === "CONVERSATION")
+    ? parseSubmissionAnswer(response.answer, response.query)
+    : null
+  return { answer, planned }
 }
 
 function eventInstructionId(event: TraceEvent): string | undefined {
@@ -293,6 +303,13 @@ export interface Thread {
   /** Upgrade 2: stable across clarification/follow-up turns while instructionId
    * rotates per trace submission. Optional for older fixtures. */
   workId?: string | null
+  executionModel?: InstructionExecutionModel | null
+  objectiveLoopId?: string | null
+  assistantSemanticKind?: AssistantSemanticKind | null
+  workPosture?: CanonicalWorkPosture | null
+  /** The existing backend WorkCase Objective projection. Kept intact so live,
+   * restore, reconnect, and fallback all render the same canonical facts. */
+  objectiveProjection?: WorkCaseProjection["objectiveLoop"] | null
   /** Exact context snapshot submitted with the current Work input. */
   interactionContext?: OperatingInteractionContextValue | null
   source: InstructionSource
@@ -364,13 +381,14 @@ export interface DurableThreadSummary {
   createdAt: string
 }
 
-interface DurableThreadMessage {
+export interface DurableThreadMessage {
   id: string
   sequence: number
   role: "user" | "assistant"
   originalText: string
   instructionId: string | null
   workId: string | null
+  outcomeRefs?: Array<Record<string, unknown>>
   createdAt: string
 }
 
@@ -955,6 +973,13 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const interaction = useOperatingInteractionActions()
 
   const [thread, setThread] = useState<Thread | null>(null)
+  const activeWorkId = thread?.workId ?? null
+  const activeWorkPollPosture = thread?.machine.instructionState === "waiting" ? "waiting" : "active"
+  const activeWorkDefinition = useMemo(
+    () => businessProjections.activeWork(activeWorkId ?? "unbound", activeWorkPollPosture),
+    [activeWorkId, activeWorkPollPosture],
+  )
+  const activeWorkProjection = useBusinessProjection(activeWorkDefinition, { enabled: Boolean(auth.session && activeWorkId) })
   const [restoredThreadPresentation, setRestoredThreadPresentation] = useState<{ threadId: string; instructionState: InstructionState } | null>(null)
   const [restoredTraceEventCount, setRestoredTraceEventCount] = useState(0)
   const [threadHistory, setThreadHistory] = useState<Thread[]>([])
@@ -981,6 +1006,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   useEffect(() => {
     if (!auth.loading) void refreshRecentThreads()
   }, [auth.loading, refreshRecentThreads])
+
   // jarvis-v3 P5.T8 — `runSubmission`'s own `useCallback` deps are
   // deliberately minimal (`[data.approvalsThisSession, data.rejectionsThisSession]`,
   // NOT `thread` — see its own eslint-disable comment), so reading `thread`
@@ -1011,6 +1037,21 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const answerResultInstructionIdsRef = useRef<Set<string>>(new Set())
   const approvalRef = useRef({ approvalsThisSession: 0, rejectionsThisSession: 0 })
   approvalRef.current = { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession }
+
+  useEffect(() => {
+    const canonical = activeWorkProjection.data
+    if (!canonical || !activeWorkId || canonical.durableWork?.id !== activeWorkId) return
+    setThread((current) => {
+      if (!current || current.workId !== activeWorkId) return current
+      return applyWorkToThread(current, canonical)
+    })
+    // Objective submission trace owns the early handoff only until canonical
+    // Work has been observed. From this point the Work projector is authoritative.
+    if (canonical.durableWork?.executionModel === "objective") {
+      traceHandleRef.current?.stop()
+      if (traceStatusRef.current !== "unavailable") setSseHealth(null)
+    }
+  }, [activeWorkId, activeWorkProjection.data])
 
   const resolveTraceQueueWaiters = useCallback(() => {
     if (traceQueueRef.current.length > 0) return
@@ -1444,6 +1485,11 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         conversationThreadId: existing?.conversationThreadId ?? null,
         instructionId,
         workId: identity.workId ?? instructionId,
+        executionModel: null,
+        objectiveLoopId: null,
+        assistantSemanticKind: null,
+        workPosture: null,
+        objectiveProjection: null,
         interactionContext: activeContext,
         source,
         instructionText: text,
@@ -1558,8 +1604,10 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // approvalWatch/runWatch side-registration — this phase's own deliberate
       // scope decision (see `applyTraceEvents`'s own header) to keep that
       // coordination in one place rather than duplicating it.
-      const planned = result.planned
-      const directAnswerResult = parseSubmissionAnswer(result.answer, result.query)
+      const planned = result.actions
+      const directAnswerResult = result.assistantMessage.semanticKind === "ANSWER" && (result.executionModel === "QUERY" || result.executionModel === "CONVERSATION")
+        ? parseSubmissionAnswer(result.answer, result.executionModel === "QUERY" ? result.query : undefined)
+        : null
       if (directAnswerResult) answerResultInstructionIdsRef.current.add(instructionId)
       const clarificationRow = planned.find((p) => p.actionType === "clarification_request")
 
@@ -1604,6 +1652,11 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
             ...prev,
             workId: result.workId,
             conversationThreadId: result.threadId,
+            executionModel: result.executionModel,
+            objectiveLoopId: null,
+            assistantSemanticKind: result.assistantMessage.semanticKind,
+            workPosture: null,
+            objectiveProjection: null,
             machine: { instructionState: "completed" },
             nodes: [],
             clarification: null,
@@ -1616,7 +1669,16 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         }
         const enrichedNodes = enrichNodesFromPlanned(prev.nodes, planned, usePostFallback)
         const m = usePostFallback && prev.machine.instructionState === "captured" ? transition(prev.machine, { type: "ACK" }) : prev.machine
-        return { ...prev, workId: result.workId, conversationThreadId: result.threadId, machine: m, nodes: enrichedNodes }
+        return {
+          ...prev,
+          workId: result.workId,
+          conversationThreadId: result.threadId,
+          executionModel: result.executionModel,
+          objectiveLoopId: result.executionModel === "OBJECTIVE" ? result.objectiveLoopId : null,
+          assistantSemanticKind: result.assistantMessage.semanticKind,
+          machine: m,
+          nodes: enrichedNodes,
+        }
       })
 
       setThread((prev) => {
@@ -1624,6 +1686,23 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         if (directAnswerResult) return prev
         if (!usePostFallback) return prev
         let m = prev.machine.instructionState === "understanding" ? transition(prev.machine, { type: "TRACE_planning" }) : prev.machine
+        if (result.executionModel === "OBJECTIVE") {
+          return {
+            ...prev,
+            machine: m,
+            workPosture: {
+              status: result.objectiveState,
+              reason: null,
+              nextStep: null,
+              nextRunAt: null,
+              revision: null,
+              successVerifiedAt: null,
+              recoveryKind: null,
+              projectedAt: result.assistantMessage.createdAt,
+            },
+            objectiveProjection: null,
+          }
+        }
         if (planned.length === 0) {
           const outcome = emptyPlanOutcome(m, prev.instructionText)
           return outcome.clarification
@@ -1677,13 +1756,15 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       // backend trace stops at action_gated; the aggregate decision above is now
       // made) — stop the transport rather than waiting out the full 120s ceiling.
       if (activeInstructionIdRef.current === instructionId) {
-        traceHandleRef.current?.stop()
-        if (traceStatusRef.current !== "unavailable") setSseHealth(null)
+        if (result.executionModel !== "OBJECTIVE") {
+          traceHandleRef.current?.stop()
+          if (traceStatusRef.current !== "unavailable") setSseHealth(null)
+        }
 
         // An answer completion is read-only. Do not leak its planned helper row
         // into the tenant-wide optimistic approval queue; similarly, never inject
         // rows from a response that belonged to a superseded instruction.
-        if (!answerResultInstructionIdsRef.current.has(instructionId)) {
+        if (result.executionModel === "ATOMIC_EFFECT" && !answerResultInstructionIdsRef.current.has(instructionId)) {
           data.injectOptimisticPending(
             planned
               .filter((p) => p.actionType !== "clarification_request")
@@ -1730,48 +1811,51 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
     const lastUser = [...messages].reverse().find((message) => message.role === "user")
     const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant")
     const workId = lastUser?.workId ?? loaded.thread.activeWorkId
-    const workAggregate = workId ? await jarvisGet<unknown>(`works/${workId}`).catch(() => null) : null
+    const [workAggregate, workProjection] = workId
+      ? await Promise.all([
+          jarvisGet<unknown>(`works/${workId}`).catch(() => null),
+          jarvisClient.workCase(workId).catch(() => null),
+        ])
+      : [null, null]
     if (workId) interaction.restore(operatingInteractionFromWorkAggregate(workAggregate), workId)
-    const workStatus = workAggregate && typeof workAggregate === "object" && "work" in workAggregate
-      ? String((workAggregate as { work?: { status?: unknown } }).work?.status ?? "")
-      : ""
-    let instructionState: InstructionState = "completed"
-    if (["received", "understanding", "planning"].includes(workStatus)) instructionState = "planning"
-    else if (["ready", "actionable", "awaiting_approval"].includes(workStatus)) instructionState = "awaiting_approval"
-    else if (["executing", "waiting", "blocked", "recovery"].includes(workStatus)) instructionState = "executing"
-    else if (workStatus === "failed") instructionState = "failed"
-    else if (workStatus === "cancelled") instructionState = "cancelled"
     if (threadRef.current && threadRef.current.conversationThreadId !== threadId) {
       setThreadHistory((previous) => [threadRef.current!, ...previous].slice(0, THREAD_HISTORY_CAP))
     }
     traceHandleRef.current?.stop()
     activeInstructionIdRef.current = null
     const createdAtMs = new Date(lastUser?.createdAt ?? loaded.thread.createdAt).getTime()
-    const restored: Thread = {
+    const base: Thread = {
       id: threadId,
       conversationThreadId: threadId,
       sessionId: getOrCreateSessionId("typed"),
       instructionId: lastUser?.instructionId ?? null,
       workId,
+      executionModel: null,
+      objectiveLoopId: loaded.thread.activeObjectiveLoopId,
+      assistantSemanticKind: null,
+      workPosture: null,
+      objectiveProjection: null,
       interactionContext: operatingInteractionFromWorkAggregate(workAggregate),
       source: "typed",
       instructionText: lastUser?.originalText ?? loaded.thread.title ?? "Conversation",
       createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : Date.now(),
-      machine: { instructionState },
+      machine: { instructionState: "planning" },
       nodes: [],
       contextChips: [],
       progress: null,
-      answerResult: lastAssistant ? { kind: "answer", spokenSummary: lastAssistant.originalText } : null,
+      answerResult: null,
       traceGating: { expectedCount: null, resolvedActionIds: [], gatedActionIds: [] },
       clarification: null,
       submitError: null,
       cancelError: null,
       approvalWatch: null,
       runWatch: null,
-      terminalAtMs: isTerminal(instructionState) ? Date.now() : null,
-      everExecuted: ["executing", "completed", "partial"].includes(instructionState),
+      terminalAtMs: null,
+      everExecuted: false,
       receiptRefreshTick: 0,
     }
+    const restored = workProjection ? applyWorkToThread(base, workProjection, lastAssistant) : base
+    const instructionState = restored.machine.instructionState
     setRestoredThreadPresentation({ threadId, instructionState })
     setRestoredTraceEventCount(0)
     setThread(restored)

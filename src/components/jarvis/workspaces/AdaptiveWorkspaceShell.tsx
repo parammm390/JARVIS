@@ -651,7 +651,7 @@ function WorkspaceBody({ projection, thread, role, reducedMotion, liveframe, onI
   if (projection.kind === "answer") return <AnswerWorkspace projection={projection} onInspect={onInspect} />
   if (projection.kind === "execution") {
     if (projection.query) return <QueryOperationsWorkspace projection={projection} onInspect={onInspect} />
-    return <div className="jarvis-execution-workspace"><WorkspaceProgress thread={thread} liveframe={liveframe} /><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} /></div>
+    return <div className="jarvis-execution-workspace"><WorkspaceProgress thread={thread} liveframe={liveframe} /><ThreadExecution thread={thread} restored={false} executionWeavePlacement="document" energy={0.7} onCancel={onCancel} /></div>
   }
   if (projection.kind === "receipt") return <div className="jarvis-receipt-workspace"><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>
   if (projection.kind === "recovery") return <div className="jarvis-recovery-workspace"><div className="jarvis-recovery-workspace__lead"><ShieldAlert size={22} /><div><strong>Work stopped safely</strong><p>{thread.submitError ?? "The durable Work record is available for retry and inspection. No unverified success is being shown."}</p></div></div><ThreadReceipt thread={thread} reducedMotion={reducedMotion} onRetry={onRetry} restored={false} /></div>

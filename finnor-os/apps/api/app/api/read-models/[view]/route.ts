@@ -73,7 +73,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ view: st
     if (view === "work-cases") {
       const rawLimit = searchParams.get("limit");
       const limit = rawLimit === null ? undefined : Number(rawLimit);
-      const result = await workCasesPage(ctx.tenantId, { limit, cursor: searchParams.get("cursor") ?? undefined });
+      const result = await workCasesPage(ctx.tenantId, {
+        limit,
+        cursor: searchParams.get("cursor") ?? undefined,
+        workId: searchParams.get("workId") ?? undefined,
+      });
       return Response.json({ view, data: result.items, page: result.page });
     }
     const data = await fn(ctx.tenantId, searchParams);

@@ -8,7 +8,7 @@
     "requireCleanWorktree": true
   },
   "release": {
-    "requiredMigrationHead": "0102_workflow_step_redrive_generation.sql",
+    "requiredMigrationHead": "0104_product_truth_objective_realtime.sql",
     "metadata": [
       "FINNOR_COMMIT_SHA",
       "FINNOR_BUILD_ID",
@@ -54,6 +54,11 @@
       "location": "northcentralus",
       "adminUsername": "finnor",
       "systemdUnit": "finnor-jarvis-worker.service",
+      "sseGatewayEnabled": true,
+      "sseGatewayPort": 8090,
+      "sseGatewayDnsLabel": "finnor-jarvis-worker",
+      "sseGatewayHostname": "finnor-jarvis-worker.northcentralus.cloudapp.azure.com",
+      "sseGatewayUrl": "https://finnor-jarvis-worker.northcentralus.cloudapp.azure.com",
       "releaseRoot": "/srv/finnor/releases",
       "currentSymlink": "/srv/finnor/current",
       "secretEnvironmentFile": "/etc/finnor/jarvis-worker.env",

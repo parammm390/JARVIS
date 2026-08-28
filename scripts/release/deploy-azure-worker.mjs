@@ -14,8 +14,6 @@ if (!evidencePath) throw new Error("Usage: node scripts/release/deploy-azure-wor
 const gitRelease = readGitRelease(repoRoot, contract)
 assertCanonicalRelease(gitRelease)
 const expected = expectedRelease(gitRelease.head, process.env.FINNOR_RELEASE_SOURCE || "github-actions")
-const coreCertificationId = process.env.FINNOR_CORE_CERTIFICATION_ID
-if (!coreCertificationId) throw new Error("FINNOR_CORE_CERTIFICATION_ID is required")
 const evidence = JSON.parse(readFileSync(resolve(evidencePath), "utf8"))
 const contractBytes = readFileSync(resolve(repoRoot, "infra/deployment/production.contract.json"))
 const contractHash = createHash("sha256").update(contractBytes).digest("hex")
@@ -33,13 +31,14 @@ const replacements = {
   __FINNOR_BUILD_ID__: expected.buildId,
   __FINNOR_VERSION__: expected.version,
   __FINNOR_RELEASE_SOURCE__: expected.source,
-  __FINNOR_CORE_CERTIFICATION_ID__: coreCertificationId,
   __FINNOR_REPOSITORY__: contract.canonicalGit.repository,
   __FINNOR_SYSTEMD_UNIT__: worker.systemdUnit,
   __FINNOR_RELEASE_ROOT__: worker.releaseRoot,
   __FINNOR_CURRENT_SYMLINK__: worker.currentSymlink,
   __FINNOR_SECRET_ENV__: worker.secretEnvironmentFile,
   __FINNOR_RELEASE_ENV__: worker.releaseEnvironmentFile,
+  __FINNOR_SSE_PORT__: String(worker.sseGatewayPort),
+  __FINNOR_SSE_HOSTNAME__: worker.sseGatewayHostname,
 }
 let script = readFileSync(resolve(repoRoot, "scripts/release/azure/deploy-worker.sh"), "utf8")
 for (const [placeholder, value] of Object.entries(replacements)) script = script.replaceAll(placeholder, value)
@@ -55,4 +54,4 @@ const message = (result.value ?? []).map((entry) => entry.message ?? "").join("\
 if (!message.includes(`FINNOR_AZURE_DEPLOY_OK ${expected.commitSha}`)) {
   throw new Error(`Azure worker deployment did not return its success marker:\n${message}`)
 }
-console.log(JSON.stringify({ ok: true, component: "worker", ...expected, coreCertificationId, resourceId: worker.resourceId }, null, 2))
+console.log(JSON.stringify({ ok: true, component: "worker", ...expected, resourceId: worker.resourceId }, null, 2))

@@ -13,8 +13,6 @@ if (!databaseEnvPath) throw new Error("Usage: node scripts/release/verify-produc
 const gitRelease = readGitRelease(repoRoot, contract)
 assertCanonicalRelease(gitRelease)
 const expected = expectedRelease(gitRelease.head, process.env.FINNOR_RELEASE_SOURCE || "github-actions")
-const expectedCoreCertificationId = process.env.FINNOR_CORE_CERTIFICATION_ID
-if (!expectedCoreCertificationId) throw new Error("FINNOR_CORE_CERTIFICATION_ID is required")
 
 async function fetchRelease(component) {
   const target = contract.topology[component]
@@ -88,7 +86,6 @@ systemctl is-active --quiet '${worker.systemdUnit}'
 test "$(readlink -f '${worker.currentSymlink}')" = '${worker.releaseRoot}/${expected.commitSha}'
 test "$(sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${expected.commitSha}'
 grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentFile}'
-grep -qx 'FINNOR_CORE_CERTIFICATION_ID=${expectedCoreCertificationId}' '${worker.releaseEnvironmentFile}'
 echo FINNOR_AZURE_PARITY_OK`
 const az = process.env.AZURE_CLI || "az"
 const azureRaw = execFileSync(az, [
@@ -104,7 +101,19 @@ const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
 
-const observed = { frontend, api, worker: workerRelease, migrationHead, expectedCoreCertificationId }
+const gatewayResponse = await fetch(`${worker.sseGatewayUrl}/healthz`, {
+  headers: { accept: "application/json", "cache-control": "no-cache" },
+  signal: AbortSignal.timeout(20_000),
+})
+const gateway = await gatewayResponse.json().catch(() => null)
+if (!gatewayResponse.ok || gateway?.ok !== true || gateway?.realtime !== true || gateway?.release?.commitSha !== expected.commitSha) {
+  throw new Error(`worker SSE gateway parity failed with HTTP ${gatewayResponse.status}`)
+}
+for (const capability of ["realtime", "sse"]) {
+  if (!gateway.capabilities?.includes(capability)) throw new Error(`worker SSE gateway is missing ${capability} capability`)
+}
+
+const observed = { frontend, api, worker: workerRelease, migrationHead }
 assertRuntimeParity(contract, expected, observed)
 console.log(JSON.stringify({
   ok: true,
@@ -112,6 +121,7 @@ console.log(JSON.stringify({
   frontend: { service: frontend.service, commitSha: frontend.commitSha, deploymentId: frontend.deploymentId },
   api: { service: api.service, commitSha: api.commitSha, deploymentId: api.deploymentId },
   worker: { commitSha: workerRelease.commitSha, heartbeatAgeSeconds, capabilities: workerRelease.capabilities },
+  realtimeGateway: { url: worker.sseGatewayUrl, commitSha: gateway.release.commitSha, capabilities: gateway.capabilities },
   orchestrator: { mode: contract.topology.orchestrator.mode, releaseIdentity: contract.topology.orchestrator.releaseIdentity },
   migrationHead,
 }, null, 2))

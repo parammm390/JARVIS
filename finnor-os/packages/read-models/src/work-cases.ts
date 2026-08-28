@@ -8,11 +8,13 @@
 import {
   actionLog,
   businessEvents,
+  businessEffects,
   businessOperations,
   businessOperationTargets,
   calls,
   commands,
   conversations,
+  computerRuns,
   decisionReceipts,
   domainActions,
   instructionEvents,
@@ -25,12 +27,14 @@ import {
   workflowSteps,
   works,
   workEvents,
+  workEventWaits,
   workInputs,
   workPlannerAttempts,
   workEntityLinks,
   workObjectiveLoops,
   workObjectiveSteps,
   workObjectivePlannerAttempts,
+  workWakeClaims,
   outcomePackRuns,
   autonomyEvaluations,
   outcomeShadowProposals,
@@ -44,6 +48,7 @@ const MAX_CHILD_ROWS_PER_TABLE = 1_000;
 export interface WorkCasesPageOptions {
   limit?: number;
   cursor?: string;
+  workId?: string;
 }
 
 export interface WorkCasesPage {
@@ -284,6 +289,28 @@ export interface WorkCaseProjection {
   workflows: WorkWorkflow[];
   receipts: WorkReceipt[];
   operations?: WorkOperation[];
+  businessEffects?: Array<{
+    id: string;
+    domainActionId: string | null;
+    semanticHash: string;
+    status: string;
+    verification: unknown;
+    observedAt: string | null;
+  }>;
+  computerRuns?: Array<{
+    id: string;
+    domainActionId: string;
+    businessEffectId: string | null;
+    status: string;
+    effectStatus: string;
+    application: string;
+    provider: string;
+    mode: "READ_ONLY" | "WRITE";
+    blockReason: string | null;
+    failureCode: string | null;
+    startedAt: string | null;
+    finishedAt: string | null;
+  }>;
   linkedEntities: WorkEntityLink[];
   businessEvents: WorkBusinessEvent[];
   calls: WorkCall[];
@@ -347,6 +374,27 @@ export interface WorkCaseProjection {
       scheduledFor: string | null;
       completedAt: string | null;
       plannerAttempts: Array<{ id: string; attempt: number; status: string; provider: string | null; failure: unknown }>;
+    }>;
+    eventWaits: Array<{
+      id: string;
+      status: string;
+      expectedEventType: string;
+      conditionSummary: string;
+      matchedEventId: string | null;
+      earliestAt: string;
+      deadlineAt: string | null;
+      satisfiedAt: string | null;
+      timedOutAt: string | null;
+    }>;
+    wakeClaims: Array<{
+      id: string;
+      waitId: string;
+      integrationEventId: string;
+      cause: "event" | "deadline";
+      objectiveRevision: number;
+      jobId: string;
+      claimedAt: string;
+      consumedAt: string | null;
     }>;
   };
   outcomePack?: {
@@ -750,6 +798,7 @@ function toWorkReceipt(row: typeof decisionReceipts.$inferSelect): WorkReceipt {
 export async function workCasesPage(tenantId: string, options: WorkCasesPageOptions = {}): Promise<WorkCasesPage> {
   return withTenant(tenantId, async (db) => {
     const limit = pageLimit(options.limit);
+    if (options.workId && options.cursor) throw Object.assign(new Error("workId and cursor cannot be combined"), { status: 400 });
     let childRowsTruncated = false;
     const bounded = <T>(rows: T[]): T[] => {
       if (rows.length > MAX_CHILD_ROWS_PER_TABLE) childRowsTruncated = true;
@@ -757,7 +806,7 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
     };
     const cursor = decodeWorkCasesCursor(options.cursor);
     const [canonicalWork] = await db.select({ id: works.id }).from(works).where(eq(works.tenantId, tenantId)).limit(1);
-    const rootScope: WorkCasesPage["page"]["rootScope"] = cursor?.scope ?? (canonicalWork ? "canonical_work" : "legacy_instruction");
+    const rootScope: WorkCasesPage["page"]["rootScope"] = options.workId ? "canonical_work" : cursor?.scope ?? (canonicalWork ? "canonical_work" : "legacy_instruction");
     const cursorDate = cursor?.updatedAt ? new Date(cursor.updatedAt) : null;
     const activityBucket = sql<number>`CASE WHEN ${works.status} IN ('completed','failed','cancelled') THEN 1 ELSE 0 END`;
     const workCursor = cursorDate
@@ -774,16 +823,16 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
       : undefined;
 
     const fetchedWorkRows = rootScope === "canonical_work"
-      ? await db.select().from(works).where(and(eq(works.tenantId, tenantId), workCursor)).orderBy(asc(activityBucket), desc(works.updatedAt), desc(works.id)).limit(limit + 1)
+      ? await db.select().from(works).where(and(eq(works.tenantId, tenantId), options.workId ? eq(works.id, options.workId) : workCursor)).orderBy(asc(activityBucket), desc(works.updatedAt), desc(works.id)).limit(options.workId ? 1 : limit + 1)
       : [];
     const fetchedLegacyInstructions = rootScope === "legacy_instruction"
       ? await db.select().from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), isNull(instructionSessions.workId), legacyCursor)).orderBy(desc(instructionSessions.updatedAt), desc(instructionSessions.id)).limit(limit + 1)
       : [];
-    const scopeHasMore = (rootScope === "canonical_work" ? fetchedWorkRows : fetchedLegacyInstructions).length > limit;
+    const scopeHasMore = !options.workId && (rootScope === "canonical_work" ? fetchedWorkRows : fetchedLegacyInstructions).length > limit;
     const workRows = fetchedWorkRows.slice(0, limit);
     const legacyInstructionRoots = fetchedLegacyInstructions.slice(0, limit);
     const lastRoot = rootScope === "canonical_work" ? workRows.at(-1) : legacyInstructionRoots.at(-1);
-    const [legacyRemaining] = rootScope === "canonical_work" && !scopeHasMore
+    const [legacyRemaining] = !options.workId && rootScope === "canonical_work" && !scopeHasMore
       ? await db.select({ id: instructionSessions.id }).from(instructionSessions).where(and(
           eq(instructionSessions.tenantId, tenantId),
           isNull(instructionSessions.workId),
@@ -811,6 +860,8 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
     const objectiveStepRows = objectiveLoopIds.length ? bounded(await db.select().from(workObjectiveSteps).where(and(eq(workObjectiveSteps.tenantId, tenantId), inArray(workObjectiveSteps.objectiveLoopId, objectiveLoopIds))).orderBy(asc(workObjectiveSteps.stepNumber)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
     const objectiveStepIds = objectiveStepRows.map((row) => row.id);
     const objectiveAttemptRows = objectiveStepIds.length ? bounded(await db.select().from(workObjectivePlannerAttempts).where(and(eq(workObjectivePlannerAttempts.tenantId, tenantId), inArray(workObjectivePlannerAttempts.objectiveStepId, objectiveStepIds))).orderBy(asc(workObjectivePlannerAttempts.startedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const eventWaitRows = objectiveLoopIds.length ? bounded(await db.select().from(workEventWaits).where(and(eq(workEventWaits.tenantId, tenantId), inArray(workEventWaits.objectiveLoopId, objectiveLoopIds))).orderBy(asc(workEventWaits.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const wakeClaimRows = objectiveLoopIds.length ? bounded(await db.select().from(workWakeClaims).where(and(eq(workWakeClaims.tenantId, tenantId), inArray(workWakeClaims.objectiveLoopId, objectiveLoopIds))).orderBy(asc(workWakeClaims.claimedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
     const outcomePackRunRows = workIds.length ? bounded(await db.select().from(outcomePackRuns).where(and(eq(outcomePackRuns.tenantId, tenantId), inArray(outcomePackRuns.workId, workIds))).orderBy(desc(outcomePackRuns.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
     const outcomePackIds = outcomePackRunRows.map((row) => row.id);
     const autonomyEvaluationRows = outcomePackIds.length ? bounded(await db.select().from(autonomyEvaluations).where(and(eq(autonomyEvaluations.tenantId, tenantId), inArray(autonomyEvaluations.outcomePackRunId, outcomePackIds))).orderBy(desc(autonomyEvaluations.evaluatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
@@ -834,6 +885,12 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
     const operationRows = operationPredicates.length ? bounded(await db.select().from(businessOperations).where(and(eq(businessOperations.tenantId, tenantId), or(...operationPredicates))).orderBy(desc(businessOperations.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
     const operationIds = operationRows.map((row) => row.id);
     const operationTargetRows = operationIds.length ? bounded(await db.select().from(businessOperationTargets).where(and(eq(businessOperationTargets.tenantId, tenantId), inArray(businessOperationTargets.operationId, operationIds))).orderBy(asc(businessOperationTargets.ordinal)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const businessEffectRows = actionIds.length ? bounded(await db.select().from(businessEffects).where(and(eq(businessEffects.tenantId, tenantId), inArray(businessEffects.domainActionId, actionIds))).orderBy(asc(businessEffects.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
+    const computerRunPredicates = [
+      ...(workIds.length ? [inArray(computerRuns.workId, workIds)] : []),
+      ...(actionIds.length ? [inArray(computerRuns.domainActionId, actionIds)] : []),
+    ];
+    const computerRunRows = computerRunPredicates.length ? bounded(await db.select().from(computerRuns).where(and(eq(computerRuns.tenantId, tenantId), or(...computerRunPredicates))).orderBy(asc(computerRuns.createdAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
     const logRows = actionIds.length ? bounded(await db.select().from(actionLog).where(and(eq(actionLog.tenantId, tenantId), inArray(actionLog.domainActionId, actionIds))).orderBy(desc(actionLog.timestamp)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
 
     const directRunRows = workIds.length ? bounded(await db.select().from(workflowRuns).where(and(eq(workflowRuns.tenantId, tenantId), inArray(workflowRuns.workId, workIds))).orderBy(desc(workflowRuns.updatedAt)).limit(MAX_CHILD_ROWS_PER_TABLE + 1)) : [];
@@ -1168,6 +1225,32 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
           createdAt: operation.createdAt.toISOString(),
           updatedAt: operation.updatedAt.toISOString(),
         }));
+      const effectsForCase = businessEffectRows
+        .filter((effect) => effect.domainActionId ? target.actionIds.has(effect.domainActionId) : false)
+        .map((effect) => ({
+          id: effect.id,
+          domainActionId: effect.domainActionId,
+          semanticHash: effect.semanticHash,
+          status: effect.status,
+          verification: effect.verification,
+          observedAt: iso(effect.observedAt),
+        }));
+      const computersForCase = computerRunRows
+        .filter((run) => run.workId === durableWork?.id || target.actionIds.has(run.domainActionId))
+        .map((run) => ({
+          id: run.id,
+          domainActionId: run.domainActionId,
+          businessEffectId: run.businessEffectId,
+          status: run.status,
+          effectStatus: run.effectStatus,
+          application: run.application,
+          provider: run.provider,
+          mode: run.mode,
+          blockReason: run.blockReason,
+          failureCode: run.failureCode,
+          startedAt: iso(run.startedAt),
+          finishedAt: iso(run.finishedAt),
+        }));
       const linkedEntities = [...target.links.values()].sort((a, b) => a.entityType.localeCompare(b.entityType) || a.entityId.localeCompare(b.entityId));
       const businessEventList = linkedEntities.flatMap((link) => eventsByEntity.get(`${link.entityType}:${link.entityId}`) ?? []).map((event) => ({ id: event.id, entityType: event.entityType, entityId: event.entityId, eventType: event.eventType, occurredAt: event.occurredAt.toISOString(), source: event.source }));
       const callsForCase = callRows
@@ -1228,6 +1311,8 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
           ...[...target.runIds].map((id) => runById.get(id)?.updatedAt),
           ...receipts.map((receipt) => new Date(receipt.finalizedAt ?? receipt.createdAt)),
           ...operations.map((operation) => new Date(operation.updatedAt)),
+          ...effectsForCase.flatMap((effect) => effect.observedAt ? [new Date(effect.observedAt)] : []),
+          ...computersForCase.flatMap((run) => run.finishedAt ? [new Date(run.finishedAt)] : run.startedAt ? [new Date(run.startedAt)] : []),
           objectiveLoop?.updatedAt,
           ...objectiveStepRows.filter((step) => step.objectiveLoopId === objectiveLoop?.id).map((step) => step.completedAt ?? step.startedAt),
         ], fallbackDate),
@@ -1238,6 +1323,8 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
         workflows,
         receipts,
         operations,
+        businessEffects: effectsForCase,
+        computerRuns: computersForCase,
         linkedEntities,
         businessEvents: businessEventList.sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)),
         calls: sourceCalls,
@@ -1323,6 +1410,27 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
                 scheduledFor: iso(step.scheduledFor),
                 completedAt: iso(step.completedAt),
                 plannerAttempts: objectiveAttemptRows.filter((attempt) => attempt.objectiveStepId === step.id).map((attempt) => ({ id: attempt.id, attempt: attempt.attempt, status: attempt.status, provider: attempt.provider, failure: attempt.failure })),
+              })),
+              eventWaits: eventWaitRows.filter((wait) => wait.objectiveLoopId === objectiveLoop.id).map((wait) => ({
+                id: wait.id,
+                status: wait.status,
+                expectedEventType: wait.expectedEventType,
+                conditionSummary: wait.conditionSummary,
+                matchedEventId: wait.matchedEventId,
+                earliestAt: wait.earliestAt.toISOString(),
+                deadlineAt: iso(wait.deadlineAt),
+                satisfiedAt: iso(wait.satisfiedAt),
+                timedOutAt: iso(wait.timedOutAt),
+              })),
+              wakeClaims: wakeClaimRows.filter((claim) => claim.objectiveLoopId === objectiveLoop.id).map((claim) => ({
+                id: claim.id,
+                waitId: claim.waitId,
+                integrationEventId: claim.integrationEventId,
+                cause: claim.cause,
+                objectiveRevision: claim.objectiveRevision,
+                jobId: claim.jobId,
+                claimedAt: claim.claimedAt.toISOString(),
+                consumedAt: iso(claim.consumedAt),
               })),
             },
           } : {}),

@@ -183,6 +183,11 @@ jobs:
       AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
       FINNOR_RELEASE_SOURCE: github-actions
       CI: "true"
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.TENANT_PROBE_VERCEL_AUTOMATION_BYPASS_SECRET }}
+      PRODUCT_TRUTH_AUTH_BEARER: ${{ secrets.TENANT_PROBE_A_JWT }}
+      PRODUCT_TRUTH_OTHER_AUTH_BEARER: ${{ secrets.TENANT_PROBE_B_JWT }}
+      PRODUCT_TRUTH_RUN_WORKER_RESTART: "1"
+      PRODUCT_TRUTH_ALLOW_COMPUTER_WRITE: ${{ vars.PRODUCT_TRUTH_ALLOW_COMPUTER_WRITE }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -219,9 +224,9 @@ jobs:
         run: node scripts/release/validate-deployment-truth.mjs
 
       - name: Release governance regression tests
-        run: node --test scripts/release/release-policy.test.mjs
+        run: node --test scripts/release/release-policy.test.mjs scripts/release/product-truth-golden-matrix.test.mjs
 
-      - name: Download certified core identity
+      - name: Download commit-locked FINNOR core certification
         uses: actions/download-artifact@v4
         with:
           name: finnor-core-certification-${{ github.sha }}
@@ -255,11 +260,16 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Configure canonical Azure SSE DNS and HTTPS ingress
+        run: node scripts/release/configure-azure-sse-ingress.mjs
+
       - name: Frontend quality gate
         run: |
           npm run lint
           npx tsc --noEmit -p tsconfig.json
           npm run test:unit
+          npm run jarvis:realtime:verify
+          npm run typecheck --prefix finnor-os
 
       - name: API typecheck gate
         run: npm run typecheck
@@ -336,3 +346,12 @@ jobs:
 
       - name: Verify cross-runtime release and migration parity
         run: node scripts/release/verify-production-parity.mjs --database-env finnor-os/apps/api/.vercel/.env.production.local
+
+      - name: Install deployed browser certification runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Certify authenticated deployed Product Truth realtime and fallback
+        run: |
+          test -n "$PRODUCT_TRUTH_AUTH_BEARER" || { echo "::error::TENANT_PROBE_A_JWT is missing"; exit 1; }
+          test -n "$PRODUCT_TRUTH_OTHER_AUTH_BEARER" || { echo "::error::TENANT_PROBE_B_JWT is missing"; exit 1; }
+          node scripts/release/certify-product-truth-deployed.mjs | tee "$RUNNER_TEMP/product-truth-deployed-certification.json"

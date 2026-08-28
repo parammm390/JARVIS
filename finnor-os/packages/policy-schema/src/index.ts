@@ -132,6 +132,28 @@ export const SubmitInstructionSchema = z.object({
 });
 export type SubmitInstruction = z.infer<typeof SubmitInstructionSchema>;
 
+const InstructionAssistantMessageSchema = z.object({
+  id: z.string().uuid(),
+  originalText: z.string(),
+  createdAt: z.string().datetime(),
+  semanticKind: z.enum(["ANSWER", "ACKNOWLEDGEMENT", "CLARIFICATION"]),
+}).strict();
+const InstructionResponseCommon = {
+  workId: z.string().uuid(),
+  workInputId: z.string().uuid(),
+  instructionId: z.string().uuid(),
+  threadId: z.string().uuid(),
+  assistantMessage: InstructionAssistantMessageSchema,
+};
+/** Runtime/OpenAPI mirror of @finnor/shared-types' one discriminated response. */
+export const InstructionSubmissionResponseSchema = z.discriminatedUnion("executionModel", [
+  z.object({ executionModel: z.literal("QUERY"), actions: z.array(z.record(z.unknown())).max(0), query: z.record(z.unknown()), answer: z.record(z.unknown()).optional(), ...InstructionResponseCommon }).strict(),
+  z.object({ executionModel: z.literal("CONVERSATION"), actions: z.array(z.record(z.unknown())).max(0), answer: z.record(z.unknown()), ...InstructionResponseCommon }).strict(),
+  z.object({ executionModel: z.literal("ATOMIC_EFFECT"), actions: z.array(z.record(z.unknown())), ...InstructionResponseCommon }).strict(),
+  z.object({ executionModel: z.literal("OBJECTIVE"), actions: z.array(z.record(z.unknown())).max(0), objectiveLoopId: z.string().uuid(), objectiveState: z.enum(["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"]), ...InstructionResponseCommon }).strict(),
+]);
+export type InstructionSubmissionResponse = z.infer<typeof InstructionSubmissionResponseSchema>;
+
 const ObjectiveAssertionSchema = z.object({
   path: z.array(z.union([z.string().min(1).max(120), z.number().int().nonnegative()])).max(24),
   operator: z.enum(["exists", "not_exists", "eq", "not_eq", "gte", "lte", "contains", "array_contains"]),

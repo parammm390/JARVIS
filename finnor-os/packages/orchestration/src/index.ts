@@ -1,7 +1,7 @@
 // Orchestration core (§9): Planner → confirmation gate → Executor → Reflection.
 // This module is the single entry point the API, webhooks, and workers all use.
 
-import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, OperatingInteractionContext, EmployeeConversationContext, Role } from "@finnor/shared-types";
+import type { DomainAction, DomainPolicy, TenantContext, ExecutionResult, MemorySnapshot, OperatingContext, OperatingInteractionContext, EmployeeConversationContext, Role, InstructionExecutionModel } from "@finnor/shared-types";
 import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
@@ -100,6 +100,7 @@ export * from "./autonomy";
 const EXTERNAL_RESEARCH_ACTION_TYPES = new Set(["search_web", "scan_competitors", "check_business_reviews"]);
 
 export interface InstructionResult {
+  executionModel?: InstructionExecutionModel;
   actions: DomainAction[];
   answer?: AnswerEnvelope;
   query?: OperationalQueryExecution;
@@ -352,7 +353,7 @@ export class FinnorOrchestrator implements Orchestrator {
         finalOutcome: { kind: "answer", route, spokenSummary: answer.spokenSummary },
         expectedWorkInputId: work.workInputId,
       });
-      return { actions: [], answer, workId: work.workId, workInputId: work.workInputId, instructionId };
+      return { executionModel: "CONVERSATION", actions: [], answer, workId: work.workId, workInputId: work.workInputId, instructionId };
     } catch (err) {
       const failure = workFailure(err, "Conversational answer failed");
       await finishWorkPlannerAttempt({ tenantId: ctx.tenantId, attemptId: work.plannerAttemptId, status: failure.timeout ? "timed_out" : "failed", failure });
@@ -602,9 +603,7 @@ export class FinnorOrchestrator implements Orchestrator {
         policyVersion: instructionRoute.version,
         route: instructionRoute.route,
         reasonCodes: instructionRoute.reasonCodes,
-      }, instructionRoute.route === "CONVERSATION"
-        ? { expectedWorkInputId: workInputId }
-        : { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "ATOMIC_EFFECT" ? "atomic_effect" : "objective", expectedWorkInputId: workInputId });
+      }, { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "CONVERSATION" ? "conversation" : instructionRoute.route === "ATOMIC_EFFECT" ? "atomic_effect" : "objective", expectedWorkInputId: workInputId });
       if (instructionRoute.route === "QUERY" && routeReadDecision.route === "fast_read" && this.fastReadOnlyRouter.execute) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
@@ -630,7 +629,7 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
       throw err;
     }
-    if (fastQuery) return { actions: [], ...(fastAnswer ? { answer: fastAnswer } : {}), query: fastQuery, workId, workInputId, instructionId };
+    if (fastQuery) return { executionModel: "QUERY", actions: [], ...(fastAnswer ? { answer: fastAnswer } : {}), query: fastQuery, workId, workInputId, instructionId };
     if (fastAnswer) {
       await transitionWork(ctx.tenantId, workId, "executing", "answer_started", { route: "fast_read_only" }, { expectedWorkInputId: workInputId });
       await emitInstructionEvent(ctx.tenantId, instructionId, "executing", { actionId: `fast-read:${instructionId}`, route: "fast_read_only" });
@@ -639,7 +638,7 @@ export class FinnorOrchestrator implements Orchestrator {
         finalOutcome: { kind: "answer", route: "fast_read_only", spokenSummary: fastAnswer.spokenSummary },
         expectedWorkInputId: workInputId,
       });
-      return { actions: [], answer: fastAnswer, workId, workInputId, instructionId };
+      return { executionModel: "QUERY", actions: [], answer: fastAnswer, workId, workInputId, instructionId };
     }
 
     if (instructionRoute?.route === "OBJECTIVE") {
@@ -655,7 +654,7 @@ export class FinnorOrchestrator implements Orchestrator {
         activeContext: opts.activeContext,
       });
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
-      return { actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
+      return { executionModel: "OBJECTIVE", actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
 
     // Greetings and capability turns are conversational by contract. Keep them
@@ -819,7 +818,7 @@ export class FinnorOrchestrator implements Orchestrator {
         activeContext: opts.activeContext,
       });
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
-      return { actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
+      return { executionModel: "OBJECTIVE", actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
     if (actions.length === 0) {
       return this.conversationalResult(instruction, ctx, memory, effectiveOpts, "empty_plan_recovery", { workId, workInputId, instructionId, plannerAttemptId: plannerAttempt.id });
@@ -957,7 +956,7 @@ export class FinnorOrchestrator implements Orchestrator {
       }).catch(() => undefined);
     }
     await reconcileWorkStatus(ctx.tenantId, workId);
-    return { actions, workId, workInputId, instructionId };
+    return { executionModel: "ATOMIC_EFFECT", actions, workId, workInputId, instructionId };
   }
 
   /**

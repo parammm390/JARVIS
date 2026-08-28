@@ -941,7 +941,7 @@ export interface TransitionWorkPatch {
   failure?: unknown;
   recovery?: unknown;
   activeContext?: Record<string, unknown>;
-  executionModel?: "query" | "atomic_effect" | "objective";
+  executionModel?: "query" | "conversation" | "atomic_effect" | "objective";
   /** Optional optimistic fence for failures that may only claim a received Work. */
   expectedStatus?: WorkStatus;
   /** Optimistic generation fence for instruction-owned transitions. */

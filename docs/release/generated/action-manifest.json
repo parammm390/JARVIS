@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-08-21T13:09:48.846Z",
-  "actionCount": 44,
+  "generatedAt": "2026-08-23T01:31:01.534Z",
+  "actionCount": 59,
   "actions": [
     {
       "plugin": "ops-overview",
       "actionType": "answer_business_question",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 331,
+      "sourceLine": 332,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 332
+      "schemaSourceLine": 333
     },
     {
       "plugin": "customer-comm",
@@ -35,6 +35,14 @@
       "schemaSourceLine": 51
     },
     {
+      "plugin": "universal-actions",
+      "actionType": "assign_task",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
       "plugin": "scheduling",
       "actionType": "assign_technician_to_visit",
       "sourcePath": "finnor-os/packages/domain-plugins/scheduling/index.ts",
@@ -46,9 +54,9 @@
       "plugin": "bulk-notify",
       "actionType": "bulk_notify_existing_customers",
       "sourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "sourceLine": 459,
+      "sourceLine": 477,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/bulk-notify/index.ts",
-      "schemaSourceLine": 460
+      "schemaSourceLine": 478
     },
     {
       "plugin": "accounting",
@@ -57,6 +65,14 @@
       "sourceLine": 42,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
       "schemaSourceLine": 43
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "cancel_delegation",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "web-research",
@@ -99,6 +115,14 @@
       "schemaSourceLine": 20
     },
     {
+      "plugin": "computer-task",
+      "actionType": "computer_task",
+      "sourcePath": "finnor-os/packages/domain-plugins/computer-task/index.ts",
+      "sourceLine": 40,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/computer-task/index.ts",
+      "schemaSourceLine": 41
+    },
+    {
       "plugin": "accounting",
       "actionType": "create_invoice",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
@@ -121,6 +145,30 @@
       "sourceLine": 57,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/marketing/index.ts",
       "schemaSourceLine": 58
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "create_task",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "delegate_objective",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "escalate_work",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "inventory",
@@ -158,9 +206,17 @@
       "plugin": "ops-overview",
       "actionType": "get_business_overview",
       "sourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "sourceLine": 331,
+      "sourceLine": 332,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/ops-overview/index.ts",
-      "schemaSourceLine": 332
+      "schemaSourceLine": 333
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "handoff_work",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "marketing",
@@ -203,6 +259,22 @@
       "schemaSourceLine": 20
     },
     {
+      "plugin": "universal-actions",
+      "actionType": "notify_group",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "place_call",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
       "plugin": "accounting",
       "actionType": "record_payment",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
@@ -219,12 +291,28 @@
       "schemaSourceLine": 16
     },
     {
+      "plugin": "universal-actions",
+      "actionType": "request_acknowledgement",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
       "plugin": "proposal-signature",
       "actionType": "request_proposal_signature",
       "sourcePath": "finnor-os/packages/domain-plugins/proposal-signature/index.ts",
       "sourceLine": 37,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/proposal-signature/index.ts",
       "schemaSourceLine": 38
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "reschedule_internal_event",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "scheduling",
@@ -249,6 +337,14 @@
       "sourceLine": 261,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/web-research/index.ts",
       "schemaSourceLine": 262
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "schedule_internal_event",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "water-test",
@@ -283,6 +379,14 @@
       "schemaSourceLine": 44
     },
     {
+      "plugin": "universal-actions",
+      "actionType": "send_message",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
+    },
+    {
       "plugin": "accounting",
       "actionType": "send_payment_reminder",
       "sourcePath": "finnor-os/packages/domain-plugins/accounting/index.ts",
@@ -305,6 +409,14 @@
       "sourceLine": 76,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/proposal-batch/index.ts",
       "schemaSourceLine": 77
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "share_document",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     },
     {
       "plugin": "quotation",
@@ -353,6 +465,14 @@
       "sourceLine": 50,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
       "schemaSourceLine": 51
+    },
+    {
+      "plugin": "universal-actions",
+      "actionType": "update_task",
+      "sourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "sourceLine": 50,
+      "schemaSourcePath": "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+      "schemaSourceLine": 66
     }
   ]
 }

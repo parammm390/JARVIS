@@ -1,6 +1,6 @@
 import { execFileSync, spawnSync } from "node:child_process"
-import { createHash } from "node:crypto"
-import { readFileSync, writeFileSync } from "node:fs"
+import { createHash, randomBytes } from "node:crypto"
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 const appName = process.argv[2]
@@ -57,7 +57,7 @@ function loadCoreCertification(path, expectedSha) {
   const gates = [...artifact.gates].sort((a, b) => String(a.gate).localeCompare(String(b.gate)))
   if (new Set(gates.map((gate) => gate.gate)).size !== CORE_GATE_KEYS.length || CORE_GATE_KEYS.some((key) => !gates.some((gate) => gate.gate === key && gate.status === "PASS"))) throw new Error("Core certification contains a non-PASS or missing gate")
   for (const gate of gates) if (gate.evidenceHash !== sha256(gate.evidence)) throw new Error(`Core certification gate evidence was modified: ${gate.gate}`)
-  const suiteHash = sha256({ version: "phase5-core-v1", gates: CORE_GATE_KEYS })
+  const suiteHash = sha256({ version: "phase6-core-v1", gates: CORE_GATE_KEYS })
   const evidenceHash = sha256(gates.map(({ gate, status, evidenceHash }) => ({ gate, status, evidenceHash })))
   const identityHash = sha256({ canonicalCoreSha: expectedSha, coreSourceTreeHash: artifact.coreSourceTreeHash, suiteHash, evidenceHash })
   if (artifact.suiteHash !== suiteHash || artifact.evidenceHash !== evidenceHash || artifact.certificationId !== `corecert-${identityHash}`) throw new Error("Core certification identity/integrity verification failed")
@@ -69,7 +69,11 @@ function git(args) {
 }
 
 function run(command, args, cwd, env) {
-  const safeArgs = args.map((arg, index) => args[index - 1] === "--token" ? "<redacted>" : arg === "--token" ? arg : arg)
+  const safeArgs = args.map((arg, index) => {
+    if (args[index - 1] === "--token") return "<redacted>"
+    if (typeof arg === "string" && arg.startsWith("PRODUCT_TRUTH_CERTIFICATION_KEY=")) return "PRODUCT_TRUTH_CERTIFICATION_KEY=<redacted>"
+    return arg
+  })
   console.log(`$ ${command} ${safeArgs.join(" ")}`)
   const result = spawnSync(command, args, {
     cwd,
@@ -98,6 +102,19 @@ if (remoteMain !== commitSha) throw new Error(`Refusing to deploy ${commitSha}; 
 if (buildId !== `finnor-${commitSha.slice(0, 12)}`) throw new Error(`FINNOR_BUILD_ID must be commit-derived: ${buildId}`)
 if (!version.endsWith(`+${commitSha.slice(0, 12)}`)) throw new Error(`FINNOR_VERSION must be commit-derived: ${version}`)
 
+let productTruthCertificationKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
+if (appName === "api" && deployOnly && !productTruthCertificationKey) {
+  const runnerTemp = process.env.RUNNER_TEMP?.trim()
+  if (!runnerTemp) throw new Error("PRODUCT_TRUTH_CERTIFICATION_KEY or RUNNER_TEMP is required for the commit-scoped API certification deployment")
+  productTruthCertificationKey = randomBytes(32).toString("hex")
+  const keyFile = join(runnerTemp, "product-truth-certification-key")
+  writeFileSync(keyFile, `${productTruthCertificationKey}\n`, { mode: 0o600 })
+  // GitHub interprets this workflow command and masks the value in all later logs.
+  if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${productTruthCertificationKey}`)
+  if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}\n`)
+  console.log(`Generated one-run Product Truth certification capability at ${keyFile}`)
+}
+
 const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
 const env = {
@@ -125,6 +142,12 @@ if (prepareOnly) {
   process.exit(0)
 }
 
+const productTruthEnvArgs = appName === "api" && productTruthCertificationKey
+  ? [
+      "--env", "PRODUCT_TRUTH_CERTIFICATION_FIXTURES=1",
+      "--env", `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}`,
+    ]
+  : []
 const deployArgs = [
   "deploy", "--prebuilt", "--prod", "--yes",
   "--meta", `finnorCommitSha=${commitSha}`,
@@ -145,6 +168,7 @@ const deployArgs = [
   "--env", `FINNOR_ENVIRONMENT=${environment}`,
   "--env", `FINNOR_RELEASE_SOURCE=${source}`,
   "--env", `FINNOR_CORE_CERTIFICATION_ID=${coreCertification.certificationId}`,
+  ...productTruthEnvArgs,
   ...tokenArgs,
 ]
 const deployOutput = run("vercel", deployArgs, appDir, env)
@@ -162,6 +186,7 @@ const result = {
   environment,
   source,
   coreCertificationId: coreCertification.certificationId,
+  productTruthCertificationFixtures: appName === "api" && Boolean(productTruthCertificationKey),
   dirty: false,
   remoteMain,
   deploymentUrl,
@@ -169,5 +194,5 @@ const result = {
 if (outputFile) {
   writeFileSync(resolve(outputFile), `${JSON.stringify(result, null, 2)}\n`)
 }
-console.log(`FINNOR_DEPLOYMENT_URL=${deploymentUrl}`)
+console.log(`\nFINNOR_DEPLOYMENT_URL=${deploymentUrl}`)
 console.log(JSON.stringify(result, null, 2))
