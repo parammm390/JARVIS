@@ -192,7 +192,7 @@ async function writeReport(report: Record<string, unknown>): Promise<void> {
 
 /**
  * Reconcile the exact load submission namespace after the timed scenarios. The
- * load runner owns the `p3-load-*` namespace, so the intake unique key is a
+ * load runner owns the `p3-load-*` namespace, so the canonical Work input key is a
  * direct database proof that the concurrent duplicate class did not create a
  * second planner claim. Marker visibility and fixed certification IDs provide
  * the tenant-boundary/data-integrity checks without printing payloads.
@@ -203,16 +203,16 @@ async function reconcileStagingLoad(): Promise<Record<string, unknown>> {
   const parsed = new URL(connectionString);
   parsed.searchParams.delete("sslmode");
   const client = new Client({ connectionString: parsed.toString(), ssl: { rejectUnauthorized: false } });
-  const perTenant: Record<string, { intakeRows: number; duplicateKeys: number; bravoMarkerVisible: number; ownMarkerVisible: number; fixedHouseholds: number }> = {};
+  const perTenant: Record<string, { workInputRows: number; duplicateKeys: number; bravoMarkerVisible: number; ownMarkerVisible: number; fixedHouseholds: number }> = {};
   try {
     await client.connect();
     for (const [alias, tenantId] of Object.entries(CERTIFICATION_TENANTS)) {
       await client.query("BEGIN");
       await client.query("SELECT set_config('app.tenant_id', $1, true)", [tenantId]);
-      const intake = await client.query<{ idempotency_key: string }>(
-        "SELECT idempotency_key FROM finnor_os.intake_idempotency WHERE idempotency_key LIKE 'p3-load-%'",
+      const inputs = await client.query<{ idempotency_key: string }>(
+        "SELECT idempotency_key FROM finnor_os.work_inputs WHERE idempotency_key LIKE 'p3-load-%'",
       );
-      const keys = intake.rows.map((row) => row.idempotency_key);
+      const keys = inputs.rows.map((row) => row.idempotency_key);
       const uniqueKeys = new Set(keys);
       const markers = await client.query<{ bravo: string; own: string }>(
         "SELECT count(*) FILTER (WHERE water_profile::text LIKE '%BRAVO-ISOLATION-SENTINEL%')::int AS bravo, count(*) FILTER (WHERE water_profile::text LIKE $1)::int AS own FROM finnor_os.households",
@@ -223,7 +223,7 @@ async function reconcileStagingLoad(): Promise<Record<string, unknown>> {
         [`${alias === "alpha" ? "a1000000" : alias === "bravo" ? "b1000000" : "c1000000"}%`],
       );
       perTenant[alias] = {
-        intakeRows: keys.length,
+        workInputRows: keys.length,
         duplicateKeys: keys.length - uniqueKeys.size,
         bravoMarkerVisible: Number(markers.rows[0]?.bravo ?? 0),
         ownMarkerVisible: Number(markers.rows[0]?.own ?? 0),

@@ -64,6 +64,7 @@ jobs:
     needs: canonical-graph-gate
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    environment: production
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -141,7 +142,6 @@ jobs:
           echo "P3_LOAD_RECONCILIATION_FILE=$RUNNER_TEMP/p3-load-reconciliation.json" >> "$GITHUB_ENV"
 
       - name: Materialize protected load identities
-        if: env.FINNOR_RELEASE_PROFILE != 'production'
         run: |
           test -n "${P3_LOAD_JWTS_JSON:-}" || {
             echo "::error::P3_LOAD_JWTS_JSON is required for core load certification."
@@ -149,22 +149,6 @@ jobs:
           }
           printf '%s' "$P3_LOAD_JWTS_JSON" > "$P3_LOAD_JWTS_FILE"
           chmod 600 "$P3_LOAD_JWTS_FILE"
-
-      - name: Run the full core certification once for this SHA
-        run: npm run release:certify -- core --core-sha="$FINNOR_COMMIT_SHA" --store="$RUNNER_TEMP/finnor-certifications"
-        working-directory: finnor-os
-
-      - name: Retain immutable core certification
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: finnor-core-certification-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/finnor-certifications/core/corecert-*.json
-            docs/release/generated/action-contract-results.json
-            docs/release/action-contract-results.md
-          if-no-files-found: error
-          retention-days: 90
 
       - name: Produce commit-locked FINNOR core certification
         id: core-certification
