@@ -69,6 +69,7 @@ test.describe("public /jarvis page", () => {
     await expect(page.getByText("PUBLIC PREVIEW", { exact: true })).toBeVisible()
     await expect(page.getByRole("heading", { name: "What needs to move?" })).toBeVisible()
     await expect(page.locator('[data-jarvis-mode="preview"]')).toBeVisible()
+    await expect(page.getByRole("link", { name: "JARVIS home" })).toBeVisible()
 
     expect(unexpected, `unexpected console errors on /jarvis: ${unexpected.join("\n")}`).toEqual([])
   })
