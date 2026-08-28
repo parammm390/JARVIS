@@ -633,10 +633,13 @@ export async function executeBusinessOperationTarget(payload: Record<string, unk
     return;
   }
   const access = await actionAccessContext(tenantId, operation.domainActionId);
-  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:target:${candidate.id}` });
   const fenced = await withActiveOperationEffectFence(tenantId, operationId, async (db) => {
     const target = await claimTargetTx(db, tenantId, operationId, targetId);
     if (!target) return null;
+    // The fence holds the parent Work row FOR UPDATE. Reuse this transaction for
+    // the idempotency ledger so its operational-delta FK check can see that lock
+    // locally instead of deadlocking on a second pooled connection.
+    const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, db, operationKeyPrefix: `operation:${operationId}:target:${candidate.id}` });
     const contact = await scoped.call("ghl_create_contact", { phone: check.phone, firstName: String(prepared.label ?? "Customer"), tenantId });
     const result = contact.ok
       ? await scoped.call("ghl_send_sms", { contactId: String(contact.output.contactId ?? ""), message, tenantId })
@@ -717,7 +720,6 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
   }
   const sequence = Number(payload.sequence ?? 0);
   const name = `finnor-winback-${operationId}-${String(payload.reservationDate)}-${sequence}`;
-  const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, operationKeyPrefix: `operation:${operationId}:call-batch:${sequence}` });
   const fenced = await withActiveOperationEffectFence(tenantId, operationId, async (db) => {
     const targets: TargetRow[] = [];
     for (const row of claimed) {
@@ -726,6 +728,7 @@ export async function executeBusinessOperationCallBatch(payload: Record<string, 
     }
     if (targets.length === 0) return null;
     const customers = targets.map((target) => object(target.preparedPayload).customer) as Record<string, unknown>[];
+    const scoped = new ScopedToolRegistry(tools(), { tenantId, domainActionId: operation.domainActionId, ...access, db, operationKeyPrefix: `operation:${operationId}:call-batch:${sequence}` });
     const result = await scoped.call("vapi_create_campaign", {
       tenantId,
       name,

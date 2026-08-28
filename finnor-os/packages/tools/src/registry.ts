@@ -9,6 +9,7 @@ import { ensureSecretsLoaded, minimizeExternalInput } from "@finnor/security";
 import { claimExternalOperation, recordExternalOperationResult, awaitExternalOperationResolution, markExternalOperationUnknown } from "./idempotent-call";
 import { resolveCapabilityBindingsForTenant } from "./binding-resolution";
 import { initObservability, Sentry } from "./observability";
+import type { Db } from "@finnor/db";
 
 /** Trusted execution metadata injected by an action/workflow boundary. It is never
  * parsed from planner/tool input and never forwarded to an external provider. */
@@ -130,6 +131,8 @@ export interface ToolCallContext {
   authProfileRef?: string;
   businessEffectId?: string;
   businessEffectHash?: string;
+  /** Existing transaction for execution paths that hold a parent Work lock. */
+  db?: Db;
   /** Deterministic namespace for independently queued targets/batches of one action. */
   operationKeyPrefix?: string;
 }
@@ -220,6 +223,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       provider,
       this.ctx.businessEffectId,
       this.ctx.authProfileRef,
+      this.ctx.db,
     );
     if (!claim.claimed) {
       if (claim.existing.requestHash !== requestHash) {
@@ -263,6 +267,7 @@ export class ScopedToolRegistry extends ToolRegistry {
       operationKey,
       result.ok ? "succeeded" : result.errorKind === "unknown_outcome" ? "unknown" : "failed",
       result.ok ? result.output : { ...result.output, ...(result.error ? { error: result.error } : {}), ...(result.errorKind ? { errorKind: result.errorKind } : {}) },
+      this.ctx.db,
     );
     if (result.ok && operation?.verificationStatus === "awaiting_observation" && this.ctx.businessEffectId) {
       const { enqueueJob } = await import("@finnor/db");

@@ -6,6 +6,7 @@
 // already-completed external side effect like sending an SMS or syncing an invoice.
 
 import { withTenant, externalOperations, tenantIntegrations, authProfiles } from "@finnor/db";
+import type { Db } from "@finnor/db";
 import { and, eq, sql } from "drizzle-orm";
 import { redactStructured } from "@finnor/security";
 
@@ -25,8 +26,9 @@ export async function claimExternalOperation(
   provider?: string,
   businessEffectId?: string,
   authProfileRef?: string,
+  txDb?: Db,
 ): Promise<ClaimResult> {
-  return withTenant(tenantId, async (db) => {
+  const claim = async (db: Db): Promise<ClaimResult> => {
     let integrationId: string | null = null;
     if (provider && ACCOUNT_BOUND_PROVIDERS.has(provider)) {
       const candidates = authProfileRef
@@ -124,7 +126,8 @@ export async function claimExternalOperation(
       return { claimed: false, existing: refetched ?? existing } as const;
     }
     return { claimed: false, existing } as const;
-  });
+  };
+  return txDb ? claim(txDb) : withTenant(tenantId, claim);
 }
 
 /**
@@ -161,6 +164,7 @@ export async function recordExternalOperationResult(
   operationKey: string,
   status: "succeeded" | "failed" | "unknown",
   response: Record<string, unknown>,
+  txDb?: Db,
 ): Promise<ExternalOperationRow | null> {
   const redacted = redactStructured(response) as Record<string, unknown>;
   // Provider/native record identifiers are required to resume a multi-step effect
@@ -172,7 +176,7 @@ export async function recordExternalOperationResult(
   for (const key of ["id", "contactId", "householdId", "messageId", "campaignId", "visitId", "appointmentId", "callId", "communicationIdentityId", "externalInvoiceId", "externalCustomerId", "linkId", "envelopeId"]) {
     if (typeof response[key] === "string") redacted[key] = response[key];
   }
-  return withTenant(tenantId, async (db) => {
+  const record = async (db: Db): Promise<ExternalOperationRow | null> => {
     const [operation] = await db.select({ integrationId: externalOperations.integrationId }).from(externalOperations).where(and(
       eq(externalOperations.tenantId, tenantId),
       eq(externalOperations.domainActionId, domainActionId),
@@ -197,7 +201,8 @@ export async function recordExternalOperationResult(
       .where(and(eq(externalOperations.domainActionId, domainActionId), eq(externalOperations.operationKey, operationKey)))
       .returning();
     return row ?? null;
-  });
+  };
+  return txDb ? record(txDb) : withTenant(tenantId, record);
 }
 
 /** Explicit provider reconciliation is the only way an unknown operation becomes a
