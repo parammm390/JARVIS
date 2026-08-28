@@ -106,7 +106,10 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
 
   afterAll(async () => {
     await withTenant(TENANT_ID, async (db) => {
-      await db.execute(sql`SELECT set_config('app.allow_audit_mutation', 'true', true)`);
+      // Work creation appends an operational-delta row. Use the database's
+      // authorized retention function before removing the isolated fixture so
+      // the append-only ledger is never rewritten by the Works FK action.
+      await db.execute(sql`SELECT finnor_os.purge_operational_deltas(${TENANT_ID}::uuid, now() + interval '1 second')`);
       await db.delete(pendingConfirmations).where(eq(pendingConfirmations.tenantId, TENANT_ID));
       await db.delete(voiceTurns).where(eq(voiceTurns.tenantId, TENANT_ID));
       await db.delete(calls).where(eq(calls.tenantId, TENANT_ID));

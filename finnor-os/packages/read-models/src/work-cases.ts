@@ -807,19 +807,23 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
     const cursor = decodeWorkCasesCursor(options.cursor);
     const [canonicalWork] = await db.select({ id: works.id }).from(works).where(eq(works.tenantId, tenantId)).limit(1);
     const rootScope: WorkCasesPage["page"]["rootScope"] = options.workId ? "canonical_work" : cursor?.scope ?? (canonicalWork ? "canonical_work" : "legacy_instruction");
-    const cursorDate = cursor?.updatedAt ? new Date(cursor.updatedAt) : null;
+    // Keep the cursor timestamp as the database string instead of converting it
+    // through JavaScript Date. PostgreSQL timestamps carry microseconds, while
+    // Date/ISO serialization only carries milliseconds; truncating here can make
+    // a same-millisecond page boundary appear newer than every remaining row.
+    const cursorTimestamp = cursor?.updatedAt ?? null;
     const activityBucket = sql<number>`CASE WHEN ${works.status} IN ('completed','failed','cancelled') THEN 1 ELSE 0 END`;
-    const workCursor = cursorDate
+    const workCursor = cursorTimestamp
       ? or(
           gt(activityBucket, cursor!.activityBucket!),
           and(eq(activityBucket, cursor!.activityBucket!), or(
-            lt(works.updatedAt, cursorDate),
-            and(eq(works.updatedAt, cursorDate), lt(works.id, cursor!.id!)),
+            sql`${works.updatedAt} < ${cursorTimestamp}::timestamptz`,
+            and(sql`${works.updatedAt} = ${cursorTimestamp}::timestamptz`, lt(works.id, cursor!.id!)),
           )),
         )
       : undefined;
-    const legacyCursor = cursorDate
-      ? or(lt(instructionSessions.updatedAt, cursorDate), and(eq(instructionSessions.updatedAt, cursorDate), lt(instructionSessions.id, cursor!.id!)))
+    const legacyCursor = cursorTimestamp
+      ? or(sql`${instructionSessions.updatedAt} < ${cursorTimestamp}::timestamptz`, and(sql`${instructionSessions.updatedAt} = ${cursorTimestamp}::timestamptz`, lt(instructionSessions.id, cursor!.id!)))
       : undefined;
 
     const fetchedWorkRows = rootScope === "canonical_work"
@@ -839,11 +843,18 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
         )).limit(1)
       : [];
     const hasMore = scopeHasMore || Boolean(legacyRemaining);
-    const nextCursor = scopeHasMore && lastRoot
+    let lastRootCursorTimestamp = lastRoot?.updatedAt.toISOString() ?? null;
+    if (scopeHasMore && lastRoot) {
+      const [exactTimestamp] = rootScope === "canonical_work"
+        ? await db.select({ value: sql<string>`to_char(${works.updatedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(works).where(and(eq(works.tenantId, tenantId), eq(works.id, lastRoot.id))).limit(1)
+        : await db.select({ value: sql<string>`to_char(${instructionSessions.updatedAt} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')` }).from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), eq(instructionSessions.id, lastRoot.id))).limit(1);
+      lastRootCursorTimestamp = exactTimestamp?.value ?? lastRootCursorTimestamp;
+    }
+    const nextCursor = scopeHasMore && lastRoot && lastRootCursorTimestamp
       ? encodeWorkCasesCursor({
           scope: rootScope,
           activityBucket: rootScope === "canonical_work" && "status" in lastRoot && ["completed", "failed", "cancelled"].includes(lastRoot.status) ? 1 : 0,
-          updatedAt: lastRoot.updatedAt.toISOString(),
+          updatedAt: lastRootCursorTimestamp,
           id: lastRoot.id,
         })
       : legacyRemaining
