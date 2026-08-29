@@ -80,13 +80,14 @@ function runCommand(repoRoot: string, spec: CommandSpec): CommandObservation {
   const result = spawnSync(spec.command, spec.args, {
     cwd,
     // Release metadata is intentionally production-shaped in the parent
-    // certification process. Test children must still exercise their local
-    // degradation paths (for example Redis fallback) rather than inheriting a
-    // production environment and failing closed for the wrong reason.
+    // certification process. Test children use a test Node environment while
+    // preserving the release environment; individual degradation tests stub the
+    // environment they are asserting rather than mixing production metadata with
+    // a test environment.
     env: {
       ...process.env,
       ...spec.env,
-      ...(isTestCommand ? { NODE_ENV: "test", FINNOR_ENVIRONMENT: "test" } : {}),
+      ...(isTestCommand ? { NODE_ENV: "test" } : {}),
     },
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
