@@ -46,8 +46,19 @@ describe("projectThreadWorkspace", () => {
     expect(projected.query?.result.intent).toBe("customer_cohort")
   })
 
-  it("keeps failed action work in recovery", () => {
+  it("keeps failed canonical Work in recovery", () => {
     expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null })).kind).toBe("recovery")
+  })
+
+  it("does not manufacture recovery for a submission failure before Work exists", () => {
+    expect(projectThreadWorkspace(thread({
+      machine: { instructionState: "failed" },
+      answerResult: null,
+      workId: null,
+      workPosture: null,
+      everExecuted: false,
+      nodes: [],
+    })).kind).toBe("plan")
   })
 
   it("routes bulk action plans to campaign work", () => {
