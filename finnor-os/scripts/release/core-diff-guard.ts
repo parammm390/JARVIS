@@ -7,6 +7,9 @@ const ALWAYS_CORE_FILES = new Set([
 ]);
 
 const GENERATED_CLIENT_PREFIXES = [
+  // The action contract runner regenerates this frontend manifest as client
+  // evidence; it is not a shared runtime source boundary.
+  "src/components/jarvis/ui/renderers/backend-action-types.generated.ts",
   "clients/",
   "evidence/clients/",
   "docs/release/generated/client-releases/",
