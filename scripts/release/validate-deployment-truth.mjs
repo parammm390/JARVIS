@@ -111,6 +111,8 @@ if (!/concurrency:\s*[\s\S]*group:\s*finnor-production-release/.test(workflow)) 
 const credentialGateAt = workflow.indexOf("Require production credentials before any mutation")
 const preflightAt = workflow.indexOf("preflight-production.mjs")
 const migrationAt = workflow.indexOf("release:migrate:production")
+const workerAt = workflow.indexOf("deploy-azure-worker.mjs")
+const parityAt = workflow.indexOf("verify-production-parity.mjs")
 const firstProductionMutationAt = workflow.indexOf("configure-azure-sse-ingress.mjs")
 if (credentialGateAt < 0 || firstProductionMutationAt < 0 || credentialGateAt > firstProductionMutationAt) fail("production credentials are not gated before the first mutation")
 const nextStepAt = workflow.indexOf("- name:", credentialGateAt + 8)
@@ -127,9 +129,16 @@ for (const credential of [
   if (!credentialGate.includes(credential)) fail(`pre-mutation credential gate omits ${credential}`)
 }
 if (preflightAt < 0 || migrationAt < 0 || preflightAt > migrationAt) fail("migration can run before production preflight")
+if (workerAt < migrationAt) fail("worker deployment is missing or can run before migration")
 for (const component of ["frontend", "api"]) {
-  const deployAt = workflow.indexOf(`deploy-production.mjs ${component} --deploy-only`)
-  if (deployAt < migrationAt) fail(`${component} deployment is missing or can run before migration`)
+  const stageAt = workflow.indexOf(`deploy-production.mjs ${component} --stage-only`)
+  const promoteAt = workflow.indexOf(`deploy-production.mjs ${component} --promote-only`)
+  if (stageAt < migrationAt) fail(`${component} staging is missing or can run before migration`)
+  if (promoteAt < workerAt) fail(`${component} promotion is missing or can run before worker verification`)
+  if (parityAt >= 0 && promoteAt > parityAt) fail(`${component} promotion can occur after parity verification`)
+}
+if (workflow.includes("deploy-production.mjs frontend --deploy-only") || workflow.includes("deploy-production.mjs api --deploy-only")) {
+  fail("canonical production workflow must not directly deploy/promote Vercel artifacts before worker verification")
 }
 if (!/for run in 1 2; do[\s\S]*PRODUCT_TRUTH_CERTIFICATION_RUN="\$run"[\s\S]*verify-consecutive-human-certifications\.mjs/.test(workflow)) {
   fail("operational closure must require two ordered deployed Human Black-Box runs")
