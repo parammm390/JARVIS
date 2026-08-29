@@ -8,8 +8,10 @@ import { migrate } from "../../packages/db/migrate";
 import {
   authorityDecisions,
   closePool,
+  CURRENT_MIGRATION_HEAD,
   communicationsLog,
   domainActions,
+  getPool,
   households,
   jobs,
   sandboxOutbox,
@@ -84,6 +86,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
   const ownerId = randomUUID();
   const suspendedId = randomUUID();
   const householdId = randomUUID();
+  const workerInstanceId = `objective-test-${tenantId}`;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = DB_URL;
@@ -92,6 +95,16 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     process.env.FINNOR_ENVIRONMENT = "test";
     process.env.AUTH_DEV_BYPASS = "1";
     await migrate(DB_URL);
+    await getPool().query(
+      `INSERT INTO finnor_os.service_release_heartbeats
+        (service,instance_id,release_sha,build_id,version,release_source,core_certification_id,migration_head,capabilities,environment,last_beat_at)
+       VALUES ('worker',$1,$2,'objective-test','0.1.0','integration-test',NULL,$3,ARRAY['jobs','orchestration'],'test',now())
+       ON CONFLICT (service,instance_id) DO UPDATE SET
+         release_sha=excluded.release_sha,
+         migration_head=excluded.migration_head,
+         last_beat_at=excluded.last_beat_at`,
+      [workerInstanceId, process.env.FINNOR_COMMIT_SHA?.trim() || "objective-test", CURRENT_MIGRATION_HEAD],
+    );
     await withTenant(tenantId, async (db) => {
       await db.insert(tenants).values({ id: tenantId, name: "Objective Loop Test Dealer" });
       await db.insert(users).values({ id: ownerId, tenantId, email: `objective-owner-${tenantId}@example.test`, role: "owner", displayName: "Objective Owner" });
@@ -108,6 +121,10 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
   });
 
   afterAll(async () => {
+    await getPool().query(
+      "DELETE FROM finnor_os.service_release_heartbeats WHERE service='worker' AND instance_id=$1",
+      [workerInstanceId],
+    );
     await closePool();
   });
 

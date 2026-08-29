@@ -38,8 +38,9 @@ import {
   businessEffects,
   domainPolicies,
   jobs,
+  reconciliationCases,
 } from "@finnor/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import {
   submitCommand,
   claimStep,
@@ -192,6 +193,7 @@ async function cleanupRun(runId: string, commandId: string, stepIds: string[]): 
       await db.delete(integrationOperations).where(eq(integrationOperations.workflowStepId, id));
       await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowStepId, id));
     }
+    await db.delete(reconciliationCases).where(inArray(reconciliationCases.relatedStepId, stepIds));
     // A run-level receipt may intentionally have no workflow_step_id. Remove those
     // before their parent run so cleanup observes the same FK contract as production.
     await db.delete(decisionReceipts).where(eq(decisionReceipts.workflowRunId, runId));

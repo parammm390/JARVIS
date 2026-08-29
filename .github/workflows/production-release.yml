@@ -96,11 +96,6 @@ jobs:
       CERTIFICATION_TEST_PHONES: "+15550000001"
       P3_NO_EGRESS: "1"
       LIVE_SMOKE_ALLOWED: "0"
-      COMMUNICATIONS_BINDING: emulator
-      ESIGN_BINDING: emulator
-      ACCOUNTING_BINDING: emulator
-      PAYMENTS_BINDING: emulator
-      MARKETING_BINDING: emulator
     steps:
       - uses: actions/checkout@v4
         with:
