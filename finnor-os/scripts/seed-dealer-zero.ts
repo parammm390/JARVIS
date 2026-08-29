@@ -15,8 +15,8 @@
 // row didn't already exist") — that conditional silently changes how many draws happen
 // before the next entity's turn, desyncing every entity after it on a rerun. Per-entity
 // hashed generators can't drift: entity i's values depend only on i, never on what ran
-// before it or what's already in the database. (Caught this the hard way on the first
-// two-runs-in-a-row test of this script — see the commit message.)
+// before it or what's already in the database. Existing evolving business state is
+// never reset by this reconciler; deterministic values are initial conditions only.
 //
 // Usage: npx tsx scripts/seed-dealer-zero.ts
 
@@ -225,11 +225,11 @@ async function ensureOpenLeads(): Promise<void> {
       // createLead owns its household insert; complete the synthetic map fixture on
       // both fresh and idempotently re-used lead households.
       await db.update(households).set({ latitude: f.latitude, longitude: f.longitude }).where(eq(households.id, result.householdId));
-      // createLead defaults status to "new" — vary it deterministically (a pure
-      // function of i, so idempotent regardless of alreadyExisted) so the lead
-      // pipeline has real cases at every stage, not 15 identical fresh leads.
+      // Deterministic lead status is an INITIAL condition only. A static reconcile
+      // must never move a real evolving lead backwards after the simulator/product
+      // has advanced, converted, or disqualified it.
       const status = pick(rngFor("lead-status", i), statuses);
-      if (status !== "new") {
+      if (!result.alreadyExisted && status !== "new") {
         await db.update(leads).set({ status }).where(eq(leads.id, result.leadId));
       }
     }
@@ -254,9 +254,11 @@ async function ensureInventory(): Promise<void> {
     for (const item of DEALER_ZERO_INVENTORY) {
       const [existing] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID), eq(inventoryItems.sku, item.sku)));
       if (existing) {
+        // Quantity is evolving business state. Reconcile only static catalog fields;
+        // never restock/deplete inventory merely because the seed is re-run.
         await db
           .update(inventoryItems)
-          .set({ quantity: item.quantity, reorderThreshold: item.reorderThreshold, unitCostUsd: String(item.unitCostUsd) })
+          .set({ name: item.name, reorderThreshold: item.reorderThreshold, unitCostUsd: String(item.unitCostUsd) })
           .where(eq(inventoryItems.id, existing.id));
       } else {
         await db.insert(inventoryItems).values({
