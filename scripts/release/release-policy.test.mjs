@@ -72,6 +72,21 @@ test("production preparation consumes the exact commit core-certification artifa
   assert.match(productionWorkflow, /artifact\.canonicalCoreSha!==process\.env\.RELEASE_COMMIT_SHA/)
 })
 
+test("production release stages Vercel artifacts before the worker and promotes only after worker verification", () => {
+  const stageFrontend = productionWorkflow.indexOf("frontend --stage-only")
+  const stageApi = productionWorkflow.indexOf("api --stage-only")
+  const worker = productionWorkflow.indexOf("Deploy and verify Azure worker and embedded orchestrator")
+  const promoteFrontend = productionWorkflow.indexOf("frontend --promote-only")
+  const promoteApi = productionWorkflow.indexOf("api --promote-only")
+  const parity = productionWorkflow.indexOf("Verify cross-runtime release and migration parity")
+  assert.ok(stageFrontend > -1 && stageApi > stageFrontend)
+  assert.ok(worker > stageApi)
+  assert.ok(promoteFrontend > worker && promoteApi > promoteFrontend)
+  assert.ok(parity > promoteApi)
+  assert.equal(productionWorkflow.includes("frontend --deploy-only"), false)
+  assert.equal(productionWorkflow.includes("api --deploy-only"), false)
+})
+
 test("production certification uses the explicit deferred-load profile", () => {
   assert.match(productionWorkflow, /FINNOR_RELEASE_PROFILE:\s*production/)
   assert.match(productionWorkflow, /name: Materialize protected load identities[\s\S]*if: env\.FINNOR_RELEASE_PROFILE != 'production'/)
@@ -89,7 +104,7 @@ test("Azure worker rollback restores release identity before restarting previous
 test("Azure worker verifies TLS over loopback and leaves public reachability to parity verification", () => {
   assert.match(workerDeployScript, /--resolve "\$\{sse_hostname\}:443:127\.0\.0\.1"/)
   assert.doesNotMatch(workerDeployScript, /curl --fail --silent --max-time 15 "https:\/\/\$\{sse_hostname\}\/healthz"/)
-  const deploy = productionWorkflow.indexOf("Deploy Azure worker and embedded orchestrator")
+  const deploy = productionWorkflow.indexOf("Deploy and verify Azure worker and embedded orchestrator")
   const parity = productionWorkflow.indexOf("Verify cross-runtime release and migration parity")
   assert.ok(deploy > -1 && parity > deploy)
 })
