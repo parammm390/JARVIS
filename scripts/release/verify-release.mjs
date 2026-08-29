@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process"
 const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/i
 const GENERATED_RELEASE_PATHS = [
   "docs/release/generated/",
+  "docs/release/action-contract-results.md",
   "finnor-os/openapi.json",
   "src/components/jarvis/ui/renderers/backend-action-types.generated.ts",
 ]
