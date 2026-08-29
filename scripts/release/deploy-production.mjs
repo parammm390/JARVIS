@@ -179,7 +179,8 @@ const productionUrl = target.productionUrl
 if (!productionUrl || !/^https:\/\//.test(productionUrl)) {
   throw new Error(`Canonical ${appName} production URL is missing or invalid`)
 }
-run("vercel", ["alias", "set", deploymentUrl, productionUrl, ...tokenArgs], appDir, env)
+const productionAlias = new URL(productionUrl).host
+run("vercel", ["alias", "set", deploymentUrl, productionAlias, ...tokenArgs], appDir, env)
 
 const result = {
   app: appName,
