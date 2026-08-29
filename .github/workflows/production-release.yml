@@ -153,6 +153,7 @@ jobs:
           npm run openapi
           npm run typecheck
           npm test
+          echo "FINNOR_PHASE5_SUITE_PASSED=1" >> "$GITHUB_ENV"
           npm run release:manifest
           npm run release:contract
           npm run policy:lint
