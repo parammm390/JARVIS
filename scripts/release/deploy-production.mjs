@@ -6,13 +6,21 @@ import { join, resolve } from "node:path"
 const appName = process.argv[2]
 const prepareOnly = process.argv.includes("--prepare-only")
 const deployOnly = process.argv.includes("--deploy-only")
+const stageOnly = process.argv.includes("--stage-only")
+const promoteOnly = process.argv.includes("--promote-only")
 const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
+const deploymentUrlIndex = process.argv.indexOf("--deployment-url")
+const promotionUrl = deploymentUrlIndex >= 0 ? process.argv[deploymentUrlIndex + 1] : undefined
 if (!["frontend", "api"].includes(appName)) {
-  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only] [--output-file path]")
+  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only|--stage-only|--promote-only --deployment-url <url>] [--output-file path]")
   process.exit(2)
 }
-if (prepareOnly && deployOnly) throw new Error("--prepare-only and --deploy-only are mutually exclusive")
+const modes = [prepareOnly, deployOnly, stageOnly, promoteOnly].filter(Boolean).length
+if (modes > 1) throw new Error("Release modes are mutually exclusive")
+if (promoteOnly && (!promotionUrl || !/^https:\/\//.test(promotionUrl))) {
+  throw new Error("--promote-only requires --deployment-url <https-url>")
+}
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
 const contract = JSON.parse(readFileSync(join(repoRoot, "infra/deployment/production.contract.json"), "utf8"))
@@ -103,13 +111,12 @@ if (buildId !== `finnor-${commitSha.slice(0, 12)}`) throw new Error(`FINNOR_BUIL
 if (!version.endsWith(`+${commitSha.slice(0, 12)}`)) throw new Error(`FINNOR_VERSION must be commit-derived: ${version}`)
 
 let productTruthCertificationKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
-if (appName === "api" && deployOnly && !productTruthCertificationKey) {
+if (appName === "api" && (deployOnly || stageOnly) && !productTruthCertificationKey) {
   const runnerTemp = process.env.RUNNER_TEMP?.trim()
   if (!runnerTemp) throw new Error("PRODUCT_TRUTH_CERTIFICATION_KEY or RUNNER_TEMP is required for the commit-scoped API certification deployment")
   productTruthCertificationKey = randomBytes(32).toString("hex")
   const keyFile = join(runnerTemp, "product-truth-certification-key")
   writeFileSync(keyFile, `${productTruthCertificationKey}\n`, { mode: 0o600 })
-  // GitHub interprets this workflow command and masks the value in all later logs.
   if (process.env.GITHUB_ACTIONS === "true") console.log(`::add-mask::${productTruthCertificationKey}`)
   if (process.env.GITHUB_ENV) appendFileSync(process.env.GITHUB_ENV, `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}\n`)
   console.log(`Generated one-run Product Truth certification capability at ${keyFile}`)
@@ -119,8 +126,6 @@ const appDir = resolve(repoRoot, app.directory)
 const tokenArgs = process.env.VERCEL_TOKEN ? ["--token", process.env.VERCEL_TOKEN] : []
 const env = {
   ...process.env,
-  // Vercel treats VERCEL_ORG_ID and VERCEL_PROJECT_ID as a pair. Scope every
-  // link/pull/build/deploy invocation to the exact project in the contract.
   VERCEL_ORG_ID: TEAM_ID,
   VERCEL_PROJECT_ID: app.projectId,
   FINNOR_COMMIT_SHA: commitSha,
@@ -131,7 +136,36 @@ const env = {
   FINNOR_CORE_CERTIFICATION_ID: coreCertification.certificationId,
 }
 
-if (!deployOnly) {
+const productionUrl = target.productionUrl
+if (!productionUrl || !/^https:\/\//.test(productionUrl)) {
+  throw new Error(`Canonical ${appName} production URL is missing or invalid`)
+}
+
+if (promoteOnly) {
+  run("vercel", ["promote", promotionUrl, "--yes", "--scope", TEAM_ID, ...tokenArgs], appDir, env)
+  const result = {
+    app: appName,
+    project: app.project,
+    projectId: app.projectId,
+    commitSha,
+    buildId,
+    version,
+    environment,
+    source,
+    coreCertificationId: coreCertification.certificationId,
+    dirty: false,
+    remoteMain,
+    promoted: true,
+    deploymentUrl: promotionUrl,
+    productionUrl,
+  }
+  if (outputFile) writeFileSync(resolve(outputFile), `${JSON.stringify(result, null, 2)}\n`)
+  console.log(`\nFINNOR_PROMOTED_URL=${promotionUrl}`)
+  console.log(JSON.stringify(result, null, 2))
+  process.exit(0)
+}
+
+if (!deployOnly && !stageOnly) {
   run("vercel", ["pull", "--yes", "--environment=production", ...tokenArgs], appDir, env)
   const localConfig = join(appDir, ".vercel", "finnor-release.vercel.json")
   writeFileSync(localConfig, `${JSON.stringify({ installCommand: app.installCommand }, null, 2)}\n`)
@@ -149,7 +183,7 @@ const productTruthEnvArgs = appName === "api" && productTruthCertificationKey
     ]
   : []
 const deployArgs = [
-  "deploy", "--prebuilt", "--prod", "--yes",
+  "deploy", "--prebuilt", ...(stageOnly ? [] : ["--prod"]), "--yes",
   "--meta", `finnorCommitSha=${commitSha}`,
   "--meta", `finnorBuildId=${buildId}`,
   "--meta", `finnorVersion=${version}`,
@@ -159,7 +193,7 @@ const deployArgs = [
   "--meta", "gitDirty=0",
   "--meta", "githubDeployment=1",
   "--meta", "githubCommitOrg=parammm390",
-  "--meta", "githubCommitRepo=JARVIS",
+  "--meta", "githubCommitRepo=finnor-ai",
   "--meta", "githubCommitRef=main",
   "--meta", `githubCommitSha=${commitSha}`,
   "--env", `FINNOR_COMMIT_SHA=${commitSha}`,
@@ -175,12 +209,11 @@ const deployOutput = run("vercel", deployArgs, appDir, env)
 const urls = [...deployOutput.matchAll(/https:\/\/[^\s)]+/g)].map((match) => match[0].replace(/[.,]+$/, ""))
 const deploymentUrl = urls.at(-1)
 if (!deploymentUrl) throw new Error("Vercel did not return a deployment URL")
-const productionUrl = target.productionUrl
-if (!productionUrl || !/^https:\/\//.test(productionUrl)) {
-  throw new Error(`Canonical ${appName} production URL is missing or invalid`)
+
+if (!stageOnly) {
+  const productionAlias = new URL(productionUrl).host
+  run("vercel", ["alias", "set", deploymentUrl, productionAlias, "--scope", TEAM_ID, ...tokenArgs], appDir, env)
 }
-const productionAlias = new URL(productionUrl).host
-run("vercel", ["alias", "set", deploymentUrl, productionAlias, "--scope", TEAM_ID, ...tokenArgs], appDir, env)
 
 const result = {
   app: appName,
@@ -195,6 +228,7 @@ const result = {
   productTruthCertificationFixtures: appName === "api" && Boolean(productTruthCertificationKey),
   dirty: false,
   remoteMain,
+  staged: stageOnly,
   deploymentUrl,
   productionUrl,
 }
