@@ -157,7 +157,13 @@ try {
   const applied = migrations.rows.map((row) => row.name)
   migrationHead = applied.at(-1)
   const repoMigrations = readdirSync(resolve(repoRoot, "finnor-os/packages/db/migrations")).filter((name) => name.endsWith(".sql")).sort()
-  const unknown = applied.filter((name) => !repoMigrations.includes(name))
+  // Production briefly recorded the product-truth migration under 0102 before
+  // 0102/0103 were assigned to later migrations. The SQL is byte-identical to
+  // the current 0104 migration; keep that historical tracker name allowlisted
+  // so the governed runner can apply 0102, 0103, and 0104 and converge at the
+  // required current head without editing the production tracker out of band.
+  const knownLegacyMigrationAliases = new Set(["0102_product_truth_objective_realtime.sql"])
+  const unknown = applied.filter((name) => !repoMigrations.includes(name) && !knownLegacyMigrationAliases.has(name))
   if (unknown.length) throw new Error(`production database contains migrations absent from the release: ${unknown.join(", ")}`)
   if (repoMigrations.at(-1) !== contract.release.requiredMigrationHead) {
     throw new Error(`repository migration head ${repoMigrations.at(-1)} differs from contract ${contract.release.requiredMigrationHead}`)
