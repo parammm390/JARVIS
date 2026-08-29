@@ -11,7 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { seed } from "../../packages/db/seed";
-import { withTenant, closePool, households, equipment, serviceVisits, maintenanceAgreements, leads, technicians, domainPolicies, priceBookItems, tenantSettings } from "@finnor/db";
+import { withTenant, closePool, households, equipment, serviceVisits, maintenanceAgreements, leads, technicians, domainPolicies, priceBookItems, tenantSettings, inventoryItems } from "@finnor/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { seedDealerZero, DEALER_ZERO_TENANT_ID } from "../../scripts/seed-dealer-zero";
 import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
@@ -93,6 +93,25 @@ describe.skipIf(!available)("Dealer Zero seeding (§3.2/§3.6)", () => {
     await seedDealerZero();
     const after3 = await counts();
     expect(after3).toEqual(after1);
+  }, 60_000);
+
+  it("static reconciliation preserves evolving lead status and inventory quantity", async () => {
+    await seedDealerZero();
+    await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
+      await db.update(leads).set({ status: "converted" }).where(eq(leads.tenantId, DEALER_ZERO_TENANT_ID));
+      await db.update(inventoryItems).set({ quantity: 777 }).where(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID));
+    });
+
+    await seedDealerZero();
+
+    const state = await withTenant(DEALER_ZERO_TENANT_ID, async (db) => ({
+      leadRows: await db.select({ status: leads.status }).from(leads).where(eq(leads.tenantId, DEALER_ZERO_TENANT_ID)),
+      inventoryRows: await db.select({ quantity: inventoryItems.quantity }).from(inventoryItems).where(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID)),
+    }));
+    expect(state.leadRows.length).toBeGreaterThanOrEqual(15);
+    expect(state.leadRows.every((row) => row.status === "converted")).toBe(true);
+    expect(state.inventoryRows.length).toBeGreaterThan(0);
+    expect(state.inventoryRows.every((row) => row.quantity === 777)).toBe(true);
   }, 60_000);
 
   it("seedTenantPolicies covers all 41 registered action types + the pricing_catalog row for Dealer Zero, zero placeholders", async () => {
