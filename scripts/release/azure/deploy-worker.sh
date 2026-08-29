@@ -39,6 +39,7 @@ fi
 
 release_env_tmp=$(mktemp)
 unit_tmp=$(mktemp)
+verify_tmp=$(mktemp)
 previous_release_env=$(mktemp)
 next_link="${current_link}.next"
 previous_target=$(readlink "$current_link" 2>/dev/null || true)
@@ -75,7 +76,7 @@ rollback() {
       fi
     fi
   fi
-  rm -f "$release_env_tmp" "$unit_tmp" "$previous_release_env" "$next_link"
+  rm -f "$release_env_tmp" "$unit_tmp" "$verify_tmp" "$previous_release_env" "$next_link"
   exit "$status"
 }
 trap rollback EXIT
@@ -134,7 +135,23 @@ SyslogIdentifier=finnor-worker
 WantedBy=multi-user.target
 EOF
 install -o root -g root -m 0644 "$unit_tmp" "/etc/systemd/system/$unit_name"
-systemd-analyze verify "/etc/systemd/system/$unit_name"
+
+# systemd-analyze loads host units too. Production already hit an unrelated
+# snapd.service diagnostic (unsupported RestartMode) which made this command exit
+# non-zero under `set -e` before FINNOR ever switched/restarted the worker. Keep
+# host diagnostics visible, but fail only when the diagnostic points at FINNOR's
+# own unit/path. This preserves a strict unit gate without coupling deployment to
+# arbitrary distro-package warnings.
+if ! systemd-analyze verify "/etc/systemd/system/$unit_name" >"$verify_tmp" 2>&1; then
+  cat "$verify_tmp" >&2
+  if grep -Fq "$unit_name" "$verify_tmp" || grep -Fq "/etc/systemd/system/$unit_name" "$verify_tmp"; then
+    echo "FINNOR systemd unit failed verification" >&2
+    exit 1
+  fi
+  echo "systemd-analyze reported only unrelated host-unit diagnostics; continuing" >&2
+fi
+rm -f "$verify_tmp"
+verify_tmp=""
 
 ln -sfn "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
