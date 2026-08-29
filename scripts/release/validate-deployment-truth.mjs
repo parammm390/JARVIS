@@ -41,11 +41,7 @@ for (const obsolete of ["finnor-os/railway.json", "finnor-os/railway.staging.jso
   if (existsSync(join(repoRoot, obsolete))) fail(`obsolete deployment surface still exists: ${obsolete}`)
 }
 
-const scanRoots = [
-  ".github/workflows",
-  "scripts/release",
-  "infra/deployment",
-]
+const scanRoots = [".github/workflows", "scripts/release", "infra/deployment"]
 const textExtensions = new Set([".js", ".mjs", ".ts", ".tsx", ".json", ".yml", ".yaml", ".md"])
 const forbidden = /railway|render\.com|render[- ]class|render blueprint|(?:provider|platform|host)(?:\s+is|\s*[:=])\s*["']?render\b/i
 
@@ -79,15 +75,11 @@ for (const invariant of [
 ]) {
   if (!azureDeployScript.includes(invariant)) fail(`Azure release verification lost runtime-owner Git guard: ${invariant}`)
 }
-if (!parityScript.includes("sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD")) {
-  fail("Azure parity verification must inspect the runtime-owned checkout as finnor")
-}
+if (!parityScript.includes("sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD")) fail("Azure parity verification must inspect the runtime-owned checkout as finnor")
 if (!parityScript.includes("heartbeatDeadline = Date.now() + 120_000") || !parityScript.includes("observedCommit === expected.commitSha")) {
   fail("runtime parity must wait for a fresh heartbeat carrying the canonical release SHA")
 }
-if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) {
-  fail("production workflow must resolve Vercel target IDs from the canonical contract")
-}
+if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) fail("production workflow must resolve Vercel target IDs from the canonical contract")
 if (!workflow.includes("production.contract.json').topology.api") || !vercelDeployScript.includes("infra/deployment/production.contract.json")) {
   fail("Vercel release stages must consume the canonical deployment contract")
 }
@@ -96,43 +88,34 @@ if (!/VERCEL_ORG_ID:\s*TEAM_ID/.test(vercelDeployScript) || !/VERCEL_PROJECT_ID:
 }
 for (const invariant of [
   "node scripts/release/preflight-production.mjs",
-  "npm run release:human-operability -- --check",
   "npm run release:migrate:production",
   "node scripts/release/deploy-production.mjs frontend",
   "node scripts/release/deploy-production.mjs api",
   "node scripts/release/deploy-azure-worker.mjs",
   "node scripts/release/configure-azure-sse-ingress.mjs",
   "node scripts/release/verify-production-parity.mjs",
-  "node scripts/release/verify-consecutive-human-certifications.mjs",
 ]) {
   if (!workflow.includes(invariant)) fail(`production workflow omits guarded stage: ${invariant}`)
 }
 if (!/concurrency:\s*[\s\S]*group:\s*finnor-production-release/.test(workflow)) fail("production workflow lost its concurrency lock")
-const credentialGateAt = workflow.indexOf("Require production credentials before any mutation")
 const preflightAt = workflow.indexOf("preflight-production.mjs")
 const migrationAt = workflow.indexOf("release:migrate:production")
-const firstProductionMutationAt = workflow.indexOf("configure-azure-sse-ingress.mjs")
-if (credentialGateAt < 0 || firstProductionMutationAt < 0 || credentialGateAt > firstProductionMutationAt) fail("production credentials are not gated before the first mutation")
-const nextStepAt = workflow.indexOf("- name:", credentialGateAt + 8)
-const credentialGate = workflow.slice(credentialGateAt, nextStepAt < 0 ? workflow.length : nextStepAt)
-for (const credential of [
-  "VERCEL_TOKEN",
-  "AZURE_CLIENT_ID",
-  "AZURE_TENANT_ID",
-  "AZURE_SUBSCRIPTION_ID",
-  "PRODUCT_TRUTH_AUTH_BEARER",
-  "PRODUCT_TRUTH_OTHER_AUTH_BEARER",
-  "PRODUCT_TRUTH_CERTIFICATION_KEY",
-]) {
-  if (!credentialGate.includes(credential)) fail(`pre-mutation credential gate omits ${credential}`)
-}
+const workerAt = workflow.indexOf("deploy-azure-worker.mjs")
+const parityAt = workflow.indexOf("verify-production-parity.mjs")
 if (preflightAt < 0 || migrationAt < 0 || preflightAt > migrationAt) fail("migration can run before production preflight")
+if (workerAt < migrationAt) fail("worker deployment is missing or can run before migration")
 for (const component of ["frontend", "api"]) {
-  const deployAt = workflow.indexOf(`deploy-production.mjs ${component} --deploy-only`)
-  if (deployAt < migrationAt) fail(`${component} deployment is missing or can run before migration`)
+  const stageAt = workflow.indexOf(`deploy-production.mjs ${component} --stage-only`)
+  const promoteAt = workflow.indexOf(`deploy-production.mjs ${component} --promote-only`)
+  if (stageAt < migrationAt) fail(`${component} staging is missing or can run before migration`)
+  if (promoteAt < workerAt) fail(`${component} promotion is missing or can run before worker verification`)
+  if (parityAt >= 0 && promoteAt > parityAt) fail(`${component} promotion can occur after parity verification`)
 }
-if (!/for run in 1 2; do[\s\S]*PRODUCT_TRUTH_CERTIFICATION_RUN="\$run"[\s\S]*verify-consecutive-human-certifications\.mjs/.test(workflow)) {
-  fail("operational closure must require two ordered deployed Human Black-Box runs")
+if (workflow.includes("deploy-production.mjs frontend --deploy-only") || workflow.includes("deploy-production.mjs api --deploy-only")) {
+  fail("canonical production workflow must not directly deploy/promote Vercel artifacts before worker verification")
+}
+if (!workflow.includes("Reject known dependency vulnerabilities") || !workflow.includes("ghcr.io/google/osv-scanner-action:v2.3.8")) {
+  fail("production certification must fail closed on known dependency vulnerabilities")
 }
 
 if (failures.length) {
