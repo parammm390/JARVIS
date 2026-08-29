@@ -25,6 +25,14 @@ function actionWorkspace(actionTypes: string[]): WorkspaceKind {
   return "plan"
 }
 
+function hasCanonicalFailure(thread: Thread): boolean {
+  // A local submission/transport failure can happen before the backend creates
+  // durable Work. That is not a business recovery case and must not manufacture
+  // the Recovery workspace. Recovery is reserved for canonical Work/effects that
+  // actually exist or have begun executing.
+  return Boolean(thread.workId) || thread.everExecuted || Boolean(thread.workPosture)
+}
+
 function titleFor(kind: WorkspaceKind, thread: Thread): string {
   const query = thread.answerResult?.query?.result
   if (query?.intent === "customer_lookup") return query.status === "ambiguous" ? "Customer matches" : "Customer record"
@@ -54,7 +62,7 @@ export function projectThreadWorkspace(thread: Thread): WorkspaceProjection {
   let kind: WorkspaceKind
   if (thread.answerResult?.query) kind = queryWorkspace(thread.answerResult.query.result.intent)
   else if (thread.answerResult) kind = actionTypes.some((type) => RESEARCH_ACTIONS.has(type)) ? "research" : "answer"
-  else if (state === "failed") kind = "recovery"
+  else if (state === "failed" && hasCanonicalFailure(thread)) kind = "recovery"
   else if (state === "completed" || state === "partial" || state === "cancelled") kind = "receipt"
   else if (state === "executing" || state === "verifying" || (state === "awaiting_approval" && thread.everExecuted)) kind = "execution"
   else kind = actionWorkspace(actionTypes)
