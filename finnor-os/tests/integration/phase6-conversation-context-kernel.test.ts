@@ -254,7 +254,8 @@ describe.skipIf(!available)("Phase 6 authenticated-employee conversation context
     const ambiguous = await prepareEmployeeConversationTurn({ ctx, instruction: "Email John the update.", instructionId: randomUUID(), idempotencyKey: "ambiguous-john", channel: "text" });
     expect(ambiguous.context.resolution).toMatchObject({ status: "clarification_required", consequential: true });
     expect(ambiguous.context.resolution.candidates.length).toBeGreaterThanOrEqual(2);
-    const result = await new FinnorOrchestrator().handleInstructionResult("Email John the update.", ctx, { instructionId: ambiguous.userMessage.instructionId!, channel: "text", conversationContext: ambiguous.context, instructionRouteDecision: { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["phase6_reference_or_sender_ambiguous"] }, skipFastReadClassification: true });
+    const result = await new FinnorOrchestrator().handleInstructionResult("Email John the update.", ctx, { instructionId: ambiguous.userMessage.instructionId!, channel: "text", conversationContext: ambiguous.context, instructionRouteDecision: { version: 1, route: "CLARIFY", reasonCodes: ["consequential_target_or_sender_unresolved"] }, skipFastReadClassification: true });
+    expect(result.executionModel).toBe("CLARIFY");
     expect(result.actions).toHaveLength(1);
     expect(result.actions[0]?.actionType).toBe("clarification_request");
     const effects = await withTenant(tenantA, (db) => db

@@ -6,12 +6,10 @@
 // request-time serial loop.
 
 import {
-  businessEvents,
   businessEffects,
   businessOperations,
   businessOperationEvents,
   businessOperationTargets,
-  communicationsLog,
   decisionReceipts,
   domainActions,
   households,
@@ -21,6 +19,7 @@ import {
   withTenant,
   type Db,
 } from "@finnor/db";
+import { recordBusinessEvent, recordCustomerMessage } from "@finnor/data-platform";
 import {
   createDefaultRegistry,
   ScopedToolRegistry,
@@ -299,7 +298,7 @@ async function finishTarget(params: {
     )).returning({ id: businessOperationTargets.id });
     if (!updated) return;
     if (params.businessEventType) {
-      await db.insert(businessEvents).values({
+      await recordBusinessEvent(db, {
         tenantId: params.tenantId,
         entityType: "household",
         entityId: params.target.targetId,
@@ -315,11 +314,16 @@ async function finishTarget(params: {
       });
     }
     if (params.communication) {
-      await db.insert(communicationsLog).values({
+      await recordCustomerMessage(db, {
+        tenantId: params.tenantId,
         householdId: params.target.targetId,
         channel: params.communication.channel,
         direction: "outbound",
         content: params.communication.content,
+        provenance: {
+          sourceSystem: "business_operation",
+          externalId: `${params.operation.id}:${params.target.id}`,
+        },
       });
     }
     await appendEventTx(db, {

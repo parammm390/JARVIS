@@ -6,7 +6,7 @@ import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, serviceVisits, households, equipment, proposals } from "@finnor/db";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { createProposal } from "@finnor/data-platform";
 import { and, desc, eq, gte } from "drizzle-orm";
 import { z } from "zod";
 import { loadPricingCatalog, isPricingCatalogReady } from "../shared/pricing-catalog";
@@ -140,23 +140,16 @@ export const proposalBatchPlugin: DomainEnginePlugin = {
         if (tenantId) {
           try {
             await withTenant(tenantId, async (db) => {
-              const [row] = await db
-                .insert(proposals)
-                .values({
+              const row = await createProposal(db, {
+                  tenantId,
                   householdId: t.householdId,
                   content: { message, kind: "post_install_follow_up" },
                   status: "sent",
                   sentAt: new Date(),
-                })
-                .returning();
-              if (!row) throw new Error("proposal_evidence_not_created");
-              await recordBusinessEvent(db, {
-                tenantId,
-                entityType: "proposal",
-                entityId: row.id,
                 eventType: "post_install_followup_sent",
-                payload: { householdId: t.householdId },
+                eventPayload: { householdId: t.householdId },
               });
+              if (!row) throw new Error("proposal_evidence_not_created");
             });
             sent.push(t.label);
           } catch {

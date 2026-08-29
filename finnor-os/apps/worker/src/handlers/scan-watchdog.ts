@@ -1,6 +1,6 @@
-// scan_watchdog job (A4.T2, JARVIS MAESTRO PLAN §4): four independent reliability
+// scan_watchdog job (A4.T2, JARVIS MAESTRO PLAN §4): five independent reliability
 // signals the existing scans don't cover — stuck runs, orphaned steps, aging approvals
-// (nudge only), and unfinalized receipts. Modeled directly on scan-reliability-alerts.ts's
+// (nudge only), unfinalized receipts, and stale pre-execution Work. Modeled directly on scan-reliability-alerts.ts's
 // split between a pure, unit-testable detector and a thin handler that reports/acts —
 // same convention, new signals.
 //
@@ -15,7 +15,7 @@
 //    signal fires EARLIER (half that timeout) and only nudges — never changes status —
 //    so it can't race or duplicate that scan's own transition.
 
-import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, domainPolicyRevisions, enqueueJob, getPool } from "@finnor/db";
+import { withTenant, workflowRuns, workflowSteps, decisionReceipts, domainActions, domainPolicies, domainPolicyRevisions, enqueueJob, expireStaleInteractivePlanning, getPool } from "@finnor/db";
 import { and, eq, lt, isNull, sql } from "drizzle-orm";
 import { enqueueStep, isRunPastWatchdogDeadline, stuckRunDeadlineHours, workflowStepJobKey } from "@finnor/workflow-runtime";
 import { appendEpisode, readEpisodes } from "@finnor/memory";
@@ -36,11 +36,22 @@ const UNFINALIZED_RECEIPT_MINUTES = 60;
 const AGING_APPROVAL_NUDGE_FRACTION = 0.5;
 
 export interface WatchdogFinding {
-  kind: "stuck_run" | "orphaned_step" | "unfinalized_receipt" | "aging_approval_nudge";
+  kind: "stuck_run" | "orphaned_step" | "unfinalized_receipt" | "aging_approval_nudge" | "stale_interactive_planning";
   tenantId: string;
   refId: string;
   domainActionId?: string;
   detail: Record<string, unknown>;
+}
+
+async function detectAndCloseStaleInteractivePlanning(tenantId: string): Promise<WatchdogFinding[]> {
+  const cutoff = new Date(Date.now() - 2 * 60_000);
+  const expired = await expireStaleInteractivePlanning({ tenantId, staleBefore: cutoff, limit: 100 });
+  return expired.map((row) => ({
+    kind: "stale_interactive_planning" as const,
+    tenantId,
+    refId: row.workId,
+    detail: { workInputId: row.workInputId, cutoff: cutoff.toISOString(), remediation: "failed_visible" },
+  }));
 }
 
 function hoursSince(d: Date): number {
@@ -177,20 +188,21 @@ async function detectAndNudgeAgingApprovals(tenantId: string): Promise<WatchdogF
  *  yet: safe to reset and re-enqueue" branch. Everything else here only reads + reports;
  *  the handler below is the thin, untested-by-design wiring that alerts on it. */
 export async function detectWatchdogFindings(tenantId: string): Promise<WatchdogFinding[]> {
-  const [stuckRuns, orphanedSteps, unfinalizedReceipts, agingNudges] = await Promise.all([
+  const [stuckRuns, orphanedSteps, unfinalizedReceipts, agingNudges, staleInteractivePlanning] = await Promise.all([
     detectStuckRuns(tenantId),
     detectAndHealOrphanedSteps(tenantId),
     detectUnfinalizedReceipts(tenantId),
     detectAndNudgeAgingApprovals(tenantId),
+    detectAndCloseStaleInteractivePlanning(tenantId),
   ]);
-  return [...stuckRuns, ...orphanedSteps, ...unfinalizedReceipts, ...agingNudges];
+  return [...stuckRuns, ...orphanedSteps, ...unfinalizedReceipts, ...agingNudges, ...staleInteractivePlanning];
 }
 
 function severityFor(kind: WatchdogFinding["kind"]): "warning" | "error" {
   // A stuck run or an unfinalized receipt is a real reliability defect worth paging on;
   // an orphaned step self-heals the moment this scan finds it, and a nudge is routine —
   // both stay at "warning" (visible, not urgent).
-  return kind === "stuck_run" ? "error" : "warning";
+  return kind === "stuck_run" || kind === "unfinalized_receipt" || kind === "stale_interactive_planning" ? "error" : "warning";
 }
 
 export const scanWatchdog: JobHandler = async (payload) => {

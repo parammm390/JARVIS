@@ -6,7 +6,7 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import { CANONICAL_ENTITY_TYPES, type AttachWorkEntityInput, type CanonicalEntityRef, type DecisionContextSnapshot, type EmployeeConversationChannel, type EmployeeConversationMessage, type EmployeeConversationThreadSummary, type EmployeePersonalMemory } from "@finnor/shared-types";
 
@@ -586,6 +586,8 @@ export interface ReceiveWorkParams {
   idempotencyKey?: string;
   activeContext?: Record<string, unknown>;
   authorityContext?: Record<string, unknown>;
+  /** One absolute deadline created by the interactive API boundary. */
+  intakeDeadlineAt?: Date;
 }
 
 export interface ReceivedWork {
@@ -698,6 +700,9 @@ export async function attachWorkEntity(
  * any caller may invoke the planner. Both client instruction ids and explicit
  * idempotency keys are unique claims, so a network retry cannot create a second Work. */
 export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWork> {
+  if (params.intakeDeadlineAt && !Number.isFinite(params.intakeDeadlineAt.getTime())) {
+    throw new Error("Interactive intake deadline must be a valid absolute timestamp");
+  }
   const desiredWorkId = params.workId ?? params.instructionId ?? randomUUID();
   const desiredInstructionId = params.instructionId ?? randomUUID();
   const contextSnapshot = boundedProvenance(params.activeContext);
@@ -829,6 +834,7 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       contextSnapshot,
       contextSnapshotHash,
       contextCapturedAt,
+      intakeDeadlineAt: params.intakeDeadlineAt ?? null,
     }).onConflictDoNothing().returning();
     if (!input) {
       const [raced] = await db.select().from(schema.workInputs).where(and(
@@ -840,6 +846,23 @@ export async function receiveWork(params: ReceiveWorkParams): Promise<ReceivedWo
       )).limit(1);
       if (!raced) throw new Error("Unable to persist Work input");
       return duplicateForInput(raced);
+    }
+
+    if (input.intakeDeadlineAt) {
+      await db.insert(schema.jobs).values({
+        type: "reconcile_interactive_work",
+        payload: {
+          tenantId: params.tenantId,
+          workId: work.id,
+          workInputId: input.id,
+          instructionId: input.instructionId,
+          deadlineAt: input.intakeDeadlineAt.toISOString(),
+        },
+        idempotencyKey: `interactive-deadline:${input.id}`,
+        runAt: input.intakeDeadlineAt,
+        lane: "interactive",
+        priority: 200,
+      }).onConflictDoNothing({ target: schema.jobs.idempotencyKey });
     }
 
     // instruction_sessions remains the backward-compatible trace projection. Every
@@ -962,7 +985,7 @@ export interface TransitionWorkPatch {
   failure?: unknown;
   recovery?: unknown;
   activeContext?: Record<string, unknown>;
-  executionModel?: "query" | "conversation" | "atomic_effect" | "objective";
+  executionModel?: "query" | "conversation" | "atomic_action" | "objective" | "clarify";
   /** Optional optimistic fence for failures that may only claim a received Work. */
   expectedStatus?: WorkStatus;
   /** Optimistic generation fence for instruction-owned transitions. */
@@ -1069,12 +1092,16 @@ export async function claimWorkRecovery(params: {
   workId: string;
   attemptKey: string;
   requestedBy: string;
+  deadlineAt?: Date;
 }): Promise<{
   claimed: boolean;
   activeAttemptKey: string;
   status: "claimed" | "planning" | "succeeded" | "failed" | "timed_out";
   input: typeof schema.workInputs.$inferSelect | null;
 }> {
+  if (params.deadlineAt && !Number.isFinite(params.deadlineAt.getTime())) {
+    throw new Error("Work recovery deadline must be a valid absolute timestamp");
+  }
   return withTenant(params.tenantId, async (db) => {
     await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id}=${params.workId} AND ${schema.works.tenantId}=${params.tenantId} FOR UPDATE`);
     const [work] = await db.select().from(schema.works).where(and(
@@ -1119,6 +1146,7 @@ export async function claimWorkRecovery(params: {
         requestedBy: params.requestedBy,
         attemptKey: params.attemptKey,
         claimedAt: now.toISOString(),
+        ...(params.deadlineAt ? { deadlineAt: params.deadlineAt.toISOString() } : {}),
         ...(work.status === "recovery" ? { reclaimedFrom: activeAttemptKey || null } : {}),
       },
       updatedAt: now,
@@ -1132,6 +1160,23 @@ export async function claimWorkRecovery(params: {
       toStatus: "recovery",
       payload: { requestedBy: params.requestedBy, attemptKey: params.attemptKey, workInputId: input.id },
     });
+    if (params.deadlineAt) {
+      await db.insert(schema.jobs).values({
+        type: "reconcile_interactive_work",
+        payload: {
+          tenantId: params.tenantId,
+          workId: params.workId,
+          workInputId: input.id,
+          instructionId: input.instructionId,
+          attemptKey: params.attemptKey,
+          deadlineAt: params.deadlineAt.toISOString(),
+        },
+        idempotencyKey: `interactive-recovery-deadline:${params.workId}:${params.attemptKey}`,
+        runAt: params.deadlineAt,
+        lane: "interactive",
+        priority: 200,
+      }).onConflictDoNothing({ target: schema.jobs.idempotencyKey });
+    }
     return { claimed: true, activeAttemptKey: params.attemptKey, status: "claimed", input };
   });
 }
@@ -1179,6 +1224,186 @@ export async function finishWorkPlannerAttempt(params: {
     failure: params.failure ?? null,
     completedAt: new Date(),
   }).where(and(eq(schema.workPlannerAttempts.id, params.attemptId), eq(schema.workPlannerAttempts.tenantId, params.tenantId))));
+}
+
+/** Canonical deadline reconciliation for one exact Work input. This is safe to
+ * redeliver and cannot relabel Work that progressed beyond planning or whose active
+ * input changed. It also closes the instruction trace so SSE/poll consumers stop. */
+export async function expireInteractiveWorkInput(params: {
+  tenantId: string;
+  workId: string;
+  workInputId: string;
+  attemptKey?: string;
+}): Promise<boolean> {
+  return withTenant(params.tenantId, async (db) => {
+    await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id}=${params.workId} AND ${schema.works.tenantId}=${params.tenantId} FOR UPDATE`);
+    const [work] = await db.select().from(schema.works).where(and(
+      eq(schema.works.tenantId, params.tenantId),
+      eq(schema.works.id, params.workId),
+    )).limit(1);
+    const [input] = await db.select().from(schema.workInputs).where(and(
+      eq(schema.workInputs.tenantId, params.tenantId),
+      eq(schema.workInputs.id, params.workInputId),
+      eq(schema.workInputs.workId, params.workId),
+    )).limit(1);
+    if (!work || !input) return false;
+    const [latestInput] = await db.select({ id: schema.workInputs.id }).from(schema.workInputs)
+      .where(and(eq(schema.workInputs.tenantId, params.tenantId), eq(schema.workInputs.workId, params.workId)))
+      .orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id))
+      .limit(1);
+    if (latestInput?.id !== input.id) return false;
+    const recovery = jsonObject(work.recovery);
+    const recoveryDeadlineMs = typeof recovery.deadlineAt === "string" ? Date.parse(recovery.deadlineAt) : Number.NaN;
+    const isExactRecovery = Boolean(
+      params.attemptKey
+      && work.status === "recovery"
+      && recovery.attemptKey === params.attemptKey
+      && Number.isFinite(recoveryDeadlineMs),
+    );
+    if (!isExactRecovery && !["received", "understanding", "planning"].includes(work.status)) return false;
+    const deadlineAt = isExactRecovery ? new Date(recoveryDeadlineMs) : input.intakeDeadlineAt;
+    if (!deadlineAt) return false;
+    const clock = (await db.execute<{ now: Date | string }>(sql`SELECT now() AS now`)).rows[0];
+    const databaseNow = clock?.now instanceof Date ? clock.now : new Date(String(clock?.now ?? ""));
+    if (!Number.isFinite(databaseNow.getTime())) throw new Error("Database clock returned an invalid timestamp");
+    if (deadlineAt > databaseNow) return false;
+
+    const failure = {
+      kind: isExactRecovery ? "recovery_deadline_exceeded" : "intake_deadline_exceeded",
+      code: isExactRecovery ? "recovery_deadline_exceeded" : "intake_deadline_exceeded",
+      message: `${isExactRecovery ? "Recovery planning" : "Interactive planning"} did not finish before its absolute deadline`,
+      deadlineAt: deadlineAt.toISOString(),
+      recoverable: true,
+      at: databaseNow.toISOString(),
+    };
+    await db.update(schema.workPlannerAttempts).set({
+      status: "timed_out",
+      failure,
+      completedAt: databaseNow,
+    }).where(and(
+      eq(schema.workPlannerAttempts.tenantId, params.tenantId),
+      eq(schema.workPlannerAttempts.workId, params.workId),
+      eq(schema.workPlannerAttempts.workInputId, input.id),
+      eq(schema.workPlannerAttempts.status, "planning"),
+      params.attemptKey ? eq(schema.workPlannerAttempts.attemptKey, params.attemptKey) : undefined,
+    ));
+    await transitionWorkTx(db, params.tenantId, params.workId, "failed", isExactRecovery ? "recovery_deadline_expired" : "intake_deadline_expired", {
+      workInputId: input.id,
+      instructionId: input.instructionId,
+      deadlineAt: deadlineAt.toISOString(),
+      ...(params.attemptKey ? { attemptKey: params.attemptKey } : {}),
+    }, { failure, expectedStatus: work.status, expectedWorkInputId: input.id });
+
+    const [terminalTrace] = await db.select({ id: schema.instructionEvents.id }).from(schema.instructionEvents).where(and(
+      eq(schema.instructionEvents.tenantId, params.tenantId),
+      eq(schema.instructionEvents.instructionId, input.instructionId),
+      inArray(schema.instructionEvents.phase, ["completed", "failed", "cancelled"]),
+    )).limit(1);
+    if (!terminalTrace) {
+      const [latestTrace] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.instructionEvents.seq}), 0)::int` })
+        .from(schema.instructionEvents)
+        .where(eq(schema.instructionEvents.instructionId, input.instructionId));
+      await db.insert(schema.instructionEvents).values({
+        tenantId: params.tenantId,
+        instructionId: input.instructionId,
+        seq: (latestTrace?.maxSeq ?? 0) + 1,
+        phase: "failed",
+        payload: { error: failure.message, code: failure.code, workId: params.workId, recoverable: true },
+      });
+    }
+    return true;
+  });
+}
+
+/** Backstop for a deadline job lost to an older release or interrupted deployment.
+ * Only pre-execution lifecycle states are eligible, and every candidate is re-read
+ * under a Work row lock before failing. Objective execution/recovery/waits are never
+ * swept by this function. */
+export async function expireStaleInteractivePlanning(params: {
+  tenantId: string;
+  staleBefore?: Date;
+  limit?: number;
+}): Promise<Array<{ workId: string; workInputId: string | null }>> {
+  const staleBefore = params.staleBefore ?? new Date(Date.now() - 2 * 60_000);
+  if (!Number.isFinite(staleBefore.getTime())) throw new Error("Stale planning cutoff must be a valid timestamp");
+  const limit = Math.max(1, Math.min(500, Math.trunc(params.limit ?? 100)));
+  const candidates = await withTenant(params.tenantId, (db) => db
+    .select({ id: schema.works.id })
+    .from(schema.works)
+    .where(and(
+      eq(schema.works.tenantId, params.tenantId),
+      inArray(schema.works.status, ["received", "understanding", "planning"]),
+      lt(schema.works.updatedAt, staleBefore),
+    ))
+    .orderBy(asc(schema.works.updatedAt), asc(schema.works.id))
+    .limit(limit));
+  const expired: Array<{ workId: string; workInputId: string | null }> = [];
+  for (const candidate of candidates) {
+    const result = await withTenant(params.tenantId, async (db) => {
+      await db.execute(sql`SELECT id FROM ${schema.works} WHERE ${schema.works.id}=${candidate.id} AND ${schema.works.tenantId}=${params.tenantId} FOR UPDATE`);
+      const [work] = await db.select().from(schema.works).where(and(
+        eq(schema.works.tenantId, params.tenantId),
+        eq(schema.works.id, candidate.id),
+      )).limit(1);
+      if (!work || !["received", "understanding", "planning"].includes(work.status) || work.updatedAt >= staleBefore) return null;
+      const [input] = await db.select().from(schema.workInputs).where(and(
+        eq(schema.workInputs.tenantId, params.tenantId),
+        eq(schema.workInputs.workId, work.id),
+      )).orderBy(desc(schema.workInputs.createdAt), desc(schema.workInputs.id)).limit(1);
+      const clock = (await db.execute<{ now: Date | string }>(sql`SELECT now() AS now`)).rows[0];
+      const databaseNow = clock?.now instanceof Date ? clock.now : new Date(String(clock?.now ?? ""));
+      if (!Number.isFinite(databaseNow.getTime())) throw new Error("Database clock returned an invalid timestamp");
+      if (input?.intakeDeadlineAt && input.intakeDeadlineAt > databaseNow) return null;
+      const failure = {
+        kind: "stale_interactive_planning",
+        code: "stale_interactive_planning",
+        message: "Interactive Work stopped making progress before execution",
+        recoverable: true,
+        cutoff: staleBefore.toISOString(),
+        at: databaseNow.toISOString(),
+      };
+      await db.update(schema.workPlannerAttempts).set({
+        status: "timed_out",
+        failure,
+        completedAt: databaseNow,
+      }).where(and(
+        eq(schema.workPlannerAttempts.tenantId, params.tenantId),
+        eq(schema.workPlannerAttempts.workId, work.id),
+        eq(schema.workPlannerAttempts.status, "planning"),
+      ));
+      await transitionWorkTx(db, params.tenantId, work.id, "failed", "stale_interactive_planning_expired", {
+        workInputId: input?.id ?? null,
+        instructionId: input?.instructionId ?? null,
+        cutoff: staleBefore.toISOString(),
+      }, {
+        failure,
+        expectedStatus: work.status,
+        ...(input ? { expectedWorkInputId: input.id } : {}),
+      });
+      if (input) {
+        const [terminalTrace] = await db.select({ id: schema.instructionEvents.id }).from(schema.instructionEvents).where(and(
+          eq(schema.instructionEvents.tenantId, params.tenantId),
+          eq(schema.instructionEvents.instructionId, input.instructionId),
+          inArray(schema.instructionEvents.phase, ["completed", "failed", "cancelled"]),
+        )).limit(1);
+        if (!terminalTrace) {
+          const [latestTrace] = await db.select({ maxSeq: sql<number>`coalesce(max(${schema.instructionEvents.seq}), 0)::int` })
+            .from(schema.instructionEvents)
+            .where(eq(schema.instructionEvents.instructionId, input.instructionId));
+          await db.insert(schema.instructionEvents).values({
+            tenantId: params.tenantId,
+            instructionId: input.instructionId,
+            seq: (latestTrace?.maxSeq ?? 0) + 1,
+            phase: "failed",
+            payload: { error: failure.message, code: failure.code, workId: work.id, recoverable: true },
+          });
+        }
+      }
+      return { workId: work.id, workInputId: input?.id ?? null };
+    });
+    if (result) expired.push(result);
+  }
+  return expired;
 }
 
 async function decisionContextSnapshot(

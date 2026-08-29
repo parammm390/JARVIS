@@ -13,6 +13,7 @@ import {
   type CanonicalOperationalQueryIntent,
   type CanonicalOperationalQueryRequest,
   type OperationalLocalDateRange,
+  type OperationalLocalDateValue,
   type OperationalQueryPageRequest,
   type OperationalQueryResult as SharedOperationalQueryResult,
   type OperationalQuerySource,
@@ -43,9 +44,13 @@ type DraftOperationalQueryRequest =
   | { intent: "inventory_status"; lowStockOnly: boolean }
   | { intent: "agent_activity"; localDateRange: OperationalLocalDateRange }
   | { intent: "business_state" }
-  | { intent: "company_context"; query: string };
+  | { intent: "company_context"; query: string }
+  | { intent: "party_lookup"; query: string }
+  | { intent: "party_context"; query: string }
+  | { intent: "team_roster"; query: string }
+  | { intent: "party_availability"; query: string; localDateRange?: OperationalLocalDateRange };
 
-type QueryDateValue = string | "today" | "tomorrow";
+type QueryDateValue = OperationalLocalDateValue;
 type QueryResultStatus = "ok" | "ambiguous" | "not_found" | "inactive";
 type QueryTenantContext = Pick<TenantContext, "tenantId"> & Partial<Pick<TenantContext, "userId" | "employeeId">>;
 
@@ -182,7 +187,7 @@ const TRAILING_READ_ONLY_GUARD = new RegExp(
 const EXTERNAL_OR_AMBIGUOUS = /\b(?:quickbooks|stripe|google|meta|vapi|integration|connected account|external|online|web|research|look up|competitors?|comparable compan(?:y|ies)|peer compan(?:y|ies)|latest|current\s+(?:news|benchmark|market|source|industry)|why|forecast|predict|projection|trend|benchmark|cite|citation|source-backed)\b/i;
 const CASH_COLLECTIONS = /\b(?:cash\s+collections?|collections?|payments?\s+collected|collected\s+(?:cash|payments?)|cash\s+position|cash\b[\s\S]{0,40}\bcollected)\b/i;
 const ISO_DATE = /\b\d{4}-\d{2}-\d{2}\b/g;
-const DATE_WORD = /\b(?:today|tomorrow)\b/gi;
+const DATE_WORD = /\b(?:today|tomorrow|yesterday)\b/gi;
 const DATE_CONNECTOR = /\b(?:through|thru|to|until|and|between)\b/i;
 const DANGEROUS_LOOKUP_TEXT = /[;{}[\]<>=$`]/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -216,9 +221,16 @@ function validLocalDate(value: string): boolean {
 
 function parseDateTokens(instruction: string): QueryDateValue[] | null {
   const normalized = normalizedInstruction(instruction);
-  // Only two relative words and explicit ISO local dates are supported. This
-  // deliberately rejects "next Friday" and server-locale date parsing.
-  if (/\b(?:next|last|this|coming|week|month|friday|monday|tuesday|wednesday|thursday|saturday|sunday)\b/i.test(normalized)) return null;
+  if (/\bnext\s+week\b/i.test(normalized)) return ["next_week_start", "next_week_end"];
+  if (/\bthis\s+week\b/i.test(normalized)) return ["this_week_start", "this_week_end"];
+  const relativeWeekday = normalized.match(/\b(?:(this|next|coming)\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+  if (relativeWeekday?.[2]) {
+    const scope = relativeWeekday[1]?.toLowerCase() === "this" ? "this" : "next";
+    return [`${scope}_${relativeWeekday[2].toLowerCase()}` as QueryDateValue];
+  }
+  // Month/quarter language remains on the planner because the operational query
+  // contracts intentionally require exact bounded ranges.
+  if (/\b(?:last|this|next|coming)\s+(?:month|quarter|year)\b/i.test(normalized)) return null;
   const matches = [
     ...[...normalized.matchAll(ISO_DATE)].map((match) => ({ value: match[0] as QueryDateValue, index: match.index ?? 0 })),
     ...[...normalized.matchAll(DATE_WORD)].map((match) => ({ value: match[0].toLowerCase() as QueryDateValue, index: match.index ?? 0 })),
@@ -238,10 +250,12 @@ function queryParamString(value: string | undefined): string | undefined {
 
 function extractCustomerQuery(instruction: string): string | undefined {
   const normalized = normalizedInstruction(instruction);
+  const possessive = normalized.match(/\b(?:pull\s+up|show(?:\s+me)?|find|get)\s+([A-Za-z][A-Za-z .,'&-]{2,100}?)(?:['’]s)\s+(?:customer\s+)?(?:account|record|profile|details?)\b/i);
+  const acrossCompany = normalized.match(/\b(?:what\s+do\s+we\s+know|show(?:\s+me)?|tell\s+me)\s+about\s+([A-Za-z][A-Za-z .,'&-]{2,100}?)\s+(?:across|throughout)\s+(?:the\s+)?company\b/i);
   const match = normalized.match(/\b(?:for|about|named|called|customer|household|client|account)\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100}?)(?:\?|$|\b(?:history|record|details|information|lookup|look-up)\b)/i);
   const history = normalized.match(/\b(?:history|record|details|information)\s+for\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100})\??$/i);
   const fallback = normalized.match(/\b(?:customer|household|client|account)\s+([A-Za-z][A-Za-z0-9 .,'&-]{1,100})\??$/i);
-  const candidate = queryParamString((match?.[1] ?? history?.[1] ?? fallback?.[1])
+  const candidate = queryParamString((possessive?.[1] ?? acrossCompany?.[1] ?? match?.[1] ?? history?.[1] ?? fallback?.[1])
     ?.replace(/^(?:record|history|details|information)\s+for\s+/i, "")
     .replace(/[,.]+$/, ""));
   if (!candidate) return undefined;
@@ -255,13 +269,43 @@ function parseOperationalQuery(instruction: string): DraftOperationalQueryReques
   const normalized = normalizedInstruction(instruction);
   if (!normalized || normalized.length > 500) return null;
 
+  if ((/\b(?:team\s+roster|roster\s+for|members?\s+of|who\s+(?:is|are)\s+on|who\s+works\s+(?:on|in))\b/i.test(normalized)
+    && /\b(?:team|crew|department|org(?:anization)?\s+unit|field\s+service|operations)\b/i.test(normalized))) {
+    return { intent: "team_roster", query: normalized };
+  }
+
+  const namedPartyAvailability = /\b(?:is|will)\s+(?:my\s+|our\s+)?[\p{L}][\p{L}'’.-]*(?:\s+[\p{L}][\p{L}'’.-]*){0,3}\s+(?:available|free)\b/iu.test(normalized)
+    || /\b(?:availability|capacity)\s+(?:for|of)\s+(?:my\s+|our\s+)?[\p{L}][\p{L}'’.-]*(?:\s+[\p{L}][\p{L}'’.-]*){0,3}\b/iu.test(normalized)
+    || /\b(?:my|our)\s+(?:manager|technician|dispatcher|employee|supplier|vendor|team)\b[\s\S]{0,80}\b(?:available|availability|capacity|free)\b/i.test(normalized);
+  if (namedPartyAvailability) {
+    const dates = parseDateTokens(normalized);
+    return {
+      intent: "party_availability",
+      query: normalized,
+      ...(dates ? { localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } } : {}),
+    };
+  }
+
+  const explicitPartySignal = /\b(?:employee|technician|manager|dispatcher|supplier|vendor|external\s+contact|team|location)\b/i.test(normalized);
+  if (!/\b(?:customer|client|household|account)\b/i.test(normalized)
+    && explicitPartySignal
+    && (/\b(?:full|complete|connected|working)\s+(?:party\s+)?context\b/i.test(normalized)
+      || /\b(?:tell\s+me|show(?:\s+me)?|what\s+do\s+we\s+know)\b/i.test(normalized))) {
+    return { intent: "party_context", query: normalized };
+  }
+
+  if (/\bwho\s+(?:is|are)\s+(?:my|our|the)\s+(?:manager|dispatcher|technician|supplier|vendor|contact)\b/i.test(normalized)
+    || /\b(?:find|lookup|look\s+up|show)\s+(?:the\s+)?(?:employee|technician|manager|dispatcher|supplier|vendor|external\s+contact)\b/i.test(normalized)) {
+    return { intent: "party_lookup", query: normalized };
+  }
+
   const scheduleMention = /\b(?:schedule|calendar|appointment|appointments|service\s+visit|service\s+visits|work\s+order|work\s+orders|technician\s+availability|(?:available|free)\s+technicians?|technicians?\s+(?:who|that)\s+(?:are\s+)?(?:available|free)|who(?:'s|\s+is)\s+free|everything)\b/i.test(normalized);
   if (scheduleMention) {
     const dates = parseDateTokens(normalized);
     if (dates) return { intent: "schedule_range", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
   }
 
-  if (/\b(?:inactive|inactivity|haven['’]?t\s+seen|not\s+(?:visited|heard\s+from)|no\s+(?:service|visit|activity))\b/i.test(normalized)) {
+  if (/\b(?:inactive|inactivity|quiet|gone\s+quiet|haven['’]?t\s+seen|not\s+(?:visited|heard\s+from|contacted)|no\s+(?:service|visit|activity|contact)|without\s+(?:service|a\s+visit|contact))\b/i.test(normalized)) {
     const days = normalized.match(/\b(\d{1,4})\s*days?\b/i)?.[1];
     if (days) return { intent: "customer_cohort", minDaysInactive: Number(days) };
     return null;
@@ -273,19 +317,19 @@ function parseOperationalQuery(instruction: string): DraftOperationalQueryReques
     return { intent: "inventory_status", lowStockOnly: /\b(?:low|running\s+low|reorder)\b/i.test(normalized) };
   }
 
-  if (/\b(?:agent\s+activity|agent\s+actions|what\s+(?:did|has)\s+(?:the\s+)?(?:agent|agents|jarvis)|recent\s+activity|activity\s+log)\b/i.test(normalized)) {
+  if (/\b(?:agent\s+activity|agent\s+actions|what\s+(?:did|has|have)\s+(?:the\s+)?(?:ai\s+)?(?:agent|agents|jarvis)|recent\s+activity|activity\s+log)\b/i.test(normalized)) {
     const dates = parseDateTokens(normalized);
     if (!dates) return null;
     return { intent: "agent_activity", localDateRange: { startDate: dates[0]!, ...(dates[1] ? { endDate: dates[1] } : {}) } };
   }
-  if (/\b(?:business\s+state|business\s+health|operational\s+state|pipeline\s+health|business\s+overview|how\s+is\s+(?:the\s+)?business)\b/i.test(normalized)) return { intent: "business_state" };
+  if (/\b(?:business\s+state|business\s+health|operational\s+(?:state|snapshot|picture)|operating\s+snapshot|company\s+snapshot|pipeline\s+health|business\s+overview|how\s+is\s+(?:the\s+)?business)\b/i.test(normalized)) return { intent: "business_state" };
   if (/\b(?:how\s+many|count|status|pipeline|overview|summary)\b/i.test(normalized) && /\b(?:quotes?|proposals?|opportunities)\b/i.test(normalized)) return { intent: "business_state" };
-  if (/\b(?:full\s+context|connected\s+context|customer\s+360|household\s+360|service\s+history|customer\s+history|household\s+history|complete\s+(?:record|history))\b/i.test(normalized)) {
+  if (/\b(?:full\s+context|connected\s+context|customer\s+360|household\s+360|service\s+history|customer\s+history|household\s+history|complete\s+(?:record|history)|across\s+(?:the\s+)?company)\b/i.test(normalized)) {
     const query = extractCustomerQuery(normalized);
     if (!query) return null;
     return { intent: "company_context", query };
   }
-  if (/\b(?:work\s+orders?|work\b|jobs?|workflow|work\s+queue|backlog|in\s+progress)\b/i.test(normalized)) return { intent: "work_list", openOnly: /\b(?:open|pending|in\s+progress|backlog|queue)\b/i.test(normalized) };
+  if (/\b(?:work\s+orders?|work\b|jobs?|workflow|work\s+queue|backlog|in\s+progress|waiting\s+(?:for|on)\s+approval|pending\s+approval)\b/i.test(normalized)) return { intent: "work_list", openOnly: /\b(?:open|pending|in\s+progress|backlog|queue|waiting\s+(?:for|on)\s+approval)\b/i.test(normalized) };
 
   if (/\b(?:customer|household|client|account|customer\s+record|household\s+history)\b/i.test(normalized)) {
     const query = extractCustomerQuery(normalized);
@@ -325,6 +369,14 @@ function toCanonicalRequest(draft: DraftOperationalQueryRequest): OperationalQue
       return { intent: "business_state" };
     case "company_context":
       return { intent: "company_context", query: draft.query };
+    case "party_lookup":
+      return { intent: "party_lookup", query: draft.query };
+    case "party_context":
+      return { intent: "party_context", query: draft.query };
+    case "team_roster":
+      return { intent: "team_roster", query: draft.query };
+    case "party_availability":
+      return { intent: "party_availability", query: draft.query, ...(draft.localDateRange ? { localDateRange: draft.localDateRange } : {}) };
     default:
       return assertNever(draft);
   }
@@ -339,7 +391,11 @@ export function interpretOperationalQuery(instruction: string): OperationalQuery
   const normalized = normalizedInstruction(instruction);
   const readRequest = withoutTrailingReadOnlyGuard(normalized);
   if (!normalized || normalized.length > 500 || (!QUESTION_PREFIX.test(readRequest) && !/\?\s*$/.test(readRequest))) return { route: "planner", reason: "not_question" };
-  if (MUTATION_OR_ADVICE.test(readRequest)) return { route: "planner", reason: "mutation_or_advice" };
+  // "reorder point/threshold" names a recorded inventory field; it is not an
+  // instruction to reorder. Remove only that exact noun phrase for the mutation
+  // scan. Commands such as "reorder the cartridges" remain fenced to planning.
+  const mutationScan = readRequest.replace(/\breorder\s+(?:point|threshold|level)\b/gi, "stock threshold");
+  if (MUTATION_OR_ADVICE.test(mutationScan)) return { route: "planner", reason: "mutation_or_advice" };
   if (EXTERNAL_OR_AMBIGUOUS.test(readRequest)) return { route: "planner", reason: "external_or_ambiguous" };
   const draft = parseOperationalQuery(readRequest);
   return draft ? { route: "fast_read", confidence: "high", request: toCanonicalRequest(draft) } : { route: "planner", reason: "unsupported" };
@@ -356,7 +412,11 @@ function isRange(value: unknown): value is { start: string; end: string } {
 }
 
 function isLocalDateValue(value: unknown): value is QueryDateValue {
-  return typeof value === "string" && (value === "today" || value === "tomorrow" || validLocalDate(value));
+  return typeof value === "string" && (
+    ["today", "tomorrow", "yesterday", "this_week_start", "this_week_end", "next_week_start", "next_week_end"].includes(value)
+    || /^(?:this|next)_(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/.test(value)
+    || validLocalDate(value)
+  );
 }
 
 function isLocalDateRange(value: unknown): value is OperationalLocalDateRange {

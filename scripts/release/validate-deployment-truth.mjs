@@ -96,22 +96,43 @@ if (!/VERCEL_ORG_ID:\s*TEAM_ID/.test(vercelDeployScript) || !/VERCEL_PROJECT_ID:
 }
 for (const invariant of [
   "node scripts/release/preflight-production.mjs",
+  "npm run release:human-operability -- --check",
   "npm run release:migrate:production",
   "node scripts/release/deploy-production.mjs frontend",
   "node scripts/release/deploy-production.mjs api",
   "node scripts/release/deploy-azure-worker.mjs",
   "node scripts/release/configure-azure-sse-ingress.mjs",
   "node scripts/release/verify-production-parity.mjs",
+  "node scripts/release/verify-consecutive-human-certifications.mjs",
 ]) {
   if (!workflow.includes(invariant)) fail(`production workflow omits guarded stage: ${invariant}`)
 }
 if (!/concurrency:\s*[\s\S]*group:\s*finnor-production-release/.test(workflow)) fail("production workflow lost its concurrency lock")
+const credentialGateAt = workflow.indexOf("Require production credentials before any mutation")
 const preflightAt = workflow.indexOf("preflight-production.mjs")
 const migrationAt = workflow.indexOf("release:migrate:production")
+const firstProductionMutationAt = workflow.indexOf("configure-azure-sse-ingress.mjs")
+if (credentialGateAt < 0 || firstProductionMutationAt < 0 || credentialGateAt > firstProductionMutationAt) fail("production credentials are not gated before the first mutation")
+const nextStepAt = workflow.indexOf("- name:", credentialGateAt + 8)
+const credentialGate = workflow.slice(credentialGateAt, nextStepAt < 0 ? workflow.length : nextStepAt)
+for (const credential of [
+  "VERCEL_TOKEN",
+  "AZURE_CLIENT_ID",
+  "AZURE_TENANT_ID",
+  "AZURE_SUBSCRIPTION_ID",
+  "PRODUCT_TRUTH_AUTH_BEARER",
+  "PRODUCT_TRUTH_OTHER_AUTH_BEARER",
+  "PRODUCT_TRUTH_CERTIFICATION_KEY",
+]) {
+  if (!credentialGate.includes(credential)) fail(`pre-mutation credential gate omits ${credential}`)
+}
 if (preflightAt < 0 || migrationAt < 0 || preflightAt > migrationAt) fail("migration can run before production preflight")
 for (const component of ["frontend", "api"]) {
   const deployAt = workflow.indexOf(`deploy-production.mjs ${component} --deploy-only`)
   if (deployAt < migrationAt) fail(`${component} deployment is missing or can run before migration`)
+}
+if (!/for run in 1 2; do[\s\S]*PRODUCT_TRUTH_CERTIFICATION_RUN="\$run"[\s\S]*verify-consecutive-human-certifications\.mjs/.test(workflow)) {
+  fail("operational closure must require two ordered deployed Human Black-Box runs")
 }
 
 if (failures.length) {

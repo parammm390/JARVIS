@@ -7,6 +7,8 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import {
   SubmitInstructionSchema,
   InstructionSubmissionResponseSchema,
+  NonObjectiveInstructionSubmissionResponseSchema,
+  ObjectiveInstructionSubmissionResponseSchema,
   StartObjectiveSchema,
   ControlObjectiveSchema,
   HandoffWorkSchema,
@@ -261,8 +263,8 @@ const doc = {
         summary: "Submit a new instruction (voice transcript or text)",
         requestBody: { content: { "application/json": { schema: s(SubmitInstructionSchema) } } },
         responses: {
-          "201": { description: "Canonical QUERY, CONVERSATION, or ATOMIC_EFFECT result", content: { "application/json": { schema: s(InstructionSubmissionResponseSchema) } } },
-          "202": { description: "Canonical durable OBJECTIVE handoff", content: { "application/json": { schema: s(InstructionSubmissionResponseSchema) } } },
+          "201": { description: "Canonical QUERY, CONVERSATION, ATOMIC_ACTION, or CLARIFY result", content: { "application/json": { schema: s(NonObjectiveInstructionSubmissionResponseSchema) } } },
+          "202": { description: "Canonical durable OBJECTIVE handoff", content: { "application/json": { schema: s(ObjectiveInstructionSubmissionResponseSchema) } } },
           "400": { description: "Invalid payload" },
           "401": { description: "Bad auth" },
           "409": { description: "Legacy response requires canonical Work projection" },

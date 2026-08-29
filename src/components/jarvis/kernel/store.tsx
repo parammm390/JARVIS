@@ -190,6 +190,28 @@ export function parseSubmissionAnswer(value: unknown, query?: unknown): AnswerRe
   return parseAnswerEnvelope(value, query)
 }
 
+function submissionFailureMessage(error: unknown, envelope: Record<string, unknown> | null): string {
+  const nestedFailure = envelope?.failure && typeof envelope.failure === "object" && !Array.isArray(envelope.failure)
+    ? envelope.failure as Record<string, unknown>
+    : null
+  const code = typeof envelope?.code === "string"
+    ? envelope.code
+    : typeof nestedFailure?.code === "string"
+      ? nestedFailure.code
+      : ""
+  if (code === "worker_fleet_unavailable") {
+    return "The operating worker is temporarily unavailable. Nothing was executed; retry shortly."
+  }
+  const timedOut = error instanceof Error && /(?:deadline|timed?\s*out|timeout)/i.test(error.message)
+  if (timedOut || error instanceof JarvisApiError && error.status === 504) {
+    return "Planning took too long. Nothing was executed; you can retry safely."
+  }
+  if (error instanceof JarvisApiError && error.status === 503) {
+    return "The operating service is temporarily unavailable. Nothing was executed; retry shortly."
+  }
+  return "JARVIS could not complete this Work safely. Nothing is shown as executed without a canonical receipt."
+}
+
 export function parseAnswerResult(payload: Record<string, unknown>): AnswerResult | null {
   return parseAnswerEnvelope(payload.result)
 }
@@ -228,7 +250,8 @@ function submissionFromWorkAggregate(value: unknown): DurableSubmissionSnapshot 
     ? finalOutcome.response as Record<string, unknown>
     : null
   if (!response) return empty
-  const planned = response.executionModel === "ATOMIC_EFFECT" && Array.isArray(response.actions)
+  const storedModel = typeof response.executionModel === "string" ? response.executionModel.toUpperCase() : ""
+  const planned = (["ATOMIC_ACTION", "ATOMIC_EFFECT", "CLARIFY"] as string[]).includes(storedModel) && Array.isArray(response.actions)
     ? response.actions.filter((row): row is PlannedActionResponse => {
         if (!row || typeof row !== "object" || Array.isArray(row)) return false
         const candidate = row as Record<string, unknown>
@@ -1038,6 +1061,20 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
   const approvalRef = useRef({ approvalsThisSession: 0, rejectionsThisSession: 0 })
   approvalRef.current = { approvalsThisSession: data.approvalsThisSession, rejectionsThisSession: data.rejectionsThisSession }
 
+  const reconcileCanonicalWork = useCallback(async (workId: string, threadId: string, instructionId: string): Promise<boolean> => {
+    try {
+      const canonical = await jarvisClient.workCase(workId)
+      if (!canonical || canonical.durableWork?.id !== workId || activeInstructionIdRef.current !== instructionId) return false
+      setThread((current) => {
+        if (!current || current.id !== threadId || current.instructionId !== instructionId) return current
+        return applyWorkToThread(current, canonical)
+      })
+      return true
+    } catch {
+      return false
+    }
+  }, [])
+
   useEffect(() => {
     const canonical = activeWorkProjection.data
     if (!canonical || !activeWorkId || canonical.durableWork?.id !== activeWorkId) return
@@ -1264,6 +1301,9 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
               if (activeInstructionIdRef.current !== pointer.instructionId) return
               traceStatusRef.current = health
               setSseHealth(health)
+              if (health === "unavailable") {
+                void reconcileCanonicalWork(durableWorkId, pointer.id, pointer.instructionId)
+              }
             },
             sinceSeq: lastSeq,
           })
@@ -1273,7 +1313,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.loading, auth.session, thread])
+  }, [auth.loading, auth.session, reconcileCanonicalWork, thread])
 
   const setVoiceIndicators = useCallback((next: { micOpen?: boolean; speaking?: boolean }) => {
     if (next.micOpen !== undefined) setMicOpen(next.micOpen)
@@ -1528,6 +1568,9 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           if (activeInstructionIdRef.current !== instructionId) return
           traceStatusRef.current = health
           setSseHealth(health)
+          if (health === "unavailable") {
+            void reconcileCanonicalWork(identity.workId ?? instructionId, id, instructionId)
+          }
         },
       })
 
@@ -1540,6 +1583,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           ? err.details as Record<string, unknown>
           : null
         const errorWorkId = typeof errorEnvelope?.workId === "string" ? errorEnvelope.workId : null
+        const canonicalWorkId = errorWorkId ?? identity.workId ?? instructionId
         if (errorWorkId) {
           persistActiveThreadPointer({ id, sessionId, instructionId, workId: errorWorkId, ...(existing?.conversationThreadId ? { conversationThreadId: existing.conversationThreadId } : {}), source, instructionText: text, createdAtMs: nowMs })
           setThread((prev) => prev && prev.id === id && prev.instructionId === instructionId ? { ...prev, workId: errorWorkId } : prev)
@@ -1555,9 +1599,10 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
           // If the trace boundary itself is unavailable, the bounded local failure
           // below is the honest recovery surface.
         }
+        await reconcileCanonicalWork(canonicalWorkId, id, instructionId)
         traceHandleRef.current?.stop()
         setSseHealth(null)
-        const timedOut = err instanceof Error && /(?:deadline|timed?\s*out|timeout)/i.test(err.message)
+        const failureMessage = submissionFailureMessage(err, errorEnvelope)
         setThread((prev) =>
           prev && prev.id === id && prev.instructionId === instructionId
             ? isTerminal(prev.machine.instructionState)
@@ -1565,9 +1610,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
               : {
                   ...prev,
                   machine: transition(prev.machine, { type: "SUBMIT_FAILED" }),
-                  submitError: timedOut
-                    ? "Planning took too long. Nothing was executed; you can retry safely."
-                    : "JARVIS could not reach the operating system. Nothing was executed; you can retry safely.",
+                  submitError: failureMessage,
                   terminalAtMs: Date.now(),
                 }
             : prev,
@@ -1764,7 +1807,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
         // An answer completion is read-only. Do not leak its planned helper row
         // into the tenant-wide optimistic approval queue; similarly, never inject
         // rows from a response that belonged to a superseded instruction.
-        if (result.executionModel === "ATOMIC_EFFECT" && !answerResultInstructionIdsRef.current.has(instructionId)) {
+        if (result.executionModel === "ATOMIC_ACTION" && !answerResultInstructionIdsRef.current.has(instructionId)) {
           data.injectOptimisticPending(
             planned
               .filter((p) => p.actionType !== "clarification_request")
@@ -1785,7 +1828,7 @@ function KernelInner({ children, mode }: { children: React.ReactNode; mode?: Jar
       return "accepted"
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue, interaction, refreshRecentThreads],
+    [data.approvalsThisSession, data.rejectionsThisSession, drainTraceQueue, enqueueTraceEvents, resetTraceQueue, interaction, reconcileCanonicalWork, refreshRecentThreads],
   )
 
   const retryThread = useCallback(async () => {

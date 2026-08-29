@@ -13,8 +13,8 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { VapiWebhookSchema } from "@finnor/policy-schema";
-import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, communicationsLog, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, externalOperations, integrationOperations, enqueueJob, type Db } from "@finnor/db";
-import { createTask, persistCall, recordBusinessEvent } from "@finnor/data-platform";
+import { adminDb, withTenant, domainActions, domainPolicies, actionLog, tenantPhoneNumbers, getPool, households, works, receiveWork, users, workAggregate, ingestIntegrationEventTx, externalOperations, integrationOperations, enqueueJob, type Db } from "@finnor/db";
+import { createTask, persistCall, recordBusinessEvent, recordCustomerMessage, setCustomerMarketingConsent } from "@finnor/data-platform";
 import { ensureSecretsLoaded, resolveTenantCredentialContext } from "@finnor/security";
 import { linkEmployeeConversationTurnToWork, parseSpokenDecision, diagnoseFailure, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn, resolveProviderForPurpose } from "@finnor/orchestration";
 import { VOICE_AGENT_KEYS, logWithTrace } from "@finnor/tools";
@@ -34,6 +34,7 @@ import { checkAndRecordReceipt } from "../../../../lib/webhook-replay";
 import { verifyTimestampedHmacSignature } from "../../../../lib/verify-hmac-signature";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
 import { parseVoiceObjectiveCommand } from "../../../../lib/voice-objective-command";
+import { createInteractiveIntakeDeadline, requireInteractiveIntakeTime } from "../../../../lib/intake-deadline";
 
 /**
  * HMAC-with-timestamp: header `x-vapi-signature: t=<unix>,v1=<hex hmac>` computed over
@@ -172,14 +173,19 @@ async function recordOutboundCustomerOutcomeTx(
     outcome.experienceSummary ? `experience: ${String(outcome.experienceSummary)}` : null,
     outcome.preferredTimeText ? `preferred time: ${String(outcome.preferredTimeText)}` : null,
   ].filter(Boolean).join("; ");
-  await db.insert(communicationsLog).values({
+  await recordCustomerMessage(db, {
+    tenantId,
     householdId,
     channel: "call",
     direction: "outbound",
     content: summary.slice(0, 1200),
+    provenance: {
+      sourceSystem: "vapi",
+      ...(callId ? { externalId: `outcome:${callId}` } : {}),
+    },
   });
   if (outcome.optOut === true) {
-    await db.update(households).set({ marketingConsent: false }).where(eq(households.id, householdId));
+    await setCustomerMarketingConsent(db, { tenantId, householdId, consent: false, source: "vapi" });
   }
   await recordBusinessEvent(db, {
     tenantId,
@@ -298,7 +304,7 @@ async function describeExecutionOutput(actionSummary: string | null, out: Record
   return actionSummary ? `${actionSummary} — done.` : "Done, but nothing specific to report.";
 }
 
-async function handleToolCalls(message: Record<string, unknown>, tenantId: string): Promise<Response> {
+async function handleToolCalls(message: Record<string, unknown>, tenantId: string, signal?: AbortSignal): Promise<Response> {
   const callMeta = message.call as
     | { id?: string; phoneNumberId?: string; customer?: { number?: string }; phoneNumber?: { number?: string }; metadata?: Record<string, unknown> }
     | undefined;
@@ -348,6 +354,10 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           });
           continue;
         }
+        // One absolute budget covers identity/context lookup, objective intake,
+        // planning, and the response for this accepted voice instruction.
+        const intakeDeadlineAt = createInteractiveIntakeDeadline("voice");
+        requireInteractiveIntakeTime(intakeDeadlineAt);
         const sessionId = `vapi:${callId}`;
         const instructionId = randomUUID();
         const humanCtx = { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId };
@@ -390,7 +400,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
               const started = await orchestrator.startObjective(
                 objectiveCommand.objective,
                 { tenantId, userId: staffCtx.userId, employeeId: staffCtx.userId, authorityRevision: voiceAuthority?.revision, authorityRoles: voiceAuthority?.roles, role: staffCtx.role, correlationId },
-                { sessionId, channel: "voice", workId: activeWork?.id, idempotencyKey: `vapi:${callId}:objective:${tc.id}` },
+                { sessionId, channel: "voice", workId: activeWork?.id, idempotencyKey: `vapi:${callId}:objective:${tc.id}`, intakeDeadlineAt: new Date(intakeDeadlineAt) },
               );
               objectiveLink = { workId: started.workId, workInputId: started.workInputId, objectiveLoopId: started.objectiveLoopId };
               spoken = `I own that objective now. It is durable Work ${started.workId.slice(0, 8)}, and I will inspect current business state before choosing one bounded next step.`;
@@ -434,6 +444,7 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
           results.push({ toolCallId: tc.id, result: spoken });
           continue;
         }
+        requireInteractiveIntakeTime(intakeDeadlineAt);
         const instructionResult = await getOrchestrator().handleInstructionResult(
           instruction,
           humanCtx,
@@ -445,6 +456,8 @@ async function handleToolCalls(message: Record<string, unknown>, tenantId: strin
             idempotencyKey: `vapi:${callId}:tool:${tc.id}`,
             activeContext,
             conversationContext: prepared.context,
+            signal,
+            deadlineAt: intakeDeadlineAt,
           },
         );
         const actions = instructionResult.actions;
@@ -702,7 +715,7 @@ export async function POST(req: Request): Promise<Response> {
 
   // 1. Live-call tools: plan + spoken confirmation inside the same call.
   if (msg.type === "tool-calls") {
-    return handleToolCalls(msg, tenantId);
+    return handleToolCalls(msg, tenantId, req.signal);
   }
 
   // B1.T4: in-progress call status → NOTIFY → SSE, so the cockpit sees a call

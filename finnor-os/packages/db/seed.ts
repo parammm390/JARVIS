@@ -9,6 +9,54 @@ import { fileURLToPath } from "node:url";
 export const SEED_TENANT_ID = "00000000-0000-4000-8000-000000000001";
 export const SEED_OWNER_EMAIL = "owner@test-dealer.finnor.local";
 
+async function insertSeedCommunication(
+  client: pg.Client,
+  params: {
+    householdId: string;
+    channel: "call" | "sms" | "email";
+    direction: "inbound" | "outbound";
+    content: string;
+    sentAt: Date;
+    key: string;
+  },
+): Promise<void> {
+  const conversationChannel = params.channel === "call" ? "voice" : params.channel;
+  // Keep parent and child inserts in separate SQL statements. Canonical-reference
+  // triggers deliberately resolve the parent through the table; a data-modifying CTE
+  // shares one statement snapshot and therefore hides its just-created conversation
+  // from that trigger even though RETURNING can see it.
+  const conversation = await client.query<{ id: string }>(
+    `INSERT INTO conversations(
+       id,tenant_id,household_id,channel,status,last_activity_at,source_system,external_id,created_by,created_at
+     ) VALUES (
+       md5($1::text || ':seed-conversation:' || $2::text || ':' || $3::text)::uuid,
+       $1::uuid,$2::uuid,$3::text,'open',$4::timestamptz,'seed','conversation:' || $2::text || ':' || $3::text,'seed',$4::timestamptz
+     )
+     ON CONFLICT (id) DO UPDATE SET
+       last_activity_at=greatest(conversations.last_activity_at,EXCLUDED.last_activity_at)
+     RETURNING id::text`,
+    [SEED_TENANT_ID, params.householdId, conversationChannel, params.sentAt],
+  );
+  const message = await client.query<{ id: string }>(
+    `INSERT INTO messages(
+       id,tenant_id,conversation_id,direction,channel,content,sent_at,source_system,external_id,created_by,created_at
+     ) VALUES (
+       md5($1::text || ':seed-message:' || $7::text)::uuid,$1::uuid,$2::uuid,
+       $3::text,$4::text,$5::text,$6::timestamptz,'seed',$7::text,'seed',$6::timestamptz
+     )
+     ON CONFLICT (id) DO NOTHING
+     RETURNING id::text`,
+    [SEED_TENANT_ID, conversation.rows[0]!.id, params.direction, params.channel, params.content, params.sentAt, params.key],
+  );
+  if (message.rows[0]) {
+    await client.query(
+      `INSERT INTO business_events(tenant_id,entity_type,entity_id,event_type,payload,occurred_at,source)
+       VALUES ($1::uuid,'message',$2::uuid,'message_recorded','{"seed":true}'::jsonb,$3::timestamptz,'seed')`,
+      [SEED_TENANT_ID, message.rows[0].id, params.sentAt],
+    );
+  }
+}
+
 export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void> {
   if (!databaseUrl) throw new Error("DATABASE_URL is not set");
   const client = new pg.Client(pgConnectionConfig(databaseUrl));
@@ -329,12 +377,14 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
          WHERE NOT EXISTS (SELECT 1 FROM invoices WHERE household_id = $2)`,
         [SEED_TENANT_ID, petersons],
       );
-      await client.query(
-        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
-         SELECT $1, 'call', 'outbound', 'Post-install follow-up — customer satisfied, mentioned invoice would be paid "this week"', now() - interval '20 days'
-         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
-        [petersons],
-      );
+      await insertSeedCommunication(client, {
+        householdId: petersons,
+        channel: "call",
+        direction: "outbound",
+        content: 'Post-install follow-up — customer satisfied, mentioned invoice would be paid "this week"',
+        sentAt: new Date(Date.now() - 20 * 24 * 3600 * 1000),
+        key: "petersons-post-install",
+      });
       await client.query(
         `INSERT INTO workflow_states (tenant_id, workflow, subject_type, subject_id, state, history)
          SELECT $1, 'lead_to_install', 'household', $2, 'follow_up_sent',
@@ -357,12 +407,14 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
          VALUES ($1, 'water_softener', 'Standard Softener 32k', 'finnor', now() - interval '210 days') ON CONFLICT DO NOTHING`,
         [angela],
       );
-      await client.query(
-        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
-         SELECT $1, 'call', 'outbound', 'Annual service reminder call — no answer, left voicemail', now() - interval '152 days'
-         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
-        [angela],
-      );
+      await insertSeedCommunication(client, {
+        householdId: angela,
+        channel: "call",
+        direction: "outbound",
+        content: "Annual service reminder call — no answer, left voicemail",
+        sentAt: new Date(Date.now() - 152 * 24 * 3600 * 1000),
+        key: "angela-annual-reminder",
+      });
       await client.query(
         `INSERT INTO maintenance_agreements (household_id, cadence, terms, status, renewal_date)
          VALUES ($1, 'annual', '{"plan":"standard","price_usd":"${PLACEHOLDER_NEEDS_REAL_VALUE}"}', 'lapsed', now() - interval '60 days')
@@ -376,12 +428,14 @@ export async function seed(databaseUrl = process.env.DATABASE_URL): Promise<void
          VALUES ($1, 'water_softener', 'HE Softener 45k', 'finnor', now() - interval '180 days') ON CONFLICT DO NOTHING`,
         [whitfields],
       );
-      await client.query(
-        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp)
-         SELECT $1, 'sms', 'outbound', 'Filter change reminder texted', now() - interval '128 days'
-         WHERE NOT EXISTS (SELECT 1 FROM communications_log WHERE household_id = $1)`,
-        [whitfields],
-      );
+      await insertSeedCommunication(client, {
+        householdId: whitfields,
+        channel: "sms",
+        direction: "outbound",
+        content: "Filter change reminder texted",
+        sentAt: new Date(Date.now() - 128 * 24 * 3600 * 1000),
+        key: "whitfields-filter-reminder",
+      });
     }
 
     // Read-only actions (web research, stock/availability checks, knowledge lookups)

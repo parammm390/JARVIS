@@ -832,7 +832,7 @@ export async function causalReplayProjection(
     work: {
       id: work.id,
       status: work.status,
-      executionModel: work.executionModel,
+      executionModel: work.executionModel === "atomic_effect" ? "atomic_action" : work.executionModel,
       objective: objectiveLoop?.objective ?? work.initialInstruction,
       objectiveState: objectiveLoop?.state ?? null,
       successCondition: objectiveLoop?.successCondition ?? null,

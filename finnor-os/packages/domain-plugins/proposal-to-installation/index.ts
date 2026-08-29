@@ -12,7 +12,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, invoices, warehouses, warehouseStock, workOrders } from "@finnor/db";
 import { submitCommand } from "@finnor/workflow-runtime";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { createInvoice, updateWorkOrderStatus } from "@finnor/data-platform";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -68,13 +68,10 @@ export const proposalToInstallationPlugin: DomainEnginePlugin = {
     const idempotencyKey = `installation:${quoteId}`;
 
     // Deposit invoice — invoices is the pre-Phase-1 canonical table, no external call.
-    const invoice = await withTenant(tenantId, async (db) => {
-      const [row] = await db
-        .insert(invoices)
-        .values({ tenantId, householdId, amountUsd: depositAmountUsd.toFixed(2), status: "sent", memo: "Installation deposit" })
-        .returning();
-      return row!;
-    });
+    const invoice = await withTenant(tenantId, (db) => createInvoice(db, {
+      tenantId, householdId, amountUsd: depositAmountUsd, status: "sent", memo: "Installation deposit",
+      eventPayload: { quoteId, purpose: "installation_deposit" },
+    }));
 
     // Procurement exception check: does the default warehouse have enough stock right
     // now? If not, a receive_procurement step for the shortfall is inserted BEFORE the
@@ -140,8 +137,7 @@ export default proposalToInstallationPlugin;
  *  than as a full technician-facing checklist UI/action type; a real, scoped
  *  simplification, not a claim that a checklist system exists. */
 export async function completeInstallation(tenantId: string, workOrderId: string): Promise<void> {
-  await withTenant(tenantId, async (db) => {
-    await db.update(workOrders).set({ status: "completed", completedAt: new Date() }).where(eq(workOrders.id, workOrderId));
-    await recordBusinessEvent(db, { tenantId, entityType: "work_order", entityId: workOrderId, eventType: "installation_completed" });
-  });
+  await withTenant(tenantId, (db) => updateWorkOrderStatus(db, {
+    tenantId, workOrderId, status: "completed", completedAt: new Date(), eventType: "installation_completed",
+  }));
 }

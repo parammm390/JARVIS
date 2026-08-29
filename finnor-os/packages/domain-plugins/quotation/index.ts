@@ -9,7 +9,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { z } from "zod";
 import { withTenant, proposals } from "@finnor/db";
-import { createQuote } from "@finnor/data-platform";
+import { createProposal, createQuote, setProposalStatus } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { findHousehold } from "../shared/db-helpers";
 import { loadPricingCatalog, priceForItem } from "../shared/pricing-catalog";
@@ -210,10 +210,9 @@ export const quotationPlugin: DomainEnginePlugin = {
               }),
             ).then((r) => r.quoteId)
           : null;
-        const row = await withTenant(tenantId, async (db) => {
-          const [r] = await db.insert(proposals).values({ householdId: hh.id, content, status: "draft", quoteId }).returning();
-          return r!;
-        });
+        const row = await withTenant(tenantId, (db) => createProposal(db, {
+          tenantId, householdId: hh.id, content, status: "draft", quoteId,
+        }));
         return { status: "success", output: { proposalId: row.id, quoteId, quote: content }, expected: { generated: true } };
       }
       return { status: "success", output: { quote: content, note: "No matching customer record — quote not attached to a household." }, expected: { generated: true } };
@@ -242,12 +241,15 @@ export const quotationPlugin: DomainEnginePlugin = {
       }
       try {
         const updated = await withTenant(tenantId, (db) =>
-          db.update(proposals)
-            .set({ status: "sent", sentAt: new Date() })
-            .where(eq(proposals.id, String(draft.payload.proposalId)))
-            .returning({ id: proposals.id }),
+          setProposalStatus(db, {
+            tenantId,
+            proposalId: String(draft.payload.proposalId),
+            status: "sent",
+            sentAt: new Date(),
+            eventType: "proposal_sent",
+          }),
         );
-        if (updated.length !== 1) throw new Error("proposal_state_not_updated");
+        if (!updated) throw new Error("proposal_state_not_updated");
       } catch {
         return {
           status: "failure",

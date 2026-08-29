@@ -23,6 +23,7 @@ import type { JobHandler } from "../queue";
 // Relative path, not a workspace package — invoice-to-cash has no package.json of its
 // own (matches how the Temporal activities.ts this replaces imported it).
 import { startInvoiceToCash } from "../../../../packages/domain-plugins/invoice-to-cash/index";
+import { createInvoice, updateMaintenanceAgreement } from "@finnor/data-platform";
 
 let orchestrator: FinnorOrchestrator | null = null;
 function getOrchestrator(): FinnorOrchestrator {
@@ -75,7 +76,13 @@ export async function markAgreementRenewed(ctx: AgreementContext): Promise<void>
   const nextRenewalDate = new Date();
   nextRenewalDate.setMonth(nextRenewalDate.getMonth() + (CADENCE_MONTHS[ctx.cadence] ?? 12));
   await withTenant(ctx.tenantId, (db) =>
-    db.update(maintenanceAgreements).set({ status: "renewed", renewalDate: nextRenewalDate }).where(eq(maintenanceAgreements.id, ctx.agreementId)),
+    updateMaintenanceAgreement(db, {
+      tenantId: ctx.tenantId,
+      agreementId: ctx.agreementId,
+      patch: { status: "renewed", renewalDate: nextRenewalDate },
+      eventType: "maintenance_agreement_renewed",
+      eventPayload: { renewalDate: nextRenewalDate.toISOString() },
+    }),
   );
   await advanceWorkflowState(ctx.tenantId, "amc_renewal", "maintenance_agreement", ctx.agreementId, "renewed", "amc_renewal_sequence");
 
@@ -95,19 +102,17 @@ export async function markAgreementRenewed(ctx: AgreementContext): Promise<void>
     return;
   }
 
-  const [invoice] = await withTenant(ctx.tenantId, (db) =>
-    db
-      .insert(invoices)
-      .values({
+  const invoice = await withTenant(ctx.tenantId, (db) =>
+    createInvoice(db, {
         tenantId: ctx.tenantId,
         householdId: ctx.householdId,
-        amountUsd: String(priceUsd),
+        amountUsd: priceUsd,
         memo: `${ctx.cadence.replace("_", "-")} maintenance agreement renewal`,
         status: "sent",
-      })
-      .returning(),
+        eventPayload: { agreementId: ctx.agreementId, purpose: "maintenance_renewal" },
+      }),
   );
-  await startInvoiceToCash(ctx.tenantId, { invoiceId: invoice!.id, channel: "sms" });
+  await startInvoiceToCash(ctx.tenantId, { invoiceId: invoice.id, channel: "sms" });
 }
 
 /** No response after both reminders: mark the agreement lapsed and have Vapi tell the
@@ -115,7 +120,12 @@ export async function markAgreementRenewed(ctx: AgreementContext): Promise<void>
  *  notifyOwnerLapsed activity. */
 async function escalateAgreementLapsed(ctx: AgreementContext): Promise<void> {
   await withTenant(ctx.tenantId, (db) =>
-    db.update(maintenanceAgreements).set({ status: "lapsed" }).where(eq(maintenanceAgreements.id, ctx.agreementId)),
+    updateMaintenanceAgreement(db, {
+      tenantId: ctx.tenantId,
+      agreementId: ctx.agreementId,
+      patch: { status: "lapsed" },
+      eventType: "maintenance_agreement_lapsed",
+    }),
   );
   await advanceWorkflowState(ctx.tenantId, "amc_renewal", "maintenance_agreement", ctx.agreementId, "lapsed", "amc_renewal_sequence");
   await enqueueJob(
@@ -215,10 +225,13 @@ export const scheduledReminder: JobHandler = async (payload) => {
     };
     const { actionId } = await draftRenewalReminder(ctx, 1);
     await withTenant(tenantId, (db) =>
-      db
-        .update(maintenanceAgreements)
-        .set({ status: "renewal_sent", firstReminderSentAt: new Date() })
-        .where(eq(maintenanceAgreements.id, row.agreementId)),
+      updateMaintenanceAgreement(db, {
+        tenantId,
+        agreementId: row.agreementId,
+        patch: { status: "renewal_sent", firstReminderSentAt: new Date() },
+        eventType: "maintenance_renewal_reminder_sent",
+        eventPayload: { attempt: 1, actionId },
+      }),
     );
     // Phase 12: every drafting scan also records a finding pointing at what it
     // drafted, so the digest can say "already queued" instead of double-reporting.
@@ -268,7 +281,13 @@ export const scheduledReminder: JobHandler = async (payload) => {
     };
     const { actionId } = await draftRenewalReminder(ctx, 2);
     await withTenant(tenantId, (db) =>
-      db.update(maintenanceAgreements).set({ secondReminderSentAt: new Date() }).where(eq(maintenanceAgreements.id, row.agreementId)),
+      updateMaintenanceAgreement(db, {
+        tenantId,
+        agreementId: row.agreementId,
+        patch: { secondReminderSentAt: new Date() },
+        eventType: "maintenance_renewal_reminder_sent",
+        eventPayload: { attempt: 2, actionId },
+      }),
     );
     await withTenant(tenantId, (db) =>
       db.insert(scanFindings).values({

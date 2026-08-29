@@ -320,6 +320,11 @@ export function startTracePoll(
     }
     if (stopped) return
     if (Date.now() - startedAtMs >= TRACE_POLL_CEILING_MS) {
+      report("unavailable", {
+        status: 0,
+        message: "Instruction trace polling reached its bounded ceiling; reconcile canonical Work",
+        attempts: Math.max(consecutiveFailures, notFoundRetries),
+      })
       stop()
       return
     }

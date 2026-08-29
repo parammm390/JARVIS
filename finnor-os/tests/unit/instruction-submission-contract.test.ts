@@ -18,8 +18,9 @@ describe("canonical instruction submission response", () => {
   it.each([
     { executionModel: "QUERY", actions: [], query: { request: {}, result: {} }, ...common, assistantMessage: { ...common.assistantMessage, semanticKind: "ANSWER" } },
     { executionModel: "CONVERSATION", actions: [], answer: { kind: "answer", spokenSummary: "Hello" }, ...common, assistantMessage: { ...common.assistantMessage, semanticKind: "ANSWER" } },
-    { executionModel: "ATOMIC_EFFECT", actions: [{ id: "action" }], ...common },
+    { executionModel: "ATOMIC_ACTION", actions: [{ id: "action" }], ...common },
     { executionModel: "OBJECTIVE", actions: [], objectiveLoopId: "66666666-6666-4666-8666-666666666666", objectiveState: "continue", ...common },
+    { executionModel: "CLARIFY", actions: [{ id: "clarification", actionType: "clarification_request" }], ...common, assistantMessage: { ...common.assistantMessage, semanticKind: "CLARIFICATION" } },
   ])("accepts the $executionModel branch", (value) => {
     expect(InstructionSubmissionResponseSchema.safeParse(value).success).toBe(true);
   });
@@ -27,5 +28,6 @@ describe("canonical instruction submission response", () => {
   it("rejects an Objective without durable identity and a Conversation without an Answer", () => {
     expect(InstructionSubmissionResponseSchema.safeParse({ executionModel: "OBJECTIVE", actions: [], objectiveState: "continue", ...common }).success).toBe(false);
     expect(InstructionSubmissionResponseSchema.safeParse({ executionModel: "CONVERSATION", actions: [], ...common }).success).toBe(false);
+    expect(InstructionSubmissionResponseSchema.safeParse({ executionModel: "CLARIFY", actions: [], ...common }).success).toBe(false);
   });
 });

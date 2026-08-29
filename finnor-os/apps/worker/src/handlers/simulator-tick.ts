@@ -11,9 +11,9 @@
 // Nothing here bypasses a policy's requiresConfirmation gate: a gated action lands in
 // the real approval queue exactly like a real dealer/customer-triggered one would.
 
-import { withTenant, tenantSettings, households, technicians, maintenanceAgreements, invoices, serviceVisits, communicationsLog, workflowSteps } from "@finnor/db";
+import { withTenant, tenantSettings, households, technicians, maintenanceAgreements, invoices, serviceVisits, workflowSteps } from "@finnor/db";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
-import { createLead } from "@finnor/data-platform";
+import { createLead, createServiceVisit, recordCustomerMessage } from "@finnor/data-platform";
 import { FinnorOrchestrator, recordDealerZeroDay } from "@finnor/orchestration";
 import { planDailyEvents, type DailySimulationContext } from "../simulator/plan";
 import { isScenarioPack, type ScenarioPack } from "../simulator/scenarios";
@@ -122,13 +122,16 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
   for (const visit of plan.visitOutcomes) {
     const scheduledAt = new Date();
     await withTenant(tenantId, (db) =>
-      db.insert(serviceVisits).values({
+      createServiceVisit(db, {
+        tenantId,
         householdId: visit.householdId,
         technicianId: technicianById.get(visit.technicianId),
         type: "maintenance",
         scheduledAt,
         completedAt: visit.outcome === "completed" ? scheduledAt : null,
         notes: visit.outcome === "completed" ? "Routine maintenance visit completed — filters/salt checked." : "Customer no-show — visit not completed, rescheduling needed.",
+        eventType: visit.outcome === "completed" ? "simulated_service_visit_completed" : "simulated_service_visit_no_show",
+        eventPayload: { dateSeed, scenario },
       }),
     );
     if (visit.outcome === "completed") {
@@ -148,11 +151,16 @@ export async function runSimulatorTick(tenantId: string, dateSeed: string, scena
 
   if (plan.complaintHouseholdId) {
     await withTenant(tenantId, (db) =>
-      db.insert(communicationsLog).values({
+      recordCustomerMessage(db, {
+        tenantId,
         householdId: plan.complaintHouseholdId!,
         channel: "sms",
         direction: "inbound",
         content: "Hi, our water has had a strange taste the last couple days, can someone take a look?",
+        provenance: {
+          sourceSystem: "dealer_zero_simulator",
+          externalId: `${dateSeed}:${scenario}:complaint:${plan.complaintHouseholdId}`,
+        },
       }),
     );
     await draftAndDrain(

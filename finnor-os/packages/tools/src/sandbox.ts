@@ -1,24 +1,18 @@
 // Sandbox comms drivers: same tool names, same schemas, REAL side effects in our own
-// database (households, service_visits, communications_log, sandbox_outbox) — the only
+// database (households, service_visits, canonical messages, sandbox_outbox) — the only
 // thing simulated is the final carrier hop (PSTN call / SMS delivery). When real keys
 // arrive, createDefaultRegistry() swaps these for the live GHL/Vapi drivers with zero
 // changes to any plugin or orchestrator code.
 //
-// Phase 3: also writes the canonical contacts/contact_methods/conversations/messages
-// rows (@finnor/data-platform) alongside the legacy households/communications_log/
-// sandbox_outbox writes — additive, not a replacement. apps/api/app/api/comms/route.ts
-// (the console's Communications view) still reads the legacy tables, so removing them
-// would regress a working UI; the canonical rows exist so 6+ plugins whose persisted
-// output flows through this one file (bulk-notify, customer-comm, marketing,
-// maintenance-agreement, proposal-batch, water-test) now also produce real canonical
-// data without any of them needing their own change.
+// Customer communication is written once through the data-platform boundary; the
+// legacy communications_log name is now only a read projection of canonical messages.
 
 import { z } from "zod";
 import type { Tool, ToolRegistry, ToolRuntimeContext } from "./registry";
 import type { Db } from "@finnor/db";
-import { withTenant, households, serviceVisits, communicationsLog, sandboxOutbox, contacts, contactMethods } from "@finnor/db";
+import { withTenant, households, serviceVisits, sandboxOutbox, contacts, contactMethods } from "@finnor/db";
 import { and, eq, or, sql } from "drizzle-orm";
-import { createContact, addContactMethod, getOrCreateConversation, persistMessage } from "@finnor/data-platform";
+import { createCustomerHousehold, createServiceVisit, recordCustomerMessage } from "@finnor/data-platform";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -121,20 +115,14 @@ export async function upsertHouseholdByPhone(
       // same-phone household in tenant A become tenant B's sandbox contact.
       .where(and(eq(households.tenantId, tenantId), sql`${households.contactInfo} ->> 'phone' = ${phone}`));
     if (existing) return { householdId: existing.id, created: false };
-    const [created] = await db
-      .insert(households)
-      .values({
-        tenantId,
-        address: address ?? "(address pending — captured from call)",
-        contactInfo: { phone, ...(name ? { name } : {}) },
-      })
-      .returning();
-    // Dual-write, same pattern as Phase 1's crm plugin: household stays authoritative,
-    // the canonical contact/consent record is additive. Only on first creation — a
-    // repeat call for a phone we already know about must not mint a second contact.
-    const { contactId } = await createContact(db, { tenantId, householdId: created!.id, name: name ?? "Unknown caller" });
-    await addContactMethod(db, { tenantId, contactId, methodType: "phone", value: phone });
-    return { householdId: created!.id, created: true };
+    const created = await createCustomerHousehold(db, {
+      tenantId,
+      name: name ?? "Unknown caller",
+      phone,
+      ...(address ? { address } : {}),
+      source: "sandbox_contact_capture",
+    });
+    return { householdId: created.householdId, created: true };
   });
 }
 
@@ -148,8 +136,7 @@ export async function bookServiceVisit(
   const when = new Date(startTime);
   const scheduledAt = Number.isNaN(when.getTime()) ? null : when;
   const visit = await withExecutionDb(tenantId, executionDb, async (db) => {
-    const [row] = await db.insert(serviceVisits).values({ householdId, type: "water_test", scheduledAt }).returning();
-    return row!;
+    return createServiceVisit(db, { tenantId, householdId, type: "water_test", scheduledAt });
   });
   return { booked: true, visitId: visit.id, scheduledAt: visit.scheduledAt?.toISOString() ?? "unscheduled", simulated: true };
 }
@@ -162,24 +149,34 @@ export async function recordOutbound(
   toNumber: string,
   content: string,
   executionDb?: Db,
-): Promise<void> {
+  provenance?: { sourceSystem: string; externalId?: string },
+): Promise<{ canonicalMessageRecorded: boolean }> {
   const validatedPhone = validateDestinationPhone(toNumber);
   await withExecutionDb(tenantId, executionDb, async (db) => {
     await db.insert(sandboxOutbox).values({ tenantId, channel, toNumber: validatedPhone, content });
     if (householdId) {
-      await db.insert(communicationsLog).values({
+      await recordCustomerMessage(db, {
+        tenantId,
         householdId,
         channel,
         direction: "outbound",
         content,
+        ...(provenance ? { provenance } : {}),
       });
     }
-    const { conversationId } = await getOrCreateConversation(db, {
-      tenantId,
-      householdId: householdId ?? undefined,
-      channel: channel === "call" ? "voice" : "sms",
-    });
-    await persistMessage(db, { tenantId, conversationId, direction: "outbound", channel, content });
+  });
+  return { canonicalMessageRecorded: Boolean(householdId) };
+}
+
+async function resolveHouseholdIdByPhone(tenantId: string, phone: string, executionDb?: Db): Promise<string | null> {
+  const normalizedPhone = validateDestinationPhone(phone);
+  return withExecutionDb(tenantId, executionDb, async (db) => {
+    const [household] = await db
+      .select({ id: households.id })
+      .from(households)
+      .where(and(eq(households.tenantId, tenantId), sql`${households.contactInfo} ->> 'phone' = ${normalizedPhone}`))
+      .limit(1);
+    return household?.id ?? null;
   });
 }
 
@@ -224,7 +221,7 @@ export function registerSandboxComms(registry: ToolRegistry): void {
     },
     {
       name: "ghl_send_sms",
-      description: "SANDBOX: record the SMS in the outbox + communications log (carrier hop simulated)",
+      description: "SANDBOX: record the SMS in the outbox + canonical message history (carrier hop simulated)",
       integration: "sandbox",
       inputSchema: z
         .object({ contactId: z.string(), message: z.string().min(1), tenantId: TenantIdSchema })
@@ -235,8 +232,12 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const tenantId = String(input.tenantId);
         const destination = await resolveSmsDestination(tenantId, String(input.contactId), runtime?.db);
-        await recordOutbound(tenantId, destination.householdId, "sms", destination.phoneNumber, String(input.message), runtime?.db);
-        return { sent: true, to: destination.phoneNumber, simulated: true };
+        const recorded = await recordOutbound(tenantId, destination.householdId, "sms", destination.phoneNumber, String(input.message), runtime?.db,
+          runtime?.domainActionId
+            ? { sourceSystem: "domain_action", externalId: `${runtime.domainActionId}:sandbox-sms` }
+            : undefined,
+        );
+        return { sent: true, to: destination.phoneNumber, simulated: true, ...recorded };
       },
     },
     {
@@ -262,14 +263,13 @@ export function registerSandboxComms(registry: ToolRegistry): void {
       piiAllowlist: ["phoneNumber", "instructions", "tenantId"],
       async run(input, runtime?: Readonly<ToolRuntimeContext>) {
         const tenantId = String(input.tenantId);
-        const [hh] = await withExecutionDb(tenantId, runtime?.db, (db) =>
-          db
-            .select({ id: households.id })
-            .from(households)
-            .where(sql`${households.contactInfo} ->> 'phone' = ${String(input.phoneNumber)}`),
+        const householdId = await resolveHouseholdIdByPhone(tenantId, String(input.phoneNumber), runtime?.db);
+        const recorded = await recordOutbound(tenantId, householdId, "call", String(input.phoneNumber), String(input.instructions ?? "(assistant call)"), runtime?.db,
+          runtime?.domainActionId
+            ? { sourceSystem: "domain_action", externalId: `${runtime.domainActionId}:sandbox-call` }
+            : undefined,
         );
-        await recordOutbound(tenantId, hh?.id ?? null, "call", String(input.phoneNumber), String(input.instructions ?? "(assistant call)"), runtime?.db);
-        return { callQueued: true, simulated: true };
+        return { callQueued: true, simulated: true, ...recorded };
       },
     },
     {
@@ -291,7 +291,16 @@ export function registerSandboxComms(registry: ToolRegistry): void {
         const tenantId = String(input.tenantId);
         const customers = input.customers as Array<{ number: string; externalId: string; assistantOverrides: { firstMessage: string } }>;
         for (const customer of customers) {
-          await recordOutbound(tenantId, customer.externalId, "call", customer.number, customer.assistantOverrides.firstMessage, runtime?.db);
+          // Vapi's externalId is provider correlation, not a Finnor household
+          // identity. Link canonical customer truth only after an exact,
+          // tenant-local destination lookup; otherwise keep the outbox fact
+          // intentionally unlinked.
+          const householdId = await resolveHouseholdIdByPhone(tenantId, customer.number, runtime?.db);
+          await recordOutbound(tenantId, householdId, "call", customer.number, customer.assistantOverrides.firstMessage, runtime?.db,
+            runtime?.domainActionId
+              ? { sourceSystem: "domain_action", externalId: `${runtime.domainActionId}:sandbox-campaign:${customer.externalId}` }
+              : undefined,
+          );
         }
         return {
           id: `sandbox:${String(input.name)}`,

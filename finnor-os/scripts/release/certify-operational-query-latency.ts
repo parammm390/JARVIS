@@ -109,13 +109,29 @@ async function seedFixture(tenantId: string): Promise<void> {
     [tenantId, SEED_HOUSEHOLDS],
   );
   await pool.query(
-    `INSERT INTO finnor_os.communications_log (id, tenant_id, household_id, channel, direction, content, "timestamp")
-     SELECT md5($1::text || ':communication:' || n)::uuid, $1::uuid,
-       md5($1::text || ':household:' || n)::uuid, 'email', 'inbound', 'certification activity',
-       now() - interval '120 days'
-     FROM generate_series(1, $2::int) AS n
-     WHERE n % 4 = 0
-     ON CONFLICT (id) DO NOTHING`,
+    `WITH conversation_rows AS (
+       INSERT INTO finnor_os.conversations(
+         id,tenant_id,household_id,channel,status,last_activity_at,source_system,external_id,created_by,created_at
+       )
+       SELECT md5($1::text || ':communication-conversation:' || n)::uuid,$1::uuid,
+         md5($1::text || ':household:' || n)::uuid,'email','closed',now()-interval '120 days',
+         'query_certification','conversation:' || n,'query-certification',now()-interval '120 days'
+       FROM generate_series(1,$2::int) AS n WHERE n%4=0
+       ON CONFLICT (id) DO NOTHING RETURNING id
+     ), message_rows AS (
+       INSERT INTO finnor_os.messages(
+         id,tenant_id,conversation_id,channel,direction,content,sent_at,source_system,external_id,created_by,created_at
+       )
+       SELECT md5($1::text || ':communication:' || n)::uuid,$1::uuid,
+         md5($1::text || ':communication-conversation:' || n)::uuid,
+         'email','inbound','certification activity',now()-interval '120 days',
+         'query_certification','message:' || n,'query-certification',now()-interval '120 days'
+       FROM generate_series(1,$2::int) AS n WHERE n%4=0
+       ON CONFLICT (id) DO NOTHING RETURNING id
+     )
+     INSERT INTO finnor_os.business_events(tenant_id,entity_type,entity_id,event_type,payload,source)
+     SELECT $1::uuid,'message',id,'message_recorded','{"certification":true}'::jsonb,'query_certification'
+     FROM message_rows`,
     [tenantId, SEED_HOUSEHOLDS],
   );
   await pool.query(

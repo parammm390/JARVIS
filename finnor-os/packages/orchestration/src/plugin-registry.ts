@@ -31,6 +31,14 @@ import { routeOptimizationPlugin } from "../../domain-plugins/route-optimization
 import universalActionsPlugin from "../../domain-plugins/universal-actions/index";
 import computerTaskPlugin from "../../domain-plugins/computer-task/index";
 
+export interface RegisteredActionDefinition {
+  plugin: string;
+  actionType: string;
+  payloadFields: string[];
+  requiredPayloadFields: string[];
+  payloadSpec: string;
+}
+
 export class PluginRegistry {
   private byActionType = new Map<string, DomainEnginePlugin>();
 
@@ -83,6 +91,34 @@ export class PluginRegistry {
     return [...this.byActionType.keys()];
   }
 
+  /** Runtime-derived action contract used by the Human Capability Registry.
+   * This reads the same registered plugin schemas as validation and planning,
+   * so a user-facing capability cannot drift into a separate hand-maintained list. */
+  actionDefinitions(): RegisteredActionDefinition[] {
+    return [...this.byActionType].map(([actionType, plugin]) => {
+      const schema = plugin.payloadSchemas?.[actionType];
+      if (!schema) return { plugin: plugin.name, actionType, payloadFields: [], requiredPayloadFields: [], payloadSpec: "(free-form object)" };
+      const json = zodToJsonSchema(schema, { $refStrategy: "none" }) as {
+        properties?: Record<string, { type?: string; enum?: unknown[]; format?: string }>;
+        required?: string[];
+      };
+      const required = new Set(json.required ?? []);
+      const fields = Object.entries(json.properties ?? {}).map(([name, def]) => {
+        const mark = required.has(name) ? "*" : "?";
+        if (def.enum) return `${name}${mark}:enum(${def.enum.join("|")})`;
+        const type = def.format === "uuid" ? "uuid" : (def.type ?? "any");
+        return `${name}${mark}:${type}`;
+      });
+      return {
+        plugin: plugin.name,
+        actionType,
+        payloadFields: Object.keys(json.properties ?? {}),
+        requiredPayloadFields: [...required],
+        payloadSpec: fields.join(", "),
+      };
+    });
+  }
+
   private specCache: string | null = null;
 
   /** Compact payload spec for the Planner prompt: one line per action type,
@@ -93,25 +129,7 @@ export class PluginRegistry {
   payloadSpecJson(): string {
     if (this.specCache) return this.specCache;
     const lines: string[] = [];
-    for (const [actionType, plugin] of this.byActionType) {
-      const schema = plugin.payloadSchemas?.[actionType];
-      if (!schema) {
-        lines.push(`${actionType}: (free-form object)`);
-        continue;
-      }
-      const json = zodToJsonSchema(schema, { $refStrategy: "none" }) as {
-        properties?: Record<string, { type?: string; enum?: unknown[]; format?: string }>;
-        required?: string[];
-      };
-      const required = new Set(json.required ?? []);
-      const fields = Object.entries(json.properties ?? {}).map(([name, def]) => {
-        const mark = required.has(name) ? "*" : "?";
-        if (def.enum) return `${name}${mark}:enum(${def.enum.join("|")})`;
-        const t = def.format === "uuid" ? "uuid" : (def.type ?? "any");
-        return `${name}${mark}:${t}`;
-      });
-      lines.push(`${actionType}: ${fields.join(", ")}`);
-    }
+    for (const definition of this.actionDefinitions()) lines.push(`${definition.actionType}: ${definition.payloadSpec}`);
     this.specCache = lines.join("\n");
     return this.specCache;
   }

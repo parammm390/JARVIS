@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const TENANT_EXPERIENCE_VERSION = 2 as const;
 
-export const WorkspaceSurfaceSchema = z.enum(["home", "work", "customers", "schedule", "money", "agents"]);
+export const WorkspaceSurfaceSchema = z.enum(["home", "customers", "schedule", "money", "work", "agents"]);
 export const WORKSPACE_SURFACES = WorkspaceSurfaceSchema.options;
 export const ExperienceRoleSchema = z.enum(["owner", "dispatcher", "technician"]);
 export const EXPERIENCE_ROLES = ExperienceRoleSchema.options;
@@ -305,7 +305,7 @@ export type ExperienceRole = z.infer<typeof ExperienceRoleSchema>;
 export const DEFAULT_WORKSPACE_CONFIG: TenantExperienceManifestV2 = {
   version: 2,
   enabledSurfaces: [...WORKSPACE_SURFACES],
-  terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "Agents" },
+  terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "AI Team" },
   vocabulary: {
     customer: "Customer", homeowner: "Homeowner", account: "Account", technician: "Technician", installer: "Installer",
     serviceVisit: "Service Visit", appointment: "Appointment", quote: "Quote", proposal: "Proposal", invoice: "Invoice", job: "Job", work: "Work",

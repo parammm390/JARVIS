@@ -755,7 +755,7 @@ export async function executionProjection(
       work: {
         id: work.id,
         status: work.status,
-        executionModel: work.executionModel,
+        executionModel: work.executionModel === "atomic_effect" ? "atomic_action" : work.executionModel,
         objective,
         objectiveState: objectiveRows[0]?.state ?? null,
         successCondition: objectiveRows[0]?.successCondition as ExecutionProjection["work"]["successCondition"] ?? null,

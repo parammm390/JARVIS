@@ -5,7 +5,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import { withTenant, serviceVisits, technicians, households, technicianCapacity, technicianDispatchProfiles, appointments, tenants } from "@finnor/db";
 import { geocodeAddress } from "@finnor/tools";
 import { osrmDurationMatrix, recommendSlots, type RoutePoint } from "@finnor/read-models";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { assignServiceVisit, updateServiceVisit } from "@finnor/data-platform";
 import { findTechnician } from "../shared/db-helpers";
 import { and, asc, eq, gte, isNull, lt, lte, ne, or } from "drizzle-orm";
 import { z } from "zod";
@@ -302,38 +302,25 @@ export const schedulingPlugin: DomainEnginePlugin = {
         name: p.technicianName ? String(p.technicianName) : undefined,
       });
       if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id.", errorKind: "validation" };
-      await withTenant(tenantId, async (db) => {
-        await db.update(serviceVisits).set({ technicianId: tech.id }).where(eq(serviceVisits.id, visit.id));
-        await recordBusinessEvent(db, {
-          tenantId,
-          entityType: "service_visit",
-          entityId: visit.id,
-          eventType: "technician_assigned",
-          payload: { technicianId: tech.id },
-        });
-      });
+      await withTenant(tenantId, (db) => assignServiceVisit(db, { tenantId, visitId: visit.id, technicianId: tech.id }));
       return { status: "success", output: { visitId: visit.id, technician: tech.name }, expected: { assigned: true } };
     }
 
     // reschedule_visit
     const when = new Date(String(p.newTime));
     if (Number.isNaN(when.getTime())) return { status: "failure", output: {}, error: "That new time isn't a valid date.", errorKind: "validation" };
-    await withTenant(tenantId, async (db) => {
-      await db
-        .update(serviceVisits)
-        .set({
+    await withTenant(tenantId, (db) =>
+      updateServiceVisit(db, {
+        tenantId,
+        visitId: visit.id,
+        patch: {
           scheduledAt: when,
           notes: [visit.notes, `Rescheduled${p.reason ? `: ${p.reason}` : ""}`].filter(Boolean).join(" | "),
-        })
-        .where(eq(serviceVisits.id, visit.id));
-      await recordBusinessEvent(db, {
-        tenantId,
-        entityType: "service_visit",
-        entityId: visit.id,
+        },
         eventType: "rescheduled",
-        payload: { scheduledAt: when.toISOString(), reason: p.reason ?? null },
-      });
-    });
+        eventPayload: { scheduledAt: when.toISOString(), reason: p.reason ?? null },
+      }),
+    );
     return { status: "success", output: { visitId: visit.id, scheduledAt: when.toISOString() }, expected: { rescheduled: true } };
   },
 };

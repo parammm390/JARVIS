@@ -1,5 +1,5 @@
 import { appointments, type Db } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { recordBusinessEvent } from "./events";
 
 export interface CreateAppointmentParams {
@@ -45,14 +45,40 @@ export async function updateAppointmentStatus(
     tenantId: string;
     appointmentId: string;
     status: "hold" | "confirmed" | "completed" | "canceled" | "no_show";
+    eventType?: string;
+    eventPayload?: Record<string, unknown>;
   },
-): Promise<void> {
-  await db.update(appointments).set({ status: params.status }).where(eq(appointments.id, params.appointmentId));
+): Promise<boolean> {
+  const [updated] = await db
+    .update(appointments)
+    .set({ status: params.status })
+    .where(and(eq(appointments.tenantId, params.tenantId), eq(appointments.id, params.appointmentId)))
+    .returning({ id: appointments.id });
+  if (!updated) return false;
   await recordBusinessEvent(db, {
     tenantId: params.tenantId,
     entityType: "appointment",
     entityId: params.appointmentId,
-    eventType: "appointment_status_changed",
-    payload: { status: params.status },
+    eventType: params.eventType ?? "appointment_status_changed",
+    payload: { status: params.status, ...(params.eventPayload ?? {}) },
   });
+  return true;
+}
+
+export async function assignAppointment(
+  db: Db,
+  params: { tenantId: string; appointmentId: string; technicianId: string },
+): Promise<typeof appointments.$inferSelect | null> {
+  const [appointment] = await db.update(appointments).set({ technicianId: params.technicianId }).where(and(
+    eq(appointments.tenantId, params.tenantId), eq(appointments.id, params.appointmentId),
+  )).returning();
+  if (!appointment) return null;
+  await recordBusinessEvent(db, {
+    tenantId: params.tenantId,
+    entityType: "appointment",
+    entityId: params.appointmentId,
+    eventType: "appointment_assigned",
+    payload: { technicianId: params.technicianId },
+  });
+  return appointment;
 }

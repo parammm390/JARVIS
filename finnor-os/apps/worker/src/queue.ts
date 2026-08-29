@@ -12,8 +12,14 @@ export type JobLane = "interactive" | "batch";
 
 /** A process-level cap: the database claim remains the cross-process boundary. */
 export function workerConcurrency(value = process.env.WORKER_CONCURRENCY): number {
+  const parsed = Number.parseInt(value ?? "2", 10);
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : 2;
+}
+
+export function reservedInteractiveConcurrency(total: number, value = process.env.WORKER_INTERACTIVE_RESERVED_CONCURRENCY): number {
+  if (total < 2) return 0;
   const parsed = Number.parseInt(value ?? "1", 10);
-  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed <= 8 ? parsed : 1;
+  return Number.isSafeInteger(parsed) && parsed >= 1 && parsed < total ? parsed : 1;
 }
 
 export class JobQueue {
@@ -64,7 +70,7 @@ export class JobQueue {
   }
 
   /** Claim and run one due job. Returns false when the queue is empty. */
-  async tick(): Promise<boolean> {
+  async tick(lane: "any" | "interactive" = "any"): Promise<boolean> {
     await this.recoverExpiredRunningJobs();
     // A queue instance may intentionally host only a subset of handlers (tests,
     // lane-specific workers, rolling deploys). It must never claim and poison a job
@@ -79,10 +85,11 @@ export class JobQueue {
         const { rows } = await client.query(
           `SELECT id, type, payload, attempts, max_attempts FROM jobs
            WHERE status = 'queued' AND run_at <= now() AND type = ANY($1::text[])
+             AND ($2::text = 'any' OR lane = $2::text)
            ORDER BY CASE lane WHEN 'interactive' THEN 0 ELSE 1 END, priority DESC, run_at
            FOR UPDATE SKIP LOCKED
            LIMIT 1`,
-          [registeredTypes],
+          [registeredTypes, lane],
         );
         if (rows.length === 0) {
           await client.query("COMMIT");
@@ -194,14 +201,18 @@ export class JobQueue {
   async runLoop(pollMs = 2000, signal?: AbortSignal, concurrency = workerConcurrency()): Promise<void> {
     // Each slot claims through FOR UPDATE SKIP LOCKED. The cap prevents one process
     // from turning an outage into an unbounded set of in-flight provider calls.
-    await Promise.all(Array.from({ length: concurrency }, () => this.runSlot(pollMs, signal)));
+    const reserved = reservedInteractiveConcurrency(concurrency);
+    await Promise.all([
+      ...Array.from({ length: reserved }, () => this.runSlot(pollMs, signal, "interactive")),
+      ...Array.from({ length: concurrency - reserved }, () => this.runSlot(pollMs, signal, "any")),
+    ]);
   }
 
-  private async runSlot(pollMs: number, signal?: AbortSignal): Promise<void> {
+  private async runSlot(pollMs: number, signal?: AbortSignal, lane: "any" | "interactive" = "any"): Promise<void> {
     while (!signal?.aborted) {
       let worked = false;
       try {
-        worked = await this.tick();
+        worked = await this.tick(lane);
       } catch (err) {
         console.error("[worker] tick failed:", err);
       }

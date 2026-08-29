@@ -216,9 +216,30 @@ function validLocalDate(value: string): boolean {
 }
 
 function resolveLocalDate(value: string, asOf: Date, timeZone: string): string {
-  if (value === "today") return localDateString(asOf, timeZone);
-  if (value === "tomorrow") return addLocalDays(localDateString(asOf, timeZone), 1);
-  if (!validLocalDate(value)) throw new Error("local schedule dates must be ISO calendar dates, today, or tomorrow");
+  const today = localDateString(asOf, timeZone);
+  if (value === "today") return today;
+  if (value === "tomorrow") return addLocalDays(today, 1);
+  if (value === "yesterday") return addLocalDays(today, -1);
+  const [year, month, day] = today.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay();
+  const mondayDelta = weekday === 0 ? -6 : 1 - weekday;
+  if (value === "this_week_start") return addLocalDays(today, mondayDelta);
+  if (value === "this_week_end") return addLocalDays(today, mondayDelta + 6);
+  if (value === "next_week_start") return addLocalDays(today, mondayDelta + 7);
+  if (value === "next_week_end") return addLocalDays(today, mondayDelta + 13);
+  const relativeWeekday = value.match(/^(this|next)_(monday|tuesday|wednesday|thursday|friday|saturday|sunday)$/);
+  if (relativeWeekday) {
+    const indexes: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    const target = indexes[relativeWeekday[2]!]!;
+    const delta = relativeWeekday[1] === "this"
+      ? mondayDelta + (target === 0 ? 6 : target - 1)
+      // `next_<weekday>` always belongs to the following Monday-Sunday
+      // business week. It must not mean merely the next chronological
+      // occurrence (for example, next Friday while today is Wednesday).
+      : mondayDelta + 7 + (target === 0 ? 6 : target - 1);
+    return addLocalDays(today, delta);
+  }
+  if (!validLocalDate(value)) throw new Error("local schedule dates must be an ISO calendar date or supported tenant-local relative date");
   return value;
 }
 

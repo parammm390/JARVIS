@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => {
       }
     : { route: "planner" as const, reason: "mutation_or_advice" as const });
   const handleInstructionResult = vi.fn(async (_instruction: string, _ctx: unknown, options: Record<string, unknown>) => ({
-    executionModel: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "fast_read" ? "QUERY" as const : "ATOMIC_EFFECT" as const,
+    executionModel: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "fast_read" ? "QUERY" as const : "ATOMIC_ACTION" as const,
     actions: options.fastReadDecision && (options.fastReadDecision as { route?: string }).route === "planner"
       ? [{ id: "planner-action" }]
       : [],
@@ -87,9 +87,9 @@ vi.mock("@finnor/db", () => ({
 }));
 vi.mock("@finnor/orchestration", () => ({
   interpretOperationalQuery: mocks.interpretOperationalQuery,
-  classifyInstructionRoute: vi.fn(({ fastReadDecision }: { fastReadDecision: { route: string } }) => fastReadDecision.route === "fast_read"
+  compileHumanInstructionRoute: vi.fn(({ fastReadDecision }: { fastReadDecision: { route: string } }) => fastReadDecision.route === "fast_read"
     ? { version: 1, route: "QUERY", reasonCodes: ["deterministic_canonical_read"], queryDecision: fastReadDecision }
-    : { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["strict_single_effect_candidate"] }),
+    : { version: 1, route: "ATOMIC_ACTION", reasonCodes: ["strict_single_action_candidate"] }),
   isConversationalTurn: vi.fn(() => false),
   resolveOperatingInteractionContext: vi.fn(async ({ context }: { context?: unknown }) => context),
   interactionAwareOperationalDecision: vi.fn((decision: unknown) => decision),
@@ -145,6 +145,6 @@ describe("POST /api/actions deterministic-vs-planner controls", () => {
         skipFastReadClassification: true,
       }),
     );
-    expect(await response.json()).toMatchObject({ executionModel: "ATOMIC_EFFECT", actions: [{ id: "planner-action" }] });
+    expect(await response.json()).toMatchObject({ executionModel: "ATOMIC_ACTION", actions: [{ id: "planner-action" }] });
   });
 });

@@ -49,6 +49,7 @@ import { scanConnectionHealth } from "./handlers/scan-connection-health";
 import { releaseProbe } from "./handlers/release-probe";
 import { syncSource, syncSources } from "./handlers/sync-source";
 import { observeExternalEffectHandler } from "./handlers/observe-external-effect";
+import { reconcileInteractiveWork } from "./handlers/reconcile-interactive-work";
 
 export function createWorker(): JobQueue {
   const queue = new JobQueue();
@@ -98,6 +99,7 @@ export function createWorker(): JobQueue {
   queue.register("sync_sources", syncSources);
   queue.register("sync_source", syncSource);
   queue.register("observe_external_effect", observeExternalEffectHandler);
+  queue.register("reconcile_interactive_work", reconcileInteractiveWork);
   return queue;
 }
 

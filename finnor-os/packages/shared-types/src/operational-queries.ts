@@ -46,7 +46,18 @@ export interface OperationalQueryRange {
   end: string;
 }
 
-export type OperationalLocalDateValue = string | "today" | "tomorrow";
+/** ISO local date or a deterministic tenant-local token resolved by the
+ * canonical reader (never by the API server's locale). */
+export type OperationalLocalDateValue = string
+  | "today"
+  | "tomorrow"
+  | "yesterday"
+  | "this_week_start"
+  | "this_week_end"
+  | "next_week_start"
+  | "next_week_end"
+  | `this_${"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"}`
+  | `next_${"monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday"}`;
 
 export interface OperationalLocalDateRange {
   /** Tenant-local calendar day at 00:00:00. */

@@ -15,7 +15,7 @@ export interface ExecutionProjection {
   work: {
     id: string;
     status: string;
-    executionModel: "query" | "conversation" | "atomic_effect" | "objective" | null;
+    executionModel: "query" | "conversation" | "atomic_action" | "objective" | "clarify" | null;
     objective: string;
     objectiveState: string | null;
     successCondition: ObjectiveSuccessCondition | null;

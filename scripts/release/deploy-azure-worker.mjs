@@ -44,11 +44,19 @@ let script = readFileSync(resolve(repoRoot, "scripts/release/azure/deploy-worker
 for (const [placeholder, value] of Object.entries(replacements)) script = script.replaceAll(placeholder, value)
 if (/__FINNOR_[A-Z_]+__/.test(script)) throw new Error("Azure deployment script contains an unresolved placeholder")
 
-const output = execFileSync(process.env.AZURE_CLI || "az", [
-  "vm", "run-command", "invoke", "--resource-group", worker.resourceGroup,
-  "--name", worker.resourceName, "--command-id", "RunShellScript", "--scripts", script,
-  "--only-show-errors", "-o", "json",
-], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 30 * 60 * 1000 })
+let output
+try {
+  output = execFileSync(process.env.AZURE_CLI || "az", [
+    "vm", "run-command", "invoke", "--resource-group", worker.resourceGroup,
+    "--name", worker.resourceName, "--command-id", "RunShellScript", "--scripts", script,
+    "--only-show-errors", "-o", "json",
+  ], { encoding: "utf8", maxBuffer: 32 * 1024 * 1024, timeout: 30 * 60 * 1000 })
+} catch (error) {
+  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+  const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+  throw new Error(`Azure worker deployment command failed:\n${diagnostic}`, { cause: error })
+}
 const result = JSON.parse(output)
 const message = (result.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!message.includes(`FINNOR_AZURE_DEPLOY_OK ${expected.commitSha}`)) {

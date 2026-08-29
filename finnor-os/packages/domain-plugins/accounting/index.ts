@@ -7,8 +7,8 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import type { ToolRegistry } from "@finnor/tools";
-import { withTenant, invoices, communicationsLog, enqueueJob } from "@finnor/db";
-import { recordPayment } from "@finnor/data-platform";
+import { withTenant, invoices, enqueueJob } from "@finnor/db";
+import { createInvoice, recordCustomerMessage, recordPayment } from "@finnor/data-platform";
 import { findHousehold } from "../shared/db-helpers";
 import { eq, inArray, or } from "drizzle-orm";
 import { z } from "zod";
@@ -97,20 +97,14 @@ export const accountingPlugin: DomainEnginePlugin = {
       });
       if (!hh) return { status: "failure", output: {}, error: `No customer found matching "${p.customerName ?? p.phone ?? p.householdId}".`, errorKind: "validation" };
       const due = p.dueDate ? new Date(String(p.dueDate)) : new Date(Date.now() + 30 * 24 * 3600 * 1000);
-      const inv = await withTenant(tenantId, async (db) => {
-        const [row] = await db
-          .insert(invoices)
-          .values({
-            tenantId,
-            householdId: hh.id,
-            amountUsd: String(p.amountUsd),
-            memo: p.memo ? String(p.memo) : null,
-            dueDate: Number.isNaN(due.getTime()) ? null : due,
-            status: "sent",
-          })
-          .returning();
-        return row!;
-      });
+      const inv = await withTenant(tenantId, (db) => createInvoice(db, {
+        tenantId,
+        householdId: hh.id,
+        amountUsd: Number(p.amountUsd),
+        memo: p.memo ? String(p.memo) : null,
+        dueDate: Number.isNaN(due.getTime()) ? null : due,
+        status: "sent",
+      }));
       // Fire-and-forget — a QuickBooks outage or missing connection never affects the
       // native invoice's own success; quickbooksSync itself no-ops if unconfigured.
       await enqueueJob("quickbooks_sync", { tenantId, invoiceId: inv.id, domainActionId: draft.domainActionId }, `qbo-sync:${inv.id}`).catch(() => undefined);
@@ -147,9 +141,22 @@ export const accountingPlugin: DomainEnginePlugin = {
           invoiceId: inv.id,
         });
         if (call.ok) {
+          if (call.output.canonicalMessageRecorded === true) {
+            called++;
+            continue;
+          }
           try {
             await withTenant(tenantId, (db) =>
-              db.insert(communicationsLog).values({ householdId: inv.householdId, channel: "call", direction: "outbound", content: firstMessage }),
+              recordCustomerMessage(db, {
+                tenantId,
+                householdId: inv.householdId,
+                channel: "call",
+                direction: "outbound",
+                content: firstMessage,
+                ...(draft.domainActionId
+                  ? { provenance: { sourceSystem: "domain_action", externalId: `${draft.domainActionId}:overdue-call:${inv.id}` } }
+                  : {}),
+              }),
             );
             called++;
           } catch {
@@ -198,6 +205,7 @@ export const accountingPlugin: DomainEnginePlugin = {
 
     let sent = false;
     let channel = "sms";
+    let canonicalMessageRecorded = false;
     if (p.channel === "call") {
       if (!contact.phone) return { status: "failure", output: {}, error: "This customer has no phone on file to call.", errorKind: "validation" };
       const r = await tools.call("vapi_place_call", {
@@ -212,6 +220,7 @@ export const accountingPlugin: DomainEnginePlugin = {
       });
       sent = r.ok;
       channel = "call";
+      canonicalMessageRecorded = r.output.canonicalMessageRecorded === true;
       if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
     } else if (contact.email) {
       const r = await tools.call("send_email", { to: String(contact.email), subject: "Payment reminder", body: message });
@@ -222,12 +231,22 @@ export const accountingPlugin: DomainEnginePlugin = {
       const r = await tools.call("ghl_send_sms", { contactId: hh!.id, message, tenantId });
       sent = r.ok;
       if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
+      canonicalMessageRecorded = r.output.canonicalMessageRecorded === true;
     } else {
       return { status: "failure", output: {}, error: "This customer has no email or phone on file for a reminder.", errorKind: "validation" };
     }
-    try {
+    if (!canonicalMessageRecorded) try {
       await withTenant(tenantId, (db) =>
-        db.insert(communicationsLog).values({ householdId: inv.householdId, channel, direction: "outbound", content: message }),
+        recordCustomerMessage(db, {
+          tenantId,
+          householdId: inv.householdId,
+          channel,
+          direction: "outbound",
+          content: message,
+          ...(draft.domainActionId
+            ? { provenance: { sourceSystem: "domain_action", externalId: `${draft.domainActionId}:payment-reminder:${inv.id}` } }
+            : {}),
+        }),
       );
     } catch {
       return {

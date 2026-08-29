@@ -46,7 +46,7 @@ describe("projectRestingAttention", () => {
     const rows = [
       workCase("working", "Working"),
       workCase("approval", "Needs you", { approvals: [{ actionId: "a1", status: "pending", decidedBy: null, decidedAt: null, pendingConfirmationId: "p1" }] }),
-      workCase("failure", "Failed", { durableWork: { id: "failure", status: "failed", executionModel: "atomic_effect", sessionId: null, channel: "text", activeContext: null, initiatedBy: null, currentOwnerId: null, assignedTo: null, authorityContext: null, finalOutcome: null, failure: { message: "Provider did not confirm delivery" }, recovery: { message: "Retry delivery" }, handoffs: [] } }),
+      workCase("failure", "Failed", { durableWork: { id: "failure", status: "failed", executionModel: "atomic_action", sessionId: null, channel: "text", activeContext: null, initiatedBy: null, currentOwnerId: null, assignedTo: null, authorityContext: null, finalOutcome: null, failure: { message: "Provider did not confirm delivery" }, recovery: { message: "Retry delivery" }, handoffs: [] } }),
       workCase("schedule", "Needs you", { linkedEntities: [{ entityType: "work_order", entityId: "wo-1", via: "work" }] }),
       workCase("money", "Needs you", { linkedEntities: [{ entityType: "invoice", entityId: "inv-1", via: "action" }] }),
       workCase("complete", "Completed"),

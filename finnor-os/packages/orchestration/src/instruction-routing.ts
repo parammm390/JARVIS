@@ -4,7 +4,7 @@ import { isConsequentialAction } from "./compiler";
 
 export const INSTRUCTION_ROUTING_POLICY_VERSION = 1 as const;
 
-export type InstructionExecutionModel = "QUERY" | "ATOMIC_EFFECT" | "OBJECTIVE" | "CONVERSATION";
+export type InstructionExecutionModel = "QUERY" | "ATOMIC_ACTION" | "OBJECTIVE" | "CONVERSATION" | "CLARIFY";
 
 export interface InstructionRouteDecision {
   version: typeof INSTRUCTION_ROUTING_POLICY_VERSION;
@@ -32,10 +32,14 @@ const QUESTION_OBJECTIVE_LANGUAGE = [
   ...OBJECTIVE_SIGNALS.slice(1),
 ];
 
+const BUSINESS_QUESTION = /\b(?:business|company|customer|client|household|contact|lead|opportunit|quote|proposal|invoice|payment|money|cash|revenue|inventory|stock|sku|schedule|appointment|visit|work(?:\s+order)?|task|job|technician|employee|manager|team|supplier|vendor|agent|campaign|review|service|installation|maintenance|water|equipment|policy|approval|workflow|delegation)\b/i;
+
 function isLightweightInformationalQuestion(instruction: string, decision: OperationalQueryDecision): boolean {
   if (decision.route === "planner" && (decision.reason === "mutation_or_advice" || decision.reason === "external_or_ambiguous")) return false;
   const value = instruction.replace(/\s+/g, " ").trim();
-  return QUESTION_SHAPE.test(value) && !QUESTION_OBJECTIVE_LANGUAGE.some((signal) => signal.test(value));
+  return QUESTION_SHAPE.test(value)
+    && !BUSINESS_QUESTION.test(value)
+    && !QUESTION_OBJECTIVE_LANGUAGE.some((signal) => signal.test(value));
 }
 
 function exactContextTarget(context: OperatingInteractionContext | Record<string, unknown> | undefined): boolean {
@@ -60,9 +64,14 @@ export function classifyInstructionRoute(input: {
   fastReadDecision: OperationalQueryDecision;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
   conversational?: boolean;
+  /** Set only by the deterministic, tenant-scoped reference/sender resolver. */
+  clarificationRequired?: boolean;
 }): InstructionRouteDecision {
   if (input.fastReadDecision.route === "fast_read") {
     return { version: 1, route: "QUERY", reasonCodes: ["deterministic_canonical_read"], queryDecision: input.fastReadDecision };
+  }
+  if (input.clarificationRequired) {
+    return { version: 1, route: "CLARIFY", reasonCodes: ["consequential_target_or_sender_unresolved"] };
   }
   if (input.conversational) return { version: 1, route: "CONVERSATION", reasonCodes: ["non_business_conversation"] };
   // A plain informational question outside the typed business-read grammar is
@@ -72,7 +81,7 @@ export function classifyInstructionRoute(input: {
     return { version: 1, route: "CONVERSATION", reasonCodes: ["lightweight_informational_question"] };
   }
   if (strictAtomicCandidate(input.instruction, input.activeContext)) {
-    return { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["strict_single_effect_candidate"] };
+    return { version: 1, route: "ATOMIC_ACTION", reasonCodes: ["strict_single_action_candidate"] };
   }
   const reasonCodes = OBJECTIVE_SIGNALS.filter((signal) => signal.test(input.instruction)).map((_, index) => `objective_signal_${index + 1}`);
   return { version: 1, route: "OBJECTIVE", reasonCodes: reasonCodes.length ? reasonCodes : ["meaningful_business_work_default"] };
@@ -87,7 +96,10 @@ export function finalizeInstructionRoute(
   preliminary: InstructionRouteDecision,
   actions: DomainAction[],
 ): InstructionRouteDecision {
-  if (preliminary.route !== "ATOMIC_EFFECT") return preliminary;
+  if (actions.length === 1 && actions[0]?.actionType === "clarification_request") {
+    return { version: 1, route: "CLARIFY", reasonCodes: ["typed_plan_requires_clarification"] };
+  }
+  if (preliminary.route !== "ATOMIC_ACTION") return preliminary;
   const action = actions[0];
   const dependencyCount = Array.isArray((action as DomainAction & { dependsOn?: unknown[] }).dependsOn)
     ? ((action as DomainAction & { dependsOn?: unknown[] }).dependsOn?.length ?? 0)

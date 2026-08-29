@@ -151,6 +151,7 @@ jobs:
       - name: Phase 5 type, security, runtime, and regression suite
         run: |
           npm run openapi
+          npm run release:human-operability -- --check
           npm run typecheck
           npm test
           echo "FINNOR_PHASE5_SUITE_PASSED=1" >> "$GITHUB_ENV"
@@ -180,7 +181,7 @@ jobs:
   release:
     needs: [canonical-graph-gate, phase5-readiness]
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
     environment: production
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
@@ -192,6 +193,7 @@ jobs:
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.TENANT_PROBE_VERCEL_AUTOMATION_BYPASS_SECRET }}
       PRODUCT_TRUTH_AUTH_BEARER: ${{ secrets.TENANT_PROBE_A_JWT }}
       PRODUCT_TRUTH_OTHER_AUTH_BEARER: ${{ secrets.TENANT_PROBE_B_JWT }}
+      PRODUCT_TRUTH_CERTIFICATION_KEY: ${{ secrets.PRODUCT_TRUTH_CERTIFICATION_KEY }}
       PRODUCT_TRUTH_RUN_WORKER_RESTART: "1"
       PRODUCT_TRUTH_ALLOW_COMPUTER_WRITE: ${{ vars.PRODUCT_TRUTH_ALLOW_COMPUTER_WRITE }}
     steps:
@@ -209,7 +211,7 @@ jobs:
 
       - name: Require production credentials before any mutation
         run: |
-          for name in VERCEL_TOKEN AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+          for name in VERCEL_TOKEN AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID PRODUCT_TRUTH_AUTH_BEARER PRODUCT_TRUTH_OTHER_AUTH_BEARER PRODUCT_TRUTH_CERTIFICATION_KEY; do
             test -n "${!name:-}" || { echo "::error::$name is missing from the production environment"; exit 1; }
           done
 
@@ -230,7 +232,7 @@ jobs:
         run: node scripts/release/validate-deployment-truth.mjs
 
       - name: Release governance regression tests
-        run: node --test scripts/release/release-policy.test.mjs scripts/release/product-truth-golden-matrix.test.mjs
+        run: npm run test:release
 
       - name: Derive commit-locked release metadata
         run: |
@@ -342,8 +344,25 @@ jobs:
       - name: Install deployed browser certification runtime
         run: npx playwright install --with-deps chromium
 
-      - name: Certify authenticated deployed Product Truth realtime and fallback
+      - name: Certify deployed Human Black-Box behavior twice
         run: |
-          test -n "$PRODUCT_TRUTH_AUTH_BEARER" || { echo "::error::TENANT_PROBE_A_JWT is missing"; exit 1; }
-          test -n "$PRODUCT_TRUTH_OTHER_AUTH_BEARER" || { echo "::error::TENANT_PROBE_B_JWT is missing"; exit 1; }
-          node scripts/release/certify-product-truth-deployed.mjs | tee "$RUNNER_TEMP/product-truth-deployed-certification.json"
+          set -o pipefail
+          for run in 1 2; do
+            PRODUCT_TRUTH_CERTIFICATION_RUN="$run" node scripts/release/certify-product-truth-deployed.mjs \
+              | tee "$RUNNER_TEMP/human-black-box-run-$run.json"
+          done
+          node scripts/release/verify-consecutive-human-certifications.mjs \
+            "$RUNNER_TEMP/human-black-box-run-1.json" \
+            "$RUNNER_TEMP/human-black-box-run-2.json" \
+            | tee "$RUNNER_TEMP/operational-closure.json"
+
+      - name: Preserve Human Black-Box certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: human-black-box-certification-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/human-black-box-run-*.json
+            ${{ runner.temp }}/operational-closure.json
+          if-no-files-found: warn
+          retention-days: 30

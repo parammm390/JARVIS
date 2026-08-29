@@ -1,10 +1,17 @@
 // CRM domain plugin — REAL, native: Finnor's database is the CRM. Leads are households,
-// interactions land in communications_log, statuses live on the workflow state machine.
+// interactions land in canonical messages, statuses live on the workflow state machine.
 
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
-import { withTenant, communicationsLog, serviceVisits } from "@finnor/db";
-import { createLead, convertLeadToOpportunity } from "@finnor/data-platform";
+import { withTenant, serviceVisits } from "@finnor/db";
+import {
+  canonicalLeadStatusForWorkflow,
+  createLead,
+  convertLeadToOpportunity,
+  createServiceVisit,
+  recordCustomerMessage,
+  updateLeadStatus,
+} from "@finnor/data-platform";
 import { advanceWorkflowState, WORKFLOWS } from "../shared/workflow";
 import { findHousehold, findTechnician } from "../shared/db-helpers";
 import { sql } from "drizzle-orm";
@@ -101,7 +108,16 @@ export const crmPlugin: DomainEnginePlugin = {
       await advanceWorkflowState(tenantId, "lead_to_install", "household", householdId, "lead", "create_lead");
       if (p.notes) {
         await withTenant(tenantId, (db) =>
-          db.insert(communicationsLog).values({ householdId, channel: "call", direction: "inbound", content: String(p.notes) }),
+          recordCustomerMessage(db, {
+            tenantId,
+            householdId,
+            channel: "call",
+            direction: "inbound",
+            content: String(p.notes),
+            ...(draft.domainActionId
+              ? { provenance: { sourceSystem: "domain_action", externalId: `${draft.domainActionId}:lead-notes` } }
+              : {}),
+          }),
         );
       }
       return { status: "success", output: { householdId, leadId, workflowState: "lead" }, expected: { created: true } };
@@ -114,20 +130,47 @@ export const crmPlugin: DomainEnginePlugin = {
     if (!hh) return { status: "failure", output: {}, error: "No customer found with that phone or id. Create the lead first.", errorKind: "validation" };
 
     if (draft.actionType === "update_lead_status") {
-      await advanceWorkflowState(tenantId, "lead_to_install", "household", hh.id, String(p.status), "update_lead_status");
-      const { opportunityId } = await withTenant(tenantId, (db) =>
-        convertLeadToOpportunity(db, { tenantId, householdId: hh.id, status: String(p.status) }),
-      );
-      return { status: "success", output: { householdId: hh.id, status: p.status, opportunityId }, expected: { updated: true } };
+      const workflowStatus = String(p.status);
+      const canonicalStatus = canonicalLeadStatusForWorkflow(workflowStatus);
+      const mutation = await withTenant(tenantId, async (db) => {
+        const lead = await updateLeadStatus(db, {
+          tenantId,
+          householdId: hh.id,
+          status: canonicalStatus,
+          source: "update_lead_status",
+        });
+        if (!lead) return null;
+        const opportunity = await convertLeadToOpportunity(db, { tenantId, householdId: hh.id, status: workflowStatus });
+        return { lead, opportunityId: opportunity.opportunityId };
+      });
+      if (!mutation) {
+        return { status: "failure", output: {}, error: "That customer has no lead to update.", errorKind: "validation" };
+      }
+      await advanceWorkflowState(tenantId, "lead_to_install", "household", hh.id, workflowStatus, "update_lead_status");
+      return {
+        status: "success",
+        output: {
+          householdId: hh.id,
+          leadId: mutation.lead.leadId,
+          status: workflowStatus,
+          canonicalLeadStatus: mutation.lead.status,
+          opportunityId: mutation.opportunityId,
+        },
+        expected: { updated: true },
+      };
     }
 
     if (draft.actionType === "log_interaction") {
       await withTenant(tenantId, (db) =>
-        db.insert(communicationsLog).values({
+        recordCustomerMessage(db, {
+          tenantId,
           householdId: hh.id,
           channel: String(p.channel),
           direction: String(p.direction) as "inbound" | "outbound",
           content: String(p.content),
+          ...(draft.domainActionId
+            ? { provenance: { sourceSystem: "domain_action", externalId: `${draft.domainActionId}:interaction` } }
+            : {}),
         }),
       );
       return { status: "success", output: { householdId: hh.id, logged: true }, expected: { logged: true } };
@@ -139,13 +182,9 @@ export const crmPlugin: DomainEnginePlugin = {
       name: p.technicianName ? String(p.technicianName) : undefined,
     });
     if (!tech) return { status: "failure", output: {}, error: "No technician found by that name or id.", errorKind: "validation" };
-    const visit = await withTenant(tenantId, async (db) => {
-      const [row] = await db
-        .insert(serviceVisits)
-        .values({ householdId: hh.id, technicianId: tech.id, type: "lead_follow_up" })
-        .returning();
-      return row!;
-    });
+    const visit = await withTenant(tenantId, (db) => createServiceVisit(db, {
+      tenantId, householdId: hh.id, technicianId: tech.id, type: "lead_follow_up",
+    }));
     return {
       status: "success",
       output: { visitId: visit.id, technician: tech.name, householdId: hh.id },

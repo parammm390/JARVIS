@@ -102,6 +102,7 @@ function decodeWorkCasesCursor(value: string | undefined): WorkCasesCursor | nul
 export const WORK_STATUSES = ["Needs you", "Working", "Waiting", "Partial", "Cancelled", "Completed", "Failed", "Blocked"] as const;
 export type WorkStatus = (typeof WORK_STATUSES)[number];
 type DurableWorkRow = typeof works.$inferSelect;
+type CanonicalWorkExecutionModel = Exclude<DurableWorkRow["executionModel"], "atomic_effect">;
 
 export type DomainActionStatus =
   | "draft"
@@ -323,7 +324,7 @@ export interface WorkCaseProjection {
   durableWork?: {
     id: string;
     status: DurableWorkRow["status"];
-    executionModel: DurableWorkRow["executionModel"];
+    executionModel: CanonicalWorkExecutionModel;
     sessionId: string | null;
     channel: DurableWorkRow["initialChannel"];
     activeContext: unknown;
@@ -344,7 +345,7 @@ export interface WorkCaseProjection {
       createdAt: string;
     }>;
   };
-  inputs?: Array<{ id: string; instructionId: string; channel: string; text: string; createdAt: string }>;
+  inputs?: Array<{ id: string; instructionId: string; channel: string; text: string; intakeDeadlineAt: string | null; createdAt: string }>;
   plannerAttempts?: Array<{ id: string; attempt: number; status: string; result: unknown; failure: unknown; startedAt: string; completedAt: string | null }>;
   objectiveLoop?: {
     id: string;
@@ -1345,7 +1346,7 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
           durableWork: {
             id: durableWork.id,
             status: durableWork.status,
-            executionModel: durableWork.executionModel,
+            executionModel: durableWork.executionModel === "atomic_effect" ? "atomic_action" : durableWork.executionModel,
             sessionId: durableWork.sessionId,
             channel: durableWork.initialChannel,
             activeContext: durableWork.activeContext,
@@ -1374,6 +1375,7 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
             instructionId: input.instructionId,
             channel: input.channel,
             text: input.instructionText,
+            intakeDeadlineAt: iso(input.intakeDeadlineAt),
             createdAt: input.createdAt.toISOString(),
           })),
           plannerAttempts: plannerAttemptRows.filter((attempt) => attempt.workId === durableWork.id).map((attempt) => ({

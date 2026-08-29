@@ -23,77 +23,43 @@
 import "dotenv/config";
 import {
   withTenant,
-  adminDb,
   closePool,
-  tenants,
-  tenantSettings,
   households,
-  technicians,
   equipment,
   maintenanceAgreements,
   serviceVisits,
-  communicationsLog,
-  leads,
-  inventoryItems,
 } from "@finnor/db";
-import { createLead } from "@finnor/data-platform";
+import {
+  createCustomerHousehold,
+  createInventoryItem,
+  createLead,
+  createServiceVisit,
+  ensureCustomerContact,
+  ensureEquipment,
+  ensureMaintenanceAgreement,
+  recordCustomerMessage,
+  reconcileInventoryItemMetadata,
+  updateCustomerCoordinates,
+  updateLeadStatus,
+} from "@finnor/data-platform";
 import { and, eq, sql } from "drizzle-orm";
 import {
   DEALER_ZERO_TENANT_ID,
   DEALER_ZERO_TENANT_NAME,
-  DEALER_ZERO_AREA_CODE as AREA_CODE,
-  DEALER_ZERO_FIRST_NAMES as FIRST_NAMES,
-  DEALER_ZERO_LAST_NAMES as LAST_NAMES,
   DEALER_ZERO_EQUIPMENT_TYPES as EQUIPMENT_TYPES,
   rngFor,
   pick,
   intBetween,
   generateHousehold,
 } from "@finnor/shared-types";
+import { reconcileDealerZeroStatic } from "./dealer-zero/static-reconciler";
+import { ensureDealerZeroCapabilityFixtures } from "./dealer-zero/capability-fixtures";
 
 export { DEALER_ZERO_TENANT_ID, DEALER_ZERO_TENANT_NAME };
 
 const ESTABLISHED_HOUSEHOLD_COUNT = 105;
 const OPEN_LEAD_COUNT = 15; // 105 + 15 = 120 households total, per DECISIONS.
 const TARGET_AMC_FRACTION = 40 / 105; // "~40" per DECISIONS — an independent per-household draw, not an exact counted target.
-const TECHNICIAN_COUNT = 3;
-
-async function ensureDealerZeroTenant(): Promise<void> {
-  await adminDb().insert(tenants).values({ id: DEALER_ZERO_TENANT_ID, name: DEALER_ZERO_TENANT_NAME, timezone: "America/Chicago" }).onConflictDoNothing();
-  await adminDb()
-    .insert(tenantSettings)
-    .values({ tenantId: DEALER_ZERO_TENANT_ID, isDealerZero: true, simulatorEnabled: true })
-    .onConflictDoUpdate({ target: tenantSettings.tenantId, set: { isDealerZero: true, updatedAt: new Date() } });
-}
-
-async function ensureTechnicians(): Promise<string[]> {
-  const names = Array.from({ length: TECHNICIAN_COUNT }, (_, i) => {
-    const rng = rngFor("technician", i);
-    return `${pick(rng, FIRST_NAMES)} ${pick(rng, LAST_NAMES)}`;
-  });
-  const ids: string[] = [];
-  await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
-    for (let i = 0; i < names.length; i++) {
-      const [existing] = await db.select().from(technicians).where(and(eq(technicians.tenantId, DEALER_ZERO_TENANT_ID), eq(technicians.name, names[i]!)));
-      if (existing) {
-        ids.push(existing.id);
-        continue;
-      }
-      const [created] = await db
-        .insert(technicians)
-        .values({
-          tenantId: DEALER_ZERO_TENANT_ID,
-          name: names[i]!,
-          contactInfo: { phone: `+1${AREA_CODE}5559${String(100 + i).padStart(3, "0")}` },
-          availability: { mon_fri: "08:00-17:00" },
-        })
-        .returning();
-      ids.push(created!.id);
-    }
-  });
-  return ids;
-}
-
 async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<string[]> {
   const householdIds: string[] = [];
   const now = Date.now();
@@ -108,21 +74,39 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
       let householdId: string;
       if (existing) {
         householdId = existing.id;
-        await db.update(households).set({ latitude: f.latitude, longitude: f.longitude }).where(eq(households.id, existing.id));
+        await ensureCustomerContact(db, {
+          tenantId: DEALER_ZERO_TENANT_ID,
+          householdId,
+          name: f.name,
+          phone: f.phone,
+          email: f.email,
+          consent: f.marketingConsent,
+          source: "dealer_zero_seed",
+          externalId: f.key,
+        });
+        await updateCustomerCoordinates(db, {
+          tenantId: DEALER_ZERO_TENANT_ID,
+          householdId,
+          latitude: f.latitude,
+          longitude: f.longitude,
+          source: "dealer_zero_seed",
+        });
       } else {
-        const [created] = await db
-          .insert(households)
-          .values({
-            tenantId: DEALER_ZERO_TENANT_ID,
-            address: f.address,
-            contactInfo: { name: f.name, phone: f.phone, email: f.email, dealerZeroKey: f.key },
-            waterProfile: { hardness_gpg: f.hardnessGpg, iron_ppm: f.ironPpm, source: f.source },
-            marketingConsent: f.marketingConsent,
-            latitude: f.latitude,
-            longitude: f.longitude,
-          })
-          .returning();
-        householdId = created!.id;
+        const created = await createCustomerHousehold(db, {
+          tenantId: DEALER_ZERO_TENANT_ID,
+          name: f.name,
+          phone: f.phone,
+          email: f.email,
+          address: f.address,
+          contactInfo: { dealerZeroKey: f.key },
+          waterProfile: { hardness_gpg: f.hardnessGpg, iron_ppm: f.ironPpm, source: f.source },
+          marketingConsent: f.marketingConsent,
+          latitude: f.latitude,
+          longitude: f.longitude,
+          source: "dealer_zero_seed",
+          externalId: f.key,
+        });
+        householdId = created.householdId;
       }
       householdIds.push(householdId);
 
@@ -139,12 +123,14 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
           .where(and(eq(equipment.householdId, householdId), eq(equipment.type, spec.type)));
         if (!existingEq) {
           const installDaysAgo = intBetween(slotRng, 30, 1800);
-          await db.insert(equipment).values({
+          await ensureEquipment(db, {
+            tenantId: DEALER_ZERO_TENANT_ID,
             householdId,
             type: spec.type,
             model: spec.model,
             installDate: new Date(now - installDaysAgo * 24 * 3600 * 1000),
             source: "finnor",
+            eventSource: "dealer_zero_seed",
           });
         }
       }
@@ -161,13 +147,16 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
           .from(serviceVisits)
           .where(and(eq(serviceVisits.householdId, householdId), eq(serviceVisits.type, "maintenance"), sql`date_trunc('day', ${serviceVisits.scheduledAt}) = date_trunc('day', ${scheduledAt.toISOString()}::timestamptz)`));
         if (!existingVisit) {
-          await db.insert(serviceVisits).values({
+          await createServiceVisit(db, {
+            tenantId: DEALER_ZERO_TENANT_ID,
             householdId,
             technicianId: pick(slotRng, technicianIds),
             type: "maintenance",
             scheduledAt,
             completedAt: scheduledAt,
             notes: "Routine maintenance visit — filters/salt checked, readings within normal range.",
+            eventType: "service_visit_seeded",
+            eventPayload: { source: "dealer_zero_seed" },
           });
         }
       }
@@ -175,14 +164,25 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
       // A light communications trail — one inbound + one outbound per household, dated
       // within the 18-month window, so household-360's merged timeline has something
       // real to show beyond visits/agreements.
-      const [existingComm] = await db.select().from(communicationsLog).where(eq(communicationsLog.householdId, householdId));
-      if (!existingComm) {
-        const commDaysAgo = intBetween(rngFor("comm", i), 1, 500);
-        await db.insert(communicationsLog).values([
-          { householdId, channel: "sms", direction: "outbound", content: "Hi! This is a reminder your annual water system check-up is coming up. Reply YES to schedule.", timestamp: new Date(now - commDaysAgo * 24 * 3600 * 1000) },
-          { householdId, channel: "sms", direction: "inbound", content: "Yes please, thanks!", timestamp: new Date(now - commDaysAgo * 24 * 3600 * 1000 + 3600_000) },
-        ]);
-      }
+      const commDaysAgo = intBetween(rngFor("comm", i), 1, 500);
+      await recordCustomerMessage(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        householdId,
+        channel: "sms",
+        direction: "outbound",
+        content: "Hi! This is a reminder your annual water system check-up is coming up. Reply YES to schedule.",
+        sentAt: new Date(now - commDaysAgo * 24 * 3600 * 1000),
+        provenance: { sourceSystem: "dealer_zero_bootstrap", externalId: `${f.key}:communication:outbound` },
+      });
+      await recordCustomerMessage(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        householdId,
+        channel: "sms",
+        direction: "inbound",
+        content: "Yes please, thanks!",
+        sentAt: new Date(now - commDaysAgo * 24 * 3600 * 1000 + 3600_000),
+        provenance: { sourceSystem: "dealer_zero_bootstrap", externalId: `${f.key}:communication:inbound` },
+      });
 
       // ~40 of the 105 established households get an AMC (per DECISIONS), renewal
       // dates spread across the year (past and future) so the renewal-scan/reminder
@@ -194,12 +194,14 @@ async function ensureEstablishedHouseholds(technicianIds: string[]): Promise<str
         const [existingAmc] = await db.select().from(maintenanceAgreements).where(eq(maintenanceAgreements.householdId, householdId));
         if (!existingAmc) {
           const renewalOffsetDays = intBetween(rngFor("amc", i), -180, 180);
-          await db.insert(maintenanceAgreements).values({
+          await ensureMaintenanceAgreement(db, {
+            tenantId: DEALER_ZERO_TENANT_ID,
             householdId,
             cadence: "annual",
             terms: { plan: "standard", price_usd: 249 },
             status: "active",
             renewalDate: new Date(now + renewalOffsetDays * 24 * 3600 * 1000),
+            source: "dealer_zero_seed",
           });
         }
       }
@@ -224,13 +226,24 @@ async function ensureOpenLeads(): Promise<void> {
       });
       // createLead owns its household insert; complete the synthetic map fixture on
       // both fresh and idempotently re-used lead households.
-      await db.update(households).set({ latitude: f.latitude, longitude: f.longitude }).where(eq(households.id, result.householdId));
+      await updateCustomerCoordinates(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        householdId: result.householdId,
+        latitude: f.latitude,
+        longitude: f.longitude,
+        source: "dealer_zero_seed",
+      });
       // createLead defaults status to "new" — vary it deterministically (a pure
       // function of i, so idempotent regardless of alreadyExisted) so the lead
       // pipeline has real cases at every stage, not 15 identical fresh leads.
       const status = pick(rngFor("lead-status", i), statuses);
       if (status !== "new") {
-        await db.update(leads).set({ status }).where(eq(leads.id, result.leadId));
+        await updateLeadStatus(db, {
+          tenantId: DEALER_ZERO_TENANT_ID,
+          leadId: result.leadId,
+          status,
+          source: "dealer_zero_seed",
+        });
       }
     }
   });
@@ -252,22 +265,23 @@ const DEALER_ZERO_INVENTORY: Array<{ sku: string; name: string; quantity: number
 async function ensureInventory(): Promise<void> {
   await withTenant(DEALER_ZERO_TENANT_ID, async (db) => {
     for (const item of DEALER_ZERO_INVENTORY) {
-      const [existing] = await db.select().from(inventoryItems).where(and(eq(inventoryItems.tenantId, DEALER_ZERO_TENANT_ID), eq(inventoryItems.sku, item.sku)));
-      if (existing) {
-        await db
-          .update(inventoryItems)
-          .set({ quantity: item.quantity, reorderThreshold: item.reorderThreshold, unitCostUsd: String(item.unitCostUsd) })
-          .where(eq(inventoryItems.id, existing.id));
-      } else {
-        await db.insert(inventoryItems).values({
-          tenantId: DEALER_ZERO_TENANT_ID,
-          sku: item.sku,
-          name: item.name,
-          quantity: item.quantity,
-          reorderThreshold: item.reorderThreshold,
-          unitCostUsd: String(item.unitCostUsd),
-        });
-      }
+      const existing = await reconcileInventoryItemMetadata(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        sku: item.sku,
+        name: item.name,
+        reorderThreshold: item.reorderThreshold,
+        unitCostUsd: item.unitCostUsd,
+        source: "dealer_zero_seed",
+      });
+      if (!existing) await createInventoryItem(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        sku: item.sku,
+        name: item.name,
+        quantity: item.quantity,
+        reorderThreshold: item.reorderThreshold,
+        unitCostUsd: item.unitCostUsd,
+        source: "dealer_zero_seed",
+      });
     }
   });
 }
@@ -280,12 +294,13 @@ export interface SeedDealerZeroResult {
   inventoryItemCount: number;
 }
 
-export async function seedDealerZero(): Promise<SeedDealerZeroResult> {
-  await ensureDealerZeroTenant();
-  const technicianIds = await ensureTechnicians();
+/** Initial evolving-state bootstrap. The continuous simulator remains a separate
+ * runtime package; this function only creates missing baseline facts. */
+export async function bootstrapDealerZeroEvolvingState(technicianIds: string[]): Promise<SeedDealerZeroResult> {
   const householdIds = await ensureEstablishedHouseholds(technicianIds);
   await ensureOpenLeads();
   await ensureInventory();
+  await ensureDealerZeroCapabilityFixtures(householdIds[0]!, technicianIds[0]!);
   return {
     tenantId: DEALER_ZERO_TENANT_ID,
     technicianCount: technicianIds.length,
@@ -293,6 +308,13 @@ export async function seedDealerZero(): Promise<SeedDealerZeroResult> {
     openLeadCount: OPEN_LEAD_COUNT,
     inventoryItemCount: DEALER_ZERO_INVENTORY.length,
   };
+}
+
+/** Compatibility package entry point: static reconciliation followed by one-time
+ * evolving-state bootstrap. Re-running it never resets simulator-owned state. */
+export async function seedDealerZero(): Promise<SeedDealerZeroResult> {
+  const staticState = await reconcileDealerZeroStatic();
+  return bootstrapDealerZeroEvolvingState(staticState.technicianIds);
 }
 
 const isMain = process.argv[1]?.endsWith("seed-dealer-zero.ts") || process.argv[1]?.endsWith("seed-dealer-zero.js");

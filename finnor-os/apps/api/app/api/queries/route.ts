@@ -9,6 +9,7 @@ import { requireContext, errorResponse } from "../../../lib/auth";
 import { getOrchestrator } from "../../../lib/orchestrator";
 import { validateOperationalQueryRequest, type OperationalQueryRequest } from "@finnor/orchestration";
 import { recordWorkResponse } from "@finnor/db";
+import { createInteractiveIntakeDeadline, requireInteractiveIntakeTime } from "../../../lib/intake-deadline";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -62,8 +63,13 @@ export async function POST(req: Request): Promise<Response> {
     const body = parseRequestBody(await req.json().catch(() => ({})));
     if (!body.success) return Response.json({ error: body.error }, { status: 400, headers: { "Cache-Control": "no-store" } });
 
+    const intakeDeadlineAt = createInteractiveIntakeDeadline("console");
     const started = performance.now();
-    const run = await getOrchestrator().handleOperationalQuery(body.request, ctx, body.options);
+    requireInteractiveIntakeTime(intakeDeadlineAt);
+    const run = await getOrchestrator().handleOperationalQuery(body.request, ctx, {
+      ...body.options,
+      intakeDeadlineAt: new Date(intakeDeadlineAt),
+    });
     const elapsedMs = Math.max(0, performance.now() - started);
     const queryDurationMs = Math.max(run.metadata.durationMs, elapsedMs);
     const response = {

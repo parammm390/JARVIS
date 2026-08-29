@@ -11,7 +11,6 @@ import {
   businessOperations,
   businessOperationTargets,
   closePool,
-  communicationsLog,
   decisionReceipts,
   domainActions,
   handoffWork,
@@ -31,6 +30,7 @@ import {
   workflowSteps,
   works,
 } from "@finnor/db";
+import { recordCustomerMessage } from "@finnor/data-platform";
 import { employeeAuthoritySnapshot } from "@finnor/authority";
 import {
   FinnorOrchestrator,
@@ -402,7 +402,7 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
       maxSteps: 4,
     });
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("continue");
-    await withTenant(tenantId, (db) => db.insert(communicationsLog).values({ householdId, channel: "sms", direction: "outbound", content: "Resolved externally during the objective" }));
+    await withTenant(tenantId, (db) => recordCustomerMessage(db, { tenantId, householdId, channel: "sms", direction: "outbound", content: "Resolved externally during the objective" }));
     expect(await orchestrator.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
     const aggregate = await workAggregate(tenantId, started.workId);
     expect(aggregate!.actions).toHaveLength(0);

@@ -12,7 +12,8 @@ describe("production-correctness post-effect persistence", () => {
     const sendPath = text.slice(text.indexOf("if (draft.actionType === \"send_customer_message\""), text.indexOf("const tenantId = String(draft.payload.tenantId", text.indexOf("return { status: \"success\", output: { sent: true")));
 
     expect(sendPath).not.toContain(".catch(() => undefined)");
-    expect(sendPath).toContain("persistenceFailures");
+    expect(sendPath).toContain("canonicalMessageRecorded");
+    expect(sendPath).toContain("recordCustomerMessage");
     expect(sendPath).toContain("output: { sent: true");
     expect(sendPath).toContain('errorKind: "needs_human"');
   });
@@ -22,8 +23,8 @@ describe("production-correctness post-effect persistence", () => {
     const sendPath = text.slice(text.lastIndexOf('if (draft.actionType === "send_proposal")'));
 
     expect(sendPath).not.toContain(".catch(() => undefined)");
-    expect(sendPath).toContain(".returning({ id: proposals.id })");
-    expect(sendPath).toContain("updated.length !== 1");
+    expect(sendPath).toContain("setProposalStatus");
+    expect(sendPath).toContain("if (!updated)");
     expect(sendPath).toContain("stateRecorded: false");
     expect(sendPath).toContain('errorKind: "needs_human"');
   });

@@ -128,4 +128,20 @@ describe("canonical Work → Thread projector", () => {
     work.businessEffects = [{ id: "effect-1", domainActionId: "action-1", semanticHash: "hash", status: "executing", verification: null, observedAt: null }]
     expect(projectWorkToThread(work).everExecuted).toBe(true)
   })
+
+  it("projects canonical failure codes into bounded, truthful UI copy", () => {
+    const work = workCase("failed", "failed")
+    work.durableWork!.failure = { code: "worker_fleet_unavailable" }
+    const projected = projectWorkToThread(work)
+    expect(projected.submitError).toMatch(/operating worker is temporarily unavailable/i)
+    expect(projected.submitError).not.toMatch(/reach the operating system/i)
+  })
+
+  it("normalizes durable legacy atomic_effect rows during the rolling deploy", () => {
+    const work = workCase("executing", "continue")
+    work.objectiveLoop = undefined
+    work.durableWork!.executionModel = "atomic_effect" as never
+    work.durableWork!.finalOutcome = null
+    expect(projectWorkToThread(work).executionModel).toBe("ATOMIC_ACTION")
+  })
 })

@@ -4,6 +4,7 @@
 import { appointments, decisionReceipts, domainActions, households, serviceVisits, technicians, tenantSettings, withTenant } from "@finnor/db";
 import { and, asc, desc, eq, gte, isNull, lt, or } from "drizzle-orm";
 import { AuthError, errorResponse, requireContext } from "../../../../lib/auth";
+import { assignAppointment, assignServiceVisit } from "@finnor/data-platform";
 
 function dayBounds(value: string): [Date, Date] {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new AuthError("date must be YYYY-MM-DD", 400);
@@ -119,10 +120,10 @@ export async function POST(req: Request): Promise<Response> {
       const [technician] = await db.select({ id: technicians.id }).from(technicians).where(and(eq(technicians.id, body.technicianId as string), eq(technicians.tenantId, ctx.tenantId))).limit(1);
       if (!technician) return null;
       if (sourceKind === "appointment") {
-        const [appointment] = await db.update(appointments).set({ technicianId: technician.id }).where(eq(appointments.id, body.visitId as string)).returning({ id: appointments.id, technicianId: appointments.technicianId });
+        const appointment = await assignAppointment(db, { tenantId: ctx.tenantId, appointmentId: body.visitId as string, technicianId: technician.id });
         return appointment ? { ...appointment, sourceKind } : null;
       }
-      const [visit] = await db.update(serviceVisits).set({ technicianId: technician.id }).where(eq(serviceVisits.id, body.visitId as string)).returning({ id: serviceVisits.id, technicianId: serviceVisits.technicianId });
+      const visit = await assignServiceVisit(db, { tenantId: ctx.tenantId, visitId: body.visitId as string, technicianId: technician.id });
       return visit ? { ...visit, sourceKind } : null;
     });
     if (!assigned) throw new AuthError("Schedule record or technician was not found", 404);

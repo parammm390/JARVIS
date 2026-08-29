@@ -9,7 +9,7 @@ import { resolveProviderForPurpose } from "./llm";
 import type { PluginRegistry } from "./plugin-registry";
 import { z } from "zod";
 import { redactStructured, redactText, restoreTokens } from "@finnor/security";
-import { groundEntitiesWithDb, buildCommandGraph } from "./compiler";
+import { groundEntitiesWithDb, buildCommandGraph, isConsequentialAction } from "./compiler";
 import { appendEpisode } from "@finnor/memory";
 import { repairAction } from "./repair";
 import type { RepairVerdict } from "./repair";
@@ -22,6 +22,7 @@ import { plannerContinuationInstruction, plannerMemoryContext, plannerShortTermC
 import { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 import { resolveCompetitorResearch } from "./research-context";
 import { applyOperatingInteractionTargets } from "./interaction-targeting";
+import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
@@ -176,6 +177,7 @@ export class LLMPlanner implements Planner {
   // (production follows the explicit planning route, while tests may want candidate
   // A from one stub and candidate B from another).
   private secondCandidateProvider: LLMProvider | undefined;
+  private readonly userCapabilities: UserCapabilityRegistry;
 
   constructor(
     private plugins: PluginRegistry,
@@ -184,6 +186,7 @@ export class LLMPlanner implements Planner {
   ) {
     this.provider = provider;
     this.secondCandidateProvider = secondCandidateProvider;
+    this.userCapabilities = createUserCapabilityRegistry(plugins);
   }
 
   private systemPromptCache: { day: string; prompt: string } | null = null;
@@ -201,6 +204,8 @@ export class LLMPlanner implements Planner {
       "Resolve me/my against operatingContext.employee and us/our/the company against operatingContext.tenant before choosing an action. Missing profile facts remain missing; never infer identity, age, industry, geography, revenue, ARR, or company performance from semantic memory.",
       "Each action_type has a REQUIRED payload JSON schema. Follow it exactly — field names matter:",
       this.plugins.payloadSpecJson(),
+      "The runtime-derived User Capability Registry is authoritative. Every ACTION capability is reachable from ordinary business English. QUERY capabilities are compiled before this planner and must never be emitted as action_type values:",
+      this.userCapabilities.plannerCatalog(),
       `Today is ${day}. Resolve relative dates to ISO 8601 datetimes.`,
       "memory.shortTerm.turns (if present) is this same call's own recent history — each turn has the instruction that was said and which action_type/payload it resolved to. USE IT to resolve references the current instruction doesn't spell out: \"call them\" / \"that one\" / \"the second one\" / \"do the same for the Petersons\" mean whatever household, invoice, or action the most recent relevant turn was about — carry its identifying fields (householdId, phone, address — fields that identify a REAL EXISTING row) into the new payload rather than leaving them blank.",
       "memory.shortTerm is omitted for every self-contained instruction. If it is present, the current turn is a genuine reference or clarification fragment. Use only the minimum identifying/action fields needed to resolve that reference. Never copy a prior answer, topic, recommendation, or research result into the new response.",
@@ -605,6 +610,22 @@ export class LLMPlanner implements Planner {
         : { ...candidate, healthAdjustment: null };
     });
 
+    // The LLM may emit an id-shaped target that was not present in the
+    // instruction. Ground every final candidate before persistence; any missing
+    // canonical row turns the whole turn into one clarification and zero business
+    // actions. This is the last compiler boundary before a consequential target
+    // could become durable.
+    const groundingPreview = await withTenant(tenantContext.tenantId, async (db) => Promise.all(
+      finalCandidates.map((candidate) => groundEntitiesWithDb(db, tenantContext.tenantId, candidate.payload)),
+    ));
+    const missingTargets = [...new Set([
+      ...groundingPreview.flatMap((fields) => fields.filter((field) => field.status === "not_found").map((field) => field.field)),
+      ...this.unresolvedConsequentialTargetFields(planningInstruction, finalCandidates, opts.operatingContext, memory.shortTerm),
+    ])];
+    if (missingTargets.length > 0) {
+      return this.persistGroundingClarification(tenantContext, opts, missingTargets);
+    }
+
     // B2.T2: forecast before persisting or gating. `PluginRegistry.simulate()` is
     // guaranteed no-write: five flagship plugins provide data-backed dry-runs and
     // every other plugin falls back to an explicitly limited schema prediction.
@@ -765,6 +786,174 @@ export class LLMPlanner implements Planner {
       groundedPayload: row.groundedPayload as DomainAction["groundedPayload"],
       compiledGraph: row.compiledGraph as DomainAction["compiledGraph"],
     }));
+  }
+
+  private async persistGroundingClarification(
+    tenantContext: TenantContext,
+    opts: PlannerOptions,
+    missingFields: string[],
+  ): Promise<DomainAction[]> {
+    const actionId = randomUUID();
+    const question = `I could not verify the requested ${missingFields.join(", ")} in current company data. Which current record should I use?`;
+    const payload = {
+      question,
+      missingFields: missingFields.slice(0, 12),
+      context: "No business action was created because its consequential target did not resolve to canonical tenant data.",
+    };
+    const [row] = await withTenant(tenantContext.tenantId, async (db) => {
+      const [policy] = await db.select().from(domainPolicyRevisions).where(and(
+        eq(domainPolicyRevisions.tenantId, tenantContext.tenantId),
+        eq(domainPolicyRevisions.actionType, "clarification_request"),
+        lte(domainPolicyRevisions.effectiveFrom, new Date()),
+      )).orderBy(desc(domainPolicyRevisions.effectiveFrom), desc(domainPolicyRevisions.version)).limit(1);
+      return db.insert(domainActions).values({
+        id: actionId,
+        tenantId: tenantContext.tenantId,
+        actionType: "clarification_request",
+        payload,
+        policyId: policy?.policyId ?? null,
+        policyVersion: policy?.version ?? null,
+        status: "draft",
+        summary: question,
+        groundedPayload: [],
+        compiledGraph: buildCommandGraph("clarification_request", true),
+        planId: randomUUID(),
+        dependsOn: [],
+        predictedReceipt: {
+          version: 1,
+          actionType: "clarification_request",
+          simulation: { mode: "schema", summary: question, predicted: { question, missingFields, fieldChanges: [] } },
+        },
+        instructionId: opts.instructionId ?? null,
+        workId: opts.workId ?? null,
+        plannerAttemptId: opts.plannerAttemptId ?? null,
+        initiatedBy: tenantContext.employeeId ?? (/^[0-9a-f-]{36}$/i.test(tenantContext.userId) ? tenantContext.userId : null),
+      }).returning();
+    });
+    if (!row) throw new Error("Failed to persist grounding clarification");
+    await appendEpisode(tenantContext.tenantId, row.id, "target_grounding_rejected", { missingFields }, { clarificationOnly: true });
+    return [{
+      id: row.id,
+      tenantId: row.tenantId,
+      actionType: row.actionType,
+      payload: row.payload as Record<string, unknown>,
+      policyId: row.policyId,
+      policyVersion: row.policyVersion,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      workId: row.workId,
+      plannerAttemptId: row.plannerAttemptId,
+      initiatedBy: row.initiatedBy,
+      authorityDecisionId: row.authorityDecisionId,
+      authorityRevision: row.authorityRevision,
+      authorityContext: row.authorityContext as Record<string, unknown>,
+      reasoning: "Consequential target failed canonical grounding; clarification required.",
+      groundedPayload: [],
+      compiledGraph: row.compiledGraph as DomainAction["compiledGraph"],
+    }];
+  }
+
+  private unresolvedConsequentialTargetFields(
+    instruction: string,
+    candidates: Array<{ actionType: string; payload: Record<string, unknown> }>,
+    context: OperatingContext | undefined,
+    shortTerm: MemorySnapshot["shortTerm"] = null,
+  ): string[] {
+    const explicitIds = new Set(instruction.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi) ?? []);
+    const interactionRefs = [
+      ...(context?.interactionContext?.selectedEntities ?? []),
+      ...(context?.interactionContext?.focusedEntity ? [context.interactionContext.focusedEntity] : []),
+    ].filter((ref) => !(context?.interactionContext?.excludedEntities ?? []).some((excluded) => excluded.entityType === ref.entityType && excluded.entityId === ref.entityId));
+    const resolvedRefs = context?.conversationContext?.resolution.resolvedReferences ?? [];
+    const primaryRefs = interactionRefs.length > 0 ? interactionRefs : resolvedRefs;
+    const senderId = context?.conversationContext?.resolution.senderIdentityRef?.communicationIdentityId;
+    // Keep all canonical provenance available for exact equality checks, but do
+    // not let the mere presence of an unrelated trusted id authorize an endpoint
+    // invented by the model.
+    const canonicalPartyIdFields = new Set([
+      "householdId", "customerId", "contactId", "leadId", "technicianId", "employeeId",
+      "userId", "externalContactId", "externalOrganizationId", "partyId", "targetId",
+    ]);
+    const endpointFields = new Set([
+      "to", "phone", "phoneNumber", "contactPhone", "email", "contactEmail", "address",
+      "recipient", "recipients", "participants",
+    ]);
+    const memoryTrustedIds = new Set<string>();
+    const memoryTrustedValues = new Set<string>();
+    const collectMemoryTrustedProvenance = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(collectMemoryTrustedProvenance);
+        return;
+      }
+      if (!value || typeof value !== "object") return;
+      for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+        if ((canonicalPartyIdFields.has(key) || endpointFields.has(key)) && typeof child === "string" && child.trim()) {
+          const trimmed = child.trim();
+          if (canonicalPartyIdFields.has(key) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed)) {
+            memoryTrustedIds.add(trimmed);
+          }
+          memoryTrustedValues.add(trimmed.toLocaleLowerCase().replace(/\s+/g, " "));
+          const digits = trimmed.replace(/\D/g, "");
+          if (digits.length >= 7) memoryTrustedValues.add(digits);
+        }
+        collectMemoryTrustedProvenance(child);
+      }
+    };
+    collectMemoryTrustedProvenance(shortTerm);
+    const trustedIds = new Set([
+      ...primaryRefs.map((ref) => ref.entityId),
+      ...(resolvedRefs.length > 0 ? resolvedRefs.map((ref) => ref.entityId) : []),
+      ...(context?.referencedEntities ?? []).map((ref) => ref.entityId),
+      ...(senderId ? [senderId] : []),
+      ...explicitIds,
+      ...memoryTrustedIds,
+    ]);
+    const normalizedInstruction = instruction.toLocaleLowerCase().replace(/\s+/g, " ");
+    const missing: string[] = [];
+    const hasTrustedCanonicalParty = (value: unknown): boolean => {
+      if (Array.isArray(value)) return value.some(hasTrustedCanonicalParty);
+      if (!value || typeof value !== "object") return false;
+      return Object.entries(value as Record<string, unknown>).some(([key, child]) =>
+        (canonicalPartyIdFields.has(key) && typeof child === "string" && trustedIds.has(child.trim()))
+        || hasTrustedCanonicalParty(child),
+      );
+    };
+    const inspect = (field: string, value: unknown, path: string, allowEndpointEnrichment: boolean, candidatePayload: Record<string, unknown>) => {
+      if (Array.isArray(value)) {
+        value.forEach((item, index) => inspect(field, item, `${path}[${index}]`, allowEndpointEnrichment, candidatePayload));
+        return;
+      }
+      if (value && typeof value === "object") {
+        Object.entries(value as Record<string, unknown>).forEach(([key, child]) => inspect(field, child, `${path}.${key}`, allowEndpointEnrichment, candidatePayload));
+        return;
+      }
+      if (typeof value !== "string" || !value.trim()) return;
+      const trimmed = value.trim();
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(trimmed)) {
+        if (!trustedIds.has(trimmed)) missing.push(path);
+        return;
+      }
+      const normalized = trimmed.toLocaleLowerCase().replace(/\s+/g, " ");
+      const digits = trimmed.replace(/\D/g, "");
+      const appearsDirectly = normalizedInstruction.includes(normalized)
+        || (digits.length >= 7 && instruction.replace(/\D/g, "").includes(digits))
+        || memoryTrustedValues.has(normalized)
+        || (digits.length >= 7 && memoryTrustedValues.has(digits));
+      // A direct endpoint/address may be enriched from an already resolved exact
+      // canonical party. The candidate itself must carry that party's trusted
+      // canonical id; an unrelated selected entity is never sufficient.
+      if (!appearsDirectly && !(allowEndpointEnrichment && hasTrustedCanonicalParty(candidatePayload))) missing.push(path);
+    };
+    for (const candidate of candidates) {
+      if (!isConsequentialAction(candidate.actionType, candidate.payload)) continue;
+      const capability = this.userCapabilities.get(`action:${candidate.actionType}`);
+      const targetFields = capability?.targetFields ?? [];
+      const allowEndpointEnrichment = hasTrustedCanonicalParty(candidate.payload);
+      for (const field of targetFields) {
+        if (candidate.payload[field] !== undefined) inspect(field, candidate.payload[field], field, allowEndpointEnrichment && endpointFields.has(field), candidate.payload);
+      }
+    }
+    return missing;
   }
 
   /** High tier only (Phase 8): a second, independent candidate for a high-stakes

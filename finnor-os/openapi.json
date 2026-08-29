@@ -600,13 +600,436 @@
         },
         "responses": {
           "201": {
-            "description": "Planned domain actions"
+            "description": "Canonical QUERY, CONVERSATION, ATOMIC_ACTION, or CLARIFY result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "executionModel": {
+                          "type": "string",
+                          "const": "QUERY"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "maxItems": 0
+                        },
+                        "query": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "answer": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "workId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "workInputId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "instructionId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "assistantMessage": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "originalText": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "semanticKind": {
+                              "type": "string",
+                              "enum": [
+                                "ANSWER",
+                                "ACKNOWLEDGEMENT",
+                                "CLARIFICATION"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "originalText",
+                            "createdAt",
+                            "semanticKind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "executionModel",
+                        "actions",
+                        "query",
+                        "workId",
+                        "workInputId",
+                        "instructionId",
+                        "threadId",
+                        "assistantMessage"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "executionModel": {
+                          "type": "string",
+                          "const": "CONVERSATION"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "maxItems": 0
+                        },
+                        "answer": {
+                          "type": "object",
+                          "additionalProperties": {}
+                        },
+                        "workId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "workInputId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "instructionId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "assistantMessage": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "originalText": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "semanticKind": {
+                              "type": "string",
+                              "enum": [
+                                "ANSWER",
+                                "ACKNOWLEDGEMENT",
+                                "CLARIFICATION"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "originalText",
+                            "createdAt",
+                            "semanticKind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "executionModel",
+                        "actions",
+                        "answer",
+                        "workId",
+                        "workInputId",
+                        "instructionId",
+                        "threadId",
+                        "assistantMessage"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "executionModel": {
+                          "type": "string",
+                          "const": "ATOMIC_ACTION"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "minItems": 1
+                        },
+                        "workId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "workInputId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "instructionId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "assistantMessage": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "originalText": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "semanticKind": {
+                              "type": "string",
+                              "enum": [
+                                "ANSWER",
+                                "ACKNOWLEDGEMENT",
+                                "CLARIFICATION"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "originalText",
+                            "createdAt",
+                            "semanticKind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "executionModel",
+                        "actions",
+                        "workId",
+                        "workInputId",
+                        "instructionId",
+                        "threadId",
+                        "assistantMessage"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "executionModel": {
+                          "type": "string",
+                          "const": "CLARIFY"
+                        },
+                        "actions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "minItems": 1,
+                          "maxItems": 1
+                        },
+                        "workId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "workInputId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "instructionId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "threadId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "assistantMessage": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "originalText": {
+                              "type": "string"
+                            },
+                            "createdAt": {
+                              "type": "string",
+                              "format": "date-time"
+                            },
+                            "semanticKind": {
+                              "type": "string",
+                              "enum": [
+                                "ANSWER",
+                                "ACKNOWLEDGEMENT",
+                                "CLARIFICATION"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "originalText",
+                            "createdAt",
+                            "semanticKind"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "executionModel",
+                        "actions",
+                        "workId",
+                        "workInputId",
+                        "instructionId",
+                        "threadId",
+                        "assistantMessage"
+                      ],
+                      "additionalProperties": false
+                    }
+                  ],
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Canonical durable OBJECTIVE handoff",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "executionModel": {
+                      "type": "string",
+                      "const": "OBJECTIVE"
+                    },
+                    "actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {}
+                      },
+                      "maxItems": 0
+                    },
+                    "objectiveLoopId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "objectiveState": {
+                      "type": "string",
+                      "enum": [
+                        "continue",
+                        "awaiting_approval",
+                        "waiting",
+                        "blocked",
+                        "completed",
+                        "failed",
+                        "cancelled"
+                      ]
+                    },
+                    "workId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "workInputId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "instructionId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "threadId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "assistantMessage": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "originalText": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "semanticKind": {
+                          "type": "string",
+                          "enum": [
+                            "ANSWER",
+                            "ACKNOWLEDGEMENT",
+                            "CLARIFICATION"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "originalText",
+                        "createdAt",
+                        "semanticKind"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "executionModel",
+                    "actions",
+                    "objectiveLoopId",
+                    "objectiveState",
+                    "workId",
+                    "workInputId",
+                    "instructionId",
+                    "threadId",
+                    "assistantMessage"
+                  ],
+                  "additionalProperties": false,
+                  "$schema": "http://json-schema.org/draft-07/schema#"
+                }
+              }
+            }
           },
           "400": {
             "description": "Invalid payload"
           },
           "401": {
             "description": "Bad auth"
+          },
+          "409": {
+            "description": "Legacy response requires canonical Work projection"
           }
         }
       }

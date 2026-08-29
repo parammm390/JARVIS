@@ -102,12 +102,14 @@ describe("kernel/instruction — startTracePoll (P3.T6, §7.1 Stage 1)", () => {
 
   it("stops at the 120s ceiling even with no terminal event", async () => {
     jarvisGetMock.mockResolvedValue({ events: [] })
-    startTracePoll("instr-7", () => {})
+    const onStatus = vi.fn()
+    startTracePoll("instr-7", () => {}, 0, { onStatus })
     await vi.waitFor(() => expect(jarvisGetMock).toHaveBeenCalledTimes(1))
     await vi.advanceTimersByTimeAsync(TRACE_POLL_CEILING_MS + TRACE_POLL_INTERVAL_MS * 2)
     const callsAtCeiling = jarvisGetMock.mock.calls.length
     await vi.advanceTimersByTimeAsync(TRACE_POLL_INTERVAL_MS * 5)
     expect(jarvisGetMock.mock.calls.length).toBe(callsAtCeiling)
+    expect(onStatus).toHaveBeenLastCalledWith("unavailable", expect.objectContaining({ status: 0, message: expect.stringMatching(/canonical Work/) }))
   })
 
   it("a transient poll failure reconnects on a bounded backoff and then resumes", async () => {

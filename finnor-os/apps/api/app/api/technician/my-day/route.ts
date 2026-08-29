@@ -2,7 +2,7 @@
 // explicit users.technician_id link. This route never falls back to tenant-wide visits.
 
 import { households, serviceVisits, users, withTenant, workOrders } from "@finnor/db";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { completeServiceVisit, updateWorkOrderStatus } from "@finnor/data-platform";
 import technicianReportsPlugin from "@finnor/plugin-technician-reports";
 import { and, asc, eq, gte, isNull, lt } from "drizzle-orm";
 import { AuthError, errorResponse, requireContext } from "../../../../lib/auth";
@@ -80,10 +80,7 @@ export async function POST(req: Request): Promise<Response> {
       if (!workOrder) throw new AuthError("Work order was not found or is not assigned to you", 404);
       if (body.action === "arrive") {
         if (workOrder.status !== "scheduled") throw new AuthError("Only a scheduled work order can be marked arrived", 409);
-        await withTenant(ctx.tenantId, async (db) => {
-          await db.update(workOrders).set({ status: "in_progress" }).where(eq(workOrders.id, workOrder.id));
-          await recordBusinessEvent(db, { tenantId: ctx.tenantId, entityType: "work_order", entityId: workOrder.id, eventType: "technician_arrived", payload: { technicianId } });
-        });
+        await withTenant(ctx.tenantId, (db) => updateWorkOrderStatus(db, { tenantId: ctx.tenantId, workOrderId: workOrder.id, status: "in_progress", eventType: "technician_arrived", eventPayload: { technicianId } }));
         return Response.json({ workOrder: { id: workOrder.id, status: "in_progress" } });
       }
       if (body.action === "report") {
@@ -100,10 +97,7 @@ export async function POST(req: Request): Promise<Response> {
       }
       if (body.action === "done") {
         if (workOrder.status !== "in_progress") throw new AuthError("Only an in-progress work order can be completed", 409);
-        await withTenant(ctx.tenantId, async (db) => {
-          await db.update(workOrders).set({ status: "completed", completedAt: new Date() }).where(eq(workOrders.id, workOrder.id));
-          await recordBusinessEvent(db, { tenantId: ctx.tenantId, entityType: "work_order", entityId: workOrder.id, eventType: "work_order_completed", payload: { technicianId } });
-        });
+        await withTenant(ctx.tenantId, (db) => updateWorkOrderStatus(db, { tenantId: ctx.tenantId, workOrderId: workOrder.id, status: "completed", completedAt: new Date(), eventType: "work_order_completed", eventPayload: { technicianId } }));
         return Response.json({ workOrder: { id: workOrder.id, status: "completed" } });
       }
       throw new AuthError("Unsupported technician work-order action", 400);
@@ -112,14 +106,7 @@ export async function POST(req: Request): Promise<Response> {
       throw new AuthError("visitId and confirm: true are required to complete a visit", 400);
     }
     const visitId = body.visitId;
-    const completed = await withTenant(ctx.tenantId, async (db) => {
-      const rows = await db
-        .update(serviceVisits)
-        .set({ completedAt: new Date() })
-        .where(and(eq(serviceVisits.id, visitId), eq(serviceVisits.technicianId, technicianId), isNull(serviceVisits.completedAt)))
-        .returning({ id: serviceVisits.id, completedAt: serviceVisits.completedAt });
-      return rows[0] ?? null;
-    });
+    const completed = await withTenant(ctx.tenantId, (db) => completeServiceVisit(db, { tenantId: ctx.tenantId, visitId, technicianId }));
     if (!completed) throw new AuthError("Visit was not found, is not assigned to you, or was already completed", 409);
     return Response.json({ visit: completed });
   } catch (err) {

@@ -54,8 +54,8 @@ const mocks = vi.hoisted(() => {
   }));
   const interpretOperationalQuery = vi.fn(() => ({ route: "planner" as const, reason: "mutation_or_advice" as const }));
   const interactionAwareOperationalDecision = vi.fn((decision: unknown) => decision);
-  const classifyInstructionRoute = vi.fn(() => ({ version: 1, route: "ATOMIC_EFFECT" as const, reasonCodes: ["strict_single_effect_candidate"] }));
-  const handleInstructionResult = vi.fn(async () => ({ actions: [] }));
+  const compileHumanInstructionRoute = vi.fn(() => ({ version: 1, route: "ATOMIC_ACTION" as const, reasonCodes: ["strict_single_action_candidate"] }));
+  const handleInstructionResult = vi.fn(async () => ({ executionModel: "ATOMIC_ACTION" as const, actions: [{ id: "planner-action", actionType: "create_task", payload: {}, status: "draft" }] }));
   const startObjective = vi.fn(async () => ({
     workId: ids.workId,
     workInputId: ids.workInputId,
@@ -80,7 +80,7 @@ const mocks = vi.hoisted(() => {
     persistEmployeeAssistantTurn,
     interpretOperationalQuery,
     interactionAwareOperationalDecision,
-    classifyInstructionRoute,
+    compileHumanInstructionRoute,
     handleInstructionResult,
     startObjective,
     getOrchestrator,
@@ -111,7 +111,7 @@ vi.mock("@finnor/db", () => ({
 vi.mock("@finnor/orchestration", () => ({
   interpretOperationalQuery: mocks.interpretOperationalQuery,
   interactionAwareOperationalDecision: mocks.interactionAwareOperationalDecision,
-  classifyInstructionRoute: mocks.classifyInstructionRoute,
+  compileHumanInstructionRoute: mocks.compileHumanInstructionRoute,
   isConversationalTurn: vi.fn(() => false),
   resolveOperatingInteractionContext: mocks.resolveOperatingInteractionContext,
   OperatingInteractionContextError: class OperatingInteractionContextError extends Error {},
@@ -171,6 +171,12 @@ describe("production-correctness intake boundary", () => {
     expect(claimOrder).toBeLessThan(mocks.enforceRouteRateLimit.mock.invocationCallOrder[0]!);
     expect(claimOrder).toBeLessThan(mocks.handleInstructionResult.mock.invocationCallOrder[0]!);
     expect(mocks.prepareEmployeeConversationTurn).toHaveBeenCalledWith(expect.objectContaining({ instructionId: ids.instructionId }));
+    expect(mocks.receiveWork).toHaveBeenCalledWith(expect.objectContaining({ intakeDeadlineAt: expect.any(Date) }));
+    expect(mocks.handleInstructionResult).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.objectContaining({ deadlineAt: expect.any(Number), signal: expect.any(AbortSignal) }),
+    );
   });
 
   it("claims Work/Input before context, conversation, or objective orchestration on /api/objectives", async () => {
@@ -182,6 +188,12 @@ describe("production-correctness intake boundary", () => {
     expect(claimOrder).toBeLessThan(mocks.prepareEmployeeConversationTurn.mock.invocationCallOrder[0]!);
     expect(claimOrder).toBeLessThan(mocks.startObjective.mock.invocationCallOrder[0]!);
     expect(mocks.prepareEmployeeConversationTurn).toHaveBeenCalledWith(expect.objectContaining({ instructionId: ids.instructionId }));
+    expect(mocks.receiveWork).toHaveBeenCalledWith(expect.objectContaining({ intakeDeadlineAt: expect.any(Date) }));
+    expect(mocks.startObjective).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      expect.objectContaining({ intakeDeadlineAt: expect.any(Date) }),
+    );
   });
 
   it("keeps action core success when assistant projection persistence fails", async () => {
@@ -192,7 +204,7 @@ describe("production-correctness intake boundary", () => {
 
     expect(response.status).toBe(201);
     expect(body).toMatchObject({
-      planned: [],
+      planned: [{ id: "planner-action" }],
       workId: ids.workId,
       workInputId: ids.workInputId,
       instructionId: ids.instructionId,
@@ -246,7 +258,7 @@ describe("production-correctness intake boundary", () => {
     expect(mocks.prepareEmployeeConversationTurn).not.toHaveBeenCalled();
     expect(mocks.interpretOperationalQuery).not.toHaveBeenCalled();
     expect(mocks.interactionAwareOperationalDecision).not.toHaveBeenCalled();
-    expect(mocks.classifyInstructionRoute).not.toHaveBeenCalled();
+    expect(mocks.compileHumanInstructionRoute).not.toHaveBeenCalled();
     expect(mocks.enforceRouteRateLimit).not.toHaveBeenCalled();
     expect(mocks.linkEmployeeConversationTurnToWork).not.toHaveBeenCalled();
     expect(mocks.handleInstructionResult).not.toHaveBeenCalled();

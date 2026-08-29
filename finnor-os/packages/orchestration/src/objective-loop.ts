@@ -172,6 +172,8 @@ export interface StartObjectiveOptions extends ObjectiveBudgets {
   workInputId?: string;
   idempotencyKey?: string;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
+  /** API request deadline; distinct from the Objective's durable multi-day deadline. */
+  intakeDeadlineAt?: Date;
   successCondition?: ObjectiveSuccessCondition;
   /** Phase 5 binding only. The existing Objective controller remains the runtime. */
   outcomePack?: OutcomePackStartBinding;
@@ -383,7 +385,9 @@ async function scheduleIterationTx(
     payload,
     runAt,
     idempotencyKey: objectiveIterationJobKey(loop.id, loop.revision, nextStep, latestTerminal?.id),
-    lane: "interactive",
+    // Objective iterations are durable background work. Interactive workflow/action
+    // deliveries own the reserved lane so a slow Objective cannot consume it.
+    lane: "batch",
     priority: 100,
   }).onConflictDoNothing({ target: jobs.idempotencyKey }).returning({ id: jobs.id });
   return Boolean(inserted);
@@ -441,6 +445,7 @@ export async function startWorkObjective(objective: string, ctx: TenantContext, 
       // Resolve it after the durable Work/Input claim before persisting it.
       activeContext: undefined,
       authorityContext: intakeAuthorityContext(ctx),
+      intakeDeadlineAt: options.intakeDeadlineAt,
     });
   options = {
     ...options,

@@ -39,18 +39,43 @@ fi
 
 release_env_tmp=$(mktemp)
 unit_tmp=$(mktemp)
+previous_release_env=$(mktemp)
 next_link="${current_link}.next"
 previous_target=$(readlink "$current_link" 2>/dev/null || true)
+previous_release_env_exists=0
+release_env_written=0
 switched=0
+
+if [ -f "$release_env" ]; then
+  cp "$release_env" "$previous_release_env"
+  previous_release_env_exists=1
+fi
 
 rollback() {
   status=$?
-  if [ "$status" -ne 0 ] && [ "$switched" -eq 1 ] && [ -n "$previous_target" ]; then
-    ln -sfn "$previous_target" "$next_link"
-    mv -Tf "$next_link" "$current_link"
-    systemctl restart "$unit_name" || true
+  if [ "$status" -ne 0 ]; then
+    # Release identity and source must roll back as one unit. Leaving the new
+    # release.env beside the previous checkout makes an old worker advertise the
+    # new SHA and migration identity, which defeats canonical readiness checks.
+    if [ "$release_env_written" -eq 1 ]; then
+      if [ "$previous_release_env_exists" -eq 1 ]; then
+        install -o root -g finnor -m 0644 "$previous_release_env" "$release_env"
+      else
+        rm -f "$release_env"
+      fi
+    fi
+    if [ "$switched" -eq 1 ]; then
+      if [ -n "$previous_target" ]; then
+        ln -sfn "$previous_target" "$next_link"
+        mv -Tf "$next_link" "$current_link"
+        systemctl restart "$unit_name" || true
+      else
+        systemctl stop "$unit_name" || true
+        rm -f "$current_link"
+      fi
+    fi
   fi
-  rm -f "$release_env_tmp" "$unit_tmp" "$next_link"
+  rm -f "$release_env_tmp" "$unit_tmp" "$previous_release_env" "$next_link"
   exit "$status"
 }
 trap rollback EXIT
@@ -63,12 +88,18 @@ FINNOR_ENVIRONMENT=production
 FINNOR_RELEASE_SOURCE=$release_source
 FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-health,realtime,sse
 FINNOR_SSE_GATEWAY_ENABLED=1
+# Two slots with one interactive reservation prevent long Objective jobs from
+# occupying the entire worker process. Release-owned values override stale
+# machine secrets and make this capacity contract deterministic.
+WORKER_CONCURRENCY=2
+WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1
 SSE_PORT=$sse_port
 JARVIS_SSE_ALLOWED_ORIGINS=https://finnorai.com
 # The embedded worker also owns the operational SSE gateway.
 PORT=$sse_port
 EOF
 install -o root -g finnor -m 0644 "$release_env_tmp" "$release_env"
+release_env_written=1
 
 cat >"$unit_tmp" <<EOF
 [Unit]
@@ -167,7 +198,10 @@ nginx -t
 systemctl enable --now nginx >/dev/null
 systemctl reload nginx
 certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email --redirect -d "$sse_hostname"
-curl --fail --silent --max-time 15 "https://${sse_hostname}/healthz" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const h=JSON.parse(s);if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)})' "$release_sha"
+# Validate TLS, SNI, nginx, and the worker without relying on Azure public-IP
+# hairpin routing. The GitHub runner performs the independent public check in
+# verify-production-parity immediately after this command returns.
+curl --fail --silent --max-time 15 --noproxy "*" --resolve "${sse_hostname}:443:127.0.0.1" "https://${sse_hostname}/healthz" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const h=JSON.parse(s);if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)})' "$release_sha"
 
 switched=0
 echo "FINNOR_AZURE_DEPLOY_OK $release_sha"

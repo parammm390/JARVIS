@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { withTenant, workQueryExecutions } from "@finnor/db";
 import { OperatingInteractionContextSchema } from "@finnor/policy-schema";
-import type { CanonicalEntityRef, OperatingInteractionContext } from "@finnor/shared-types";
+import { canonicalEntityRefToPartyRef, type CanonicalEntityRef, type OperatingInteractionContext } from "@finnor/shared-types";
 import { eq } from "drizzle-orm";
 import type { OperationalQueryDecision } from "./fast-read-lane";
 
@@ -182,15 +182,45 @@ export function effectiveInteractionTargets(context: OperatingInteractionContext
   return unique(candidates).filter((ref) => !excluded.has(key(ref)));
 }
 
-/** Global fast reads cannot silently discard an exact canvas target. Route the
- * instruction through the context-aware planner instead. */
+/** Bind a compatible exact canvas target directly into the typed query. A
+ * selection is never silently discarded; incompatible or multi-target scopes
+ * go through the context-aware planner. */
 export function interactionAwareOperationalDecision(
   decision: OperationalQueryDecision,
   context: OperatingInteractionContext | undefined,
 ): OperationalQueryDecision {
   if (decision.route !== "fast_read" || !context) return decision;
-  const hasExplicitScope = effectiveInteractionTargets(context).length > 0 || Boolean(context.cohort);
-  return hasExplicitScope && decision.request.intent !== "company_context"
-    ? { route: "planner", reason: "unsupported" }
-    : decision;
+  const targets = effectiveInteractionTargets(context);
+  if (targets.length === 0 && !context.cohort) return decision;
+  if (targets.length !== 1 || context.cohort) return { route: "planner", reason: "unsupported" };
+  const target = targets[0]!;
+  switch (decision.request.intent) {
+    case "company_context":
+      return { ...decision, request: { intent: "company_context", anchor: target } };
+    case "customer_lookup":
+      return target.entityType === "household"
+        ? { ...decision, request: { intent: "customer_lookup", householdId: target.entityId } }
+        : { route: "planner", reason: "unsupported" };
+    case "work_list":
+      return target.entityType === "work"
+        ? { ...decision, request: { intent: "work_list", section: "works", recordId: target.entityId } }
+        : { route: "planner", reason: "unsupported" };
+    case "party_lookup":
+    case "party_context":
+    case "party_availability": {
+      const ref = canonicalEntityRefToPartyRef(target);
+      if (!ref) return { route: "planner", reason: "unsupported" };
+      return decision.request.intent === "party_availability"
+        ? { ...decision, request: { ...decision.request, ref, query: undefined } }
+        : { ...decision, request: { ...decision.request, ref, query: undefined } };
+    }
+    case "team_roster": {
+      const ref = canonicalEntityRefToPartyRef(target);
+      return ref?.partyType === "team"
+        ? { ...decision, request: { intent: "team_roster", teamRef: ref } }
+        : { route: "planner", reason: "unsupported" };
+    }
+    default:
+      return { route: "planner", reason: "unsupported" };
+  }
 }

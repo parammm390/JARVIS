@@ -9,7 +9,6 @@ import {
   authorityDecisions,
   closePool,
   CURRENT_MIGRATION_HEAD,
-  communicationsLog,
   domainActions,
   getPool,
   households,
@@ -26,6 +25,7 @@ import {
   workflowRuns,
   workflowSteps,
 } from "@finnor/db";
+import { recordCustomerMessage } from "@finnor/data-platform";
 import { ToolRegistry } from "@finnor/tools";
 import {
   controlWorkObjective,
@@ -293,7 +293,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
         if (!providerAvailable) throw new Error("test SMS provider unavailable");
         await withTenant(String(input.tenantId), async (db) => {
           await db.insert(sandboxOutbox).values({ tenantId: String(input.tenantId), channel: "sms", toNumber: "+15550191919", content: String(input.message) });
-          await db.insert(communicationsLog).values({ householdId: String(input.contactId), channel: "sms", direction: "outbound", content: String(input.message) });
+          await recordCustomerMessage(db, { tenantId: String(input.tenantId), householdId: String(input.contactId), channel: "sms", direction: "outbound", content: String(input.message) });
         });
         return { providerMessageId: `recovered-${providerAttempts}` };
       },
@@ -458,7 +458,7 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
   });
 
   it("completes without the originally expected action when fresh Company Graph state makes it unnecessary", async () => {
-    await withTenant(tenantId, (db) => db.insert(communicationsLog).values({ householdId, channel: "sms", direction: "outbound", content: "Already followed up from the service desk." }));
+    await withTenant(tenantId, (db) => recordCustomerMessage(db, { tenantId, householdId, channel: "sms", direction: "outbound", content: "Already followed up from the service desk." }));
     const planner = new ScriptedPlanner([
       (inspection) => {
         if (!JSON.stringify(inspection.companyContext).includes("Already followed up from the service desk")) {
@@ -501,7 +501,9 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
     const firstBody = await first.json() as { objective: { workId: string; objectiveLoopId: string } };
     const canonicalJobKey = `objective:${firstBody.objective.objectiveLoopId}:revision:1:step:1`;
     const [initialJob] = await withTenant(tenantId, (db) => db.select().from(jobs).where(eq(jobs.idempotencyKey, canonicalJobKey)));
-    expect(initialJob).toMatchObject({ status: "queued", lane: "interactive", priority: 100 });
+    // Objective iterations use the batch lane so durable, slow Objectives cannot
+    // consume the worker slot reserved for simple interactive commands.
+    expect(initialJob).toMatchObject({ status: "queued", lane: "batch", priority: 100 });
     expect((await workAggregate(tenantId, firstBody.objective.workId))!.work).toMatchObject({ status: "executing", executionModel: "objective" });
 
     // Simulate the historical split-commit orphan: an idempotent replay must repair

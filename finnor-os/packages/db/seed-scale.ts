@@ -246,8 +246,39 @@ export async function seedAtScale(databaseUrl = process.env.DATABASE_URL, count 
     }
     if (commsBatch.length > 0) {
       await client.query(
-        `INSERT INTO communications_log (household_id, channel, direction, content, timestamp) VALUES ${commsBatch.join(",")}`,
-        commsParams,
+        `WITH source(household_id,channel,direction,content,sent_at) AS (
+           VALUES ${commsBatch.join(",")}
+         ), conversation_source AS (
+           SELECT household_id::uuid AS household_id,
+             CASE WHEN channel='call' THEN 'voice' WHEN channel='email' THEN 'email' ELSE 'sms' END AS conversation_channel,
+             min(sent_at) AS created_at,max(sent_at) AS last_activity_at
+           FROM source GROUP BY household_id::uuid,
+             CASE WHEN channel='call' THEN 'voice' WHEN channel='email' THEN 'email' ELSE 'sms' END
+         ), upserted_conversations AS (
+           INSERT INTO conversations(
+             id,tenant_id,household_id,channel,status,last_activity_at,source_system,external_id,created_by,created_at
+           )
+           SELECT md5($${cp}::text || ':seed-scale-conversation:' || household_id::text || ':' || conversation_channel)::uuid,
+             $${cp},household_id,conversation_channel,'open',last_activity_at,'seed_scale',
+             household_id::text || ':' || conversation_channel,'seed-scale',created_at
+           FROM conversation_source
+           ON CONFLICT (id) DO UPDATE SET
+             last_activity_at=greatest(conversations.last_activity_at,EXCLUDED.last_activity_at)
+           RETURNING id
+         ), inserted_messages AS (
+           INSERT INTO messages(
+             tenant_id,conversation_id,direction,channel,content,sent_at,source_system,created_by,created_at
+           )
+           SELECT $${cp},
+             md5($${cp}::text || ':seed-scale-conversation:' || household_id::text || ':' ||
+               CASE WHEN channel='call' THEN 'voice' WHEN channel='email' THEN 'email' ELSE 'sms' END)::uuid,
+             direction::text,channel::text,content::text,sent_at,'seed_scale','seed-scale',sent_at
+           FROM source RETURNING id,sent_at
+         )
+         INSERT INTO business_events(tenant_id,entity_type,entity_id,event_type,payload,occurred_at,source)
+         SELECT $${cp},'message',id,'message_recorded','{"seedScale":true}'::jsonb,sent_at,'seed_scale'
+         FROM inserted_messages`,
+        [...commsParams, SEED_TENANT_ID],
       );
     }
     if (invoicesBatch.length > 0) {

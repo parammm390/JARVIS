@@ -73,9 +73,19 @@ describe("fast read-only lane", () => {
     "Create an invoice for the overdue customer",
     "How can we improve cash collections?",
     "What is the QuickBooks collections status?",
-    "Tell me about technician availability",
   ])("falls back for uncertain or consequential input: %s", (instruction) => {
     expect(classifyFastReadOnlyQuestion(instruction).route).toBe("planner");
+  });
+
+  it("keeps an ordinary business people question on a typed query instead of generic conversation", () => {
+    expect(classifyFastReadOnlyQuestion("Tell me about technician availability")).toMatchObject({ route: "fast_read", intent: "party_context" });
+  });
+
+  it.each([
+    "Show the full context",
+    "Show the complete context for John's account",
+  ])("does not mistake an unqualified customer/account context request for party context: %s", (instruction) => {
+    expect(classifyFastReadOnlyQuestion(instruction)).not.toMatchObject({ route: "fast_read", intent: "party_context" });
   });
 
   it("returns a bounded, citation-safe cash answer from the authenticated tenant", async () => {

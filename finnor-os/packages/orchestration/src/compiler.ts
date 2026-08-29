@@ -54,7 +54,7 @@ import {
   externalOperations,
   type Db,
 } from "@finnor/db";
-import { and, asc, desc, eq, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import type {
   BusinessEffectBinding,
@@ -914,7 +914,15 @@ export async function recordBusinessEffectOutcome(tenantId: string, effect: Busi
         .where(and(
           eq(messages.tenantId, tenantId),
           eq(messages.direction, "outbound"),
-          eq(messages.sourceSystem, `domain_action:${effect.source.domainActionId}`),
+          or(
+            and(
+              eq(messages.sourceSystem, "domain_action"),
+              sql`${messages.externalId} LIKE ${`${effect.source.domainActionId}:%`}`,
+            ),
+            // Rolling compatibility for messages written before the canonical
+            // provenance split into source_system + external_id.
+            eq(messages.sourceSystem, `domain_action:${effect.source.domainActionId}`),
+          ),
         ))
         .orderBy(desc(messages.sentAt))
         .limit(1);

@@ -5,8 +5,8 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { hybridRetrieve, type StructuredFact } from "@finnor/memory";
-import { withTenant, communicationsLog } from "@finnor/db";
-import { getOrCreateConversation, persistMessage } from "@finnor/data-platform";
+import { withTenant } from "@finnor/db";
+import { recordCustomerMessage } from "@finnor/data-platform";
 import { household360 } from "@finnor/read-models";
 import { resolveProviderForPurpose } from "@finnor/tools";
 import type { ToolRegistry } from "@finnor/tools";
@@ -107,6 +107,7 @@ export const customerCommPlugin: DomainEnginePlugin = {
       const wantsEmail = draft.payload.channel === "email" || (!contact.phone && email);
 
       let channel: string;
+      let canonicalMessageRecorded = false;
       if (wantsEmail && email) {
         const r = await tools.call("send_email", { to: email, subject: "From your water treatment dealer", body: message });
         if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
@@ -115,45 +116,28 @@ export const customerCommPlugin: DomainEnginePlugin = {
         const r = await tools.call("ghl_send_sms", { contactId: hh.id, message, tenantId });
         if (!r.ok) return { status: "integration_unavailable", output: {}, error: r.error };
         channel = "sms";
+        canonicalMessageRecorded = r.output.canonicalMessageRecorded === true;
       } else {
         return { status: "failure", output: {}, error: "No customer found and no email given — nowhere to send this.", errorKind: "validation" };
       }
-      if (hh) {
-        const persistenceFailures: string[] = [];
+      if (hh && !canonicalMessageRecorded) {
         try {
-          await withTenant(tenantId, async (db) => {
-            const { conversationId } = await getOrCreateConversation(db, {
+          await withTenant(tenantId, (db) =>
+            recordCustomerMessage(db, {
               tenantId,
               householdId: hh.id,
-              channel: channel === "email" ? "email" : "sms",
-            });
-            await persistMessage(db, {
-              tenantId,
-              conversationId,
               direction: "outbound",
               channel,
               content: message,
-              ...(draft.businessEffect
-                ? { provenance: { sourceSystem: `domain_action:${draft.businessEffect.source.domainActionId}` } }
+              ...(draft.domainActionId
+                ? { provenance: { sourceSystem: "domain_action", externalId: `${draft.domainActionId}:customer-message` } }
                 : {}),
-            });
-          });
-        } catch {
-          persistenceFailures.push("canonical_message");
-        }
-        try {
-          // Kept alongside the canonical write above — packages/memory/src/long-term.ts
-          // still reads communications_log for household history.
-          await withTenant(tenantId, (db) =>
-            db.insert(communicationsLog).values({ householdId: hh.id, channel, direction: "outbound", content: message }),
+            }),
           );
         } catch {
-          persistenceFailures.push("communications_history");
-        }
-        if (persistenceFailures.length > 0) {
           return {
             status: "failure",
-            output: { sent: true, channel, householdId: hh.id, persistenceFailures },
+            output: { sent: true, channel, householdId: hh.id, deliveredUnrecorded: true },
             error: "The customer message was sent, but its required canonical history is incomplete. Do not resend automatically; reconcile the recorded delivery.",
             errorKind: "needs_human",
           };

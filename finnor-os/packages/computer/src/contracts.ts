@@ -103,6 +103,8 @@ export interface ComputerDecisionContext {
   observation: StructuredPageObservation;
   stepNumber: number;
   effectStatus: "none" | "pending" | "dispatching" | "succeeded" | "failed" | "unknown";
+  /** Absolute governed run deadline; every micro-planner call consumes its remainder. */
+  deadlineAt: number;
 }
 
 export type ComputerRunnerDecision =

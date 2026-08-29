@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-23T01:31:01.534Z",
+  "generatedAt": "2026-08-29T23:39:25.603Z",
   "actionCount": 59,
   "actions": [
     {
@@ -30,9 +30,9 @@
       "plugin": "crm",
       "actionType": "assign_lead_to_technician",
       "sourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "sourceLine": 50,
+      "sourceLine": 57,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "schemaSourceLine": 51
+      "schemaSourceLine": 58
     },
     {
       "plugin": "universal-actions",
@@ -134,9 +134,9 @@
       "plugin": "crm",
       "actionType": "create_lead",
       "sourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "sourceLine": 50,
+      "sourceLine": 57,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "schemaSourceLine": 51
+      "schemaSourceLine": 58
     },
     {
       "plugin": "marketing",
@@ -230,9 +230,9 @@
       "plugin": "crm",
       "actionType": "log_interaction",
       "sourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "sourceLine": 50,
+      "sourceLine": 57,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "schemaSourceLine": 51
+      "schemaSourceLine": 58
     },
     {
       "plugin": "inventory",
@@ -462,9 +462,9 @@
       "plugin": "crm",
       "actionType": "update_lead_status",
       "sourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "sourceLine": 50,
+      "sourceLine": 57,
       "schemaSourcePath": "finnor-os/packages/domain-plugins/crm/index.ts",
-      "schemaSourceLine": 51
+      "schemaSourceLine": 58
     },
     {
       "plugin": "universal-actions",

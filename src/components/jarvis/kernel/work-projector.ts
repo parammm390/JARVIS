@@ -29,6 +29,7 @@ export interface WorkThreadProjection {
   objectiveProjection: WorkCaseProjection["objectiveLoop"] | null
   everExecuted: boolean
   terminalAtMs: number | null
+  submitError: string | null
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -42,14 +43,21 @@ function responseFromWork(work: WorkCaseProjection): Record<string, unknown> | n
 
 function executionModel(work: WorkCaseProjection, response: Record<string, unknown> | null): InstructionExecutionModel {
   const stored = response?.executionModel
-  if (stored === "QUERY" || stored === "CONVERSATION" || stored === "ATOMIC_EFFECT" || stored === "OBJECTIVE") return stored
-  switch (work.durableWork?.executionModel) {
+  if (stored === "QUERY" || stored === "CONVERSATION" || stored === "ATOMIC_ACTION" || stored === "OBJECTIVE" || stored === "CLARIFY") return stored
+  // Rolling-deploy compatibility for response JSON committed before the route
+  // rename. It is normalized immediately and never exposed as a current model.
+  if (typeof stored === "string" && stored.toLowerCase() === "atomic_effect") return "ATOMIC_ACTION"
+  const durableModel = work.durableWork?.executionModel as string | null | undefined
+  if (durableModel?.toLowerCase() === "atomic_effect") return "ATOMIC_ACTION"
+  switch (durableModel) {
     case "query": return "QUERY"
-    case "atomic_effect": return "ATOMIC_EFFECT"
+    case "atomic_action": return "ATOMIC_ACTION"
+    case "clarify": return "CLARIFY"
     case "objective": return "OBJECTIVE"
     default:
       if (work.objectiveLoop) return "OBJECTIVE"
-      if (work.actions.length > 0) return "ATOMIC_EFFECT"
+      if (work.actions.length === 1 && work.actions[0]?.actionType === "clarification_request") return "CLARIFY"
+      if (work.actions.length > 0) return "ATOMIC_ACTION"
       return "CONVERSATION"
   }
 }
@@ -155,6 +163,26 @@ function activeEventWait(work: WorkCaseProjection) {
     .find((wait) => wait.status === "waiting" || wait.status === "pending") ?? null
 }
 
+function projectedFailureMessage(work: WorkCaseProjection, state: InstructionState): string | null {
+  if (state !== "failed") return null
+  const failure = record(work.durableWork?.failure)
+  const code = typeof failure?.code === "string"
+    ? failure.code
+    : typeof failure?.kind === "string"
+      ? failure.kind
+      : ""
+  if (code === "worker_fleet_unavailable") {
+    return "The operating worker is temporarily unavailable. Nothing was executed; retry shortly."
+  }
+  if (code === "intake_deadline_exceeded" || /(?:deadline|timed?_?out|timeout)/i.test(code)) {
+    return "Planning took too long. Nothing unverified is shown; you can retry safely."
+  }
+  if (code === "interaction_context_invalid" || code === "invalid_input") {
+    return "This request could not use the selected context safely. Review the target and try again."
+  }
+  return "JARVIS could not complete this Work safely. The canonical failure is recorded and can be retried."
+}
+
 export function projectWorkToThread(
   work: WorkCaseProjection,
   options: { existingNodes?: ThreadNode[]; assistantMessage?: DurableThreadMessage | null } = {},
@@ -186,6 +214,7 @@ export function projectWorkToThread(
     objectiveProjection: work.objectiveLoop ?? null,
     everExecuted: hasExecuted(work),
     terminalAtMs: terminal ? new Date(work.updatedAt).getTime() : null,
+    submitError: projectedFailureMessage(work, state),
   }
 }
 
@@ -202,6 +231,7 @@ export function applyWorkToThread(thread: Thread, work: WorkCaseProjection, assi
     machine: { instructionState: projection.instructionState },
     nodes: projection.nodes,
     answerResult: projection.answerResult,
+    submitError: projection.submitError,
     terminalAtMs: projection.terminalAtMs,
     everExecuted: thread.everExecuted || projection.everExecuted,
   }

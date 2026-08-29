@@ -9,7 +9,7 @@ import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { withTenant, appointments } from "@finnor/db";
 import type { CapabilityContract, CapabilityBinding, RetryPolicy } from "@finnor/workflow-runtime";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { createAppointment, updateAppointmentStatus } from "@finnor/data-platform";
 import {
   emulatorHoldAppointment,
   emulatorReleaseHold,
@@ -83,25 +83,22 @@ async function nativeHoldAppointment(input: HoldAppointmentInput): Promise<HoldA
       );
     if (existing) return { holdId: existing.id, status: "held", scheduledAt: existing.scheduledAt.toISOString() };
 
-    const [row] = await db
-      .insert(appointments)
-      .values({
-        tenantId: input.tenantId,
-        subjectType: input.subjectType,
-        subjectId: input.subjectId,
-        technicianId: input.technicianId ?? null,
-        status: "hold",
-        scheduledAt: new Date(input.scheduledAt),
-        holdExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
-      })
-      .returning();
-    return { holdId: row!.id, status: "held", scheduledAt: row!.scheduledAt.toISOString() };
+    const scheduledAt = new Date(input.scheduledAt);
+    const { appointmentId } = await createAppointment(db, {
+      tenantId: input.tenantId,
+      subjectType: input.subjectType,
+      subjectId: input.subjectId,
+      ...(input.technicianId ? { technicianId: input.technicianId } : {}),
+      scheduledAt,
+      holdExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+    });
+    return { holdId: appointmentId, status: "held", scheduledAt: scheduledAt.toISOString() };
   });
 }
 
 async function nativeReleaseHold(input: HoldAppointmentInput, output: HoldAppointmentOutput): Promise<void> {
   await withTenant(input.tenantId, (db) =>
-    db.update(appointments).set({ status: "canceled" }).where(eq(appointments.id, output.holdId)),
+    updateAppointmentStatus(db, { tenantId: input.tenantId, appointmentId: output.holdId, status: "canceled" }),
   );
 }
 
@@ -143,15 +140,7 @@ export const confirmAppointmentNativeBinding: CapabilityBinding<ConfirmAppointme
   name: "native",
   async call(input) {
     return withTenant(input.tenantId, async (db) => {
-      const [row] = await db.update(appointments).set({ status: "confirmed" }).where(eq(appointments.id, input.holdId)).returning();
-      if (row) {
-        await recordBusinessEvent(db, {
-          tenantId: input.tenantId,
-          entityType: "appointment",
-          entityId: row.id,
-          eventType: "appointment_confirmed",
-        });
-      }
+      await updateAppointmentStatus(db, { tenantId: input.tenantId, appointmentId: input.holdId, status: "confirmed", eventType: "appointment_confirmed" });
       return { holdId: input.holdId, status: "confirmed" as const };
     });
   },

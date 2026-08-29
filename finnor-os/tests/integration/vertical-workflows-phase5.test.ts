@@ -6,10 +6,13 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import pg from "pg";
+import { randomUUID } from "node:crypto";
 import { migrate } from "../../packages/db/migrate";
 import {
   withTenant,
   closePool,
+  contacts,
+  contactMethods,
   tenants,
   households,
   leads,
@@ -19,7 +22,7 @@ import {
   maintenanceAgreements,
   dataQualityFindings,
 } from "@finnor/db";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createLead } from "@finnor/data-platform";
 import { checkAndRecordReceipt } from "../../apps/api/lib/webhook-replay";
 import { pipelineHealth, cashCollections, followUpDebt, stockRisk, technicianLoad, serviceDue, slaBreaches, dataQuality } from "@finnor/read-models";
@@ -50,7 +53,7 @@ describe.skipIf(!available)("Phase 5 vertical workflows 6-7 + read-models", () =
   });
 
   it("workflow 7 (marketing to revenue): a conversion event creates a real lead, and a replayed event never duplicates it", async () => {
-    const eventId = `mkt-evt-${TENANT_ID}-1`;
+    const eventId = `mkt-evt-${TENANT_ID}-${randomUUID()}`;
     const rawBody = JSON.stringify({ tenantId: TENANT_ID, campaignId: "camp-1", eventId, name: "Ad Lead One", phone: "+15555550300" });
 
     const first = await checkAndRecordReceipt("marketing_conversion", eventId, rawBody);
@@ -88,7 +91,18 @@ describe.skipIf(!available)("Phase 5 vertical workflows 6-7 + read-models", () =
 
     await withTenant(TENANT_ID, async (db) => {
       await db.delete(leads).where(eq(leads.id, created.leadId));
-      await db.delete(households).where(eq(households.id, created.householdId));
+      const createdContacts = await db.select({ id: contacts.id }).from(contacts).where(and(
+        eq(contacts.tenantId, TENANT_ID),
+        eq(contacts.householdId, created.householdId),
+      ));
+      if (createdContacts.length > 0) {
+        await db.delete(contactMethods).where(and(
+          eq(contactMethods.tenantId, TENANT_ID),
+          inArray(contactMethods.contactId, createdContacts.map((contact) => contact.id)),
+        ));
+      }
+      await db.delete(contacts).where(and(eq(contacts.tenantId, TENANT_ID), eq(contacts.householdId, created.householdId)));
+      await db.delete(households).where(and(eq(households.tenantId, TENANT_ID), eq(households.id, created.householdId)));
     });
     await withTenant(TENANT_ID, (db) => db.delete(webhookReceipts).where(eq(webhookReceipts.eventId, eventId)));
   });

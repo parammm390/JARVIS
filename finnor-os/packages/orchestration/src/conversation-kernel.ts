@@ -132,6 +132,9 @@ export function extractNamedExpressions(instruction: string): NamedExpression[] 
     }
     if (!clean || clean.length < 2) return;
     if (/^(?:the|this|that|my|our|him|her|them|it)$/i.test(clean)) return;
+    // Dates following a mutation preposition ("move Peterson to Friday") are
+    // scheduling payload, never a person or customer target.
+    if (/^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|yesterday|january|february|march|april|may|june|july|august|september|october|november|december)$/i.test(clean)) return;
     // A pronoun embedded in a cue such as "when contacting him" is not a
     // named target. Reject the whole capture rather than adding a false party
     // group that can make a consequential instruction ambiguous.
@@ -149,7 +152,18 @@ export function extractNamedExpressions(instruction: string): NamedExpression[] 
     found.push({ name: clean, cue, index, ...(cleanOrganization ? { organization: cleanOrganization } : {}) });
   };
   for (const match of instruction.matchAll(/\b([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\s+from\s+([\p{L}][\p{L}\d&.' -]{1,80}?)(?=[,.!?]|\s+(?:and|use|then)\b|$)/giu)) add(match[1], match[2], "party", match.index ?? 0);
-  for (const match of instruction.matchAll(/\b(?:email|call|text|contact|message|notify)\s+([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\b/giu)) add(match[1], undefined, "party", match.index ?? 0);
+  for (const match of instruction.matchAll(/\b(?:email|call|text|contact|message|notify)\s+([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,2})\b/giu)) {
+    const end = (match.index ?? 0) + match[0].length;
+    // The local part of an exact email address is already a direct target; it
+    // must not also become a partial, unresolved person-name candidate.
+    if (/^[\p{L}\p{N}._%+-]*@/u.test(instruction.slice(end))) continue;
+    add(match[1], undefined, "party", match.index ?? 0);
+  }
+  // Non-communication mutations commonly place the canonical party after a
+  // preposition ("create an invoice for Alice Johnson"). Require title-cased
+  // name tokens so cohort prose such as "for every overdue customer" is not
+  // misrepresented as a named target.
+  for (const match of instruction.matchAll(/\b(?:for|to)\s+(?:the\s+)?(?:customer|client|household|contact|lead|employee|technician|vendor|supplier)?\s*([\p{Lu}][\p{L}'’.-]+(?:\s+[\p{Lu}][\p{L}'’.-]+){0,2})(?=[,.:!?]|\s+(?:with|about|regarding|on|at|by|and|then)\b|$)/gu)) add(match[1], undefined, "party", match.index ?? 0);
   for (const match of instruction.matchAll(/\b(?:move|moving|reschedule|schedule|book)\s+(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+){0,1}?)(?=\s+(?:appointment|booking|to|on|for|until|at|this|next)\b|[,.!?]|$)/giu)) add(match[1], undefined, "appointment", match.index ?? 0);
   for (const match of instruction.matchAll(/\b(?:the\s+)?([\p{L}][\p{L}'-]+(?:\s+[\p{L}][\p{L}'-]+)?)\s+(appointment|invoice|quote|proposal|account)\b/giu)) {
     const noun = match[2]?.toLocaleLowerCase();

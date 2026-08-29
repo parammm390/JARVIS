@@ -146,11 +146,23 @@ const InstructionResponseCommon = {
   assistantMessage: InstructionAssistantMessageSchema,
 };
 /** Runtime/OpenAPI mirror of @finnor/shared-types' one discriminated response. */
+export const QueryInstructionSubmissionResponseSchema = z.object({ executionModel: z.literal("QUERY"), actions: z.array(z.record(z.unknown())).max(0), query: z.record(z.unknown()), answer: z.record(z.unknown()).optional(), ...InstructionResponseCommon }).strict();
+export const ConversationInstructionSubmissionResponseSchema = z.object({ executionModel: z.literal("CONVERSATION"), actions: z.array(z.record(z.unknown())).max(0), answer: z.record(z.unknown()), ...InstructionResponseCommon }).strict();
+export const AtomicActionInstructionSubmissionResponseSchema = z.object({ executionModel: z.literal("ATOMIC_ACTION"), actions: z.array(z.record(z.unknown())).min(1), ...InstructionResponseCommon }).strict();
+export const ObjectiveInstructionSubmissionResponseSchema = z.object({ executionModel: z.literal("OBJECTIVE"), actions: z.array(z.record(z.unknown())).max(0), objectiveLoopId: z.string().uuid(), objectiveState: z.enum(["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"]), ...InstructionResponseCommon }).strict();
+export const ClarifyInstructionSubmissionResponseSchema = z.object({ executionModel: z.literal("CLARIFY"), actions: z.array(z.record(z.unknown())).length(1), ...InstructionResponseCommon }).strict();
+export const NonObjectiveInstructionSubmissionResponseSchema = z.discriminatedUnion("executionModel", [
+  QueryInstructionSubmissionResponseSchema,
+  ConversationInstructionSubmissionResponseSchema,
+  AtomicActionInstructionSubmissionResponseSchema,
+  ClarifyInstructionSubmissionResponseSchema,
+]);
 export const InstructionSubmissionResponseSchema = z.discriminatedUnion("executionModel", [
-  z.object({ executionModel: z.literal("QUERY"), actions: z.array(z.record(z.unknown())).max(0), query: z.record(z.unknown()), answer: z.record(z.unknown()).optional(), ...InstructionResponseCommon }).strict(),
-  z.object({ executionModel: z.literal("CONVERSATION"), actions: z.array(z.record(z.unknown())).max(0), answer: z.record(z.unknown()), ...InstructionResponseCommon }).strict(),
-  z.object({ executionModel: z.literal("ATOMIC_EFFECT"), actions: z.array(z.record(z.unknown())), ...InstructionResponseCommon }).strict(),
-  z.object({ executionModel: z.literal("OBJECTIVE"), actions: z.array(z.record(z.unknown())).max(0), objectiveLoopId: z.string().uuid(), objectiveState: z.enum(["continue", "awaiting_approval", "waiting", "blocked", "completed", "failed", "cancelled"]), ...InstructionResponseCommon }).strict(),
+  QueryInstructionSubmissionResponseSchema,
+  ConversationInstructionSubmissionResponseSchema,
+  AtomicActionInstructionSubmissionResponseSchema,
+  ObjectiveInstructionSubmissionResponseSchema,
+  ClarifyInstructionSubmissionResponseSchema,
 ]);
 export type InstructionSubmissionResponse = z.infer<typeof InstructionSubmissionResponseSchema>;
 

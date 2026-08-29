@@ -38,11 +38,11 @@ describe("objective-first instruction-routing policy", () => {
     });
   });
 
-  it("does not promote an unsupported read question into an objective", () => {
+  it("keeps an unsupported business question out of generic conversation", () => {
     expect(classifyInstructionRoute({
       instruction: "Tell me about technician availability",
       fastReadDecision: { route: "planner", reason: "unsupported" },
-    }).route).toBe("CONVERSATION");
+    }).route).toBe("OBJECTIVE");
   });
 
   it("reserves the atomic route for an exact one-effect candidate", () => {
@@ -50,11 +50,23 @@ describe("objective-first instruction-routing policy", () => {
       instruction: "Send this exact message to casey@example.test",
       fastReadDecision: planner,
     });
-    expect(preliminary.route).toBe("ATOMIC_EFFECT");
+    expect(preliminary.route).toBe("ATOMIC_ACTION");
     expect(finalizeInstructionRoute(preliminary, [action({ actionType: "send_customer_message" })])).toMatchObject({
-      route: "ATOMIC_EFFECT",
-      reasonCodes: ["strict_single_effect_candidate", "one_independent_effect_set"],
+      route: "ATOMIC_ACTION",
+      reasonCodes: ["strict_single_action_candidate", "one_independent_effect_set"],
     });
+  });
+
+  it("routes a consequential resolver ambiguity only to CLARIFY", () => {
+    expect(classifyInstructionRoute({
+      instruction: "Email Alex the invoice",
+      fastReadDecision: planner,
+      clarificationRequired: true,
+    })).toMatchObject({ route: "CLARIFY", reasonCodes: ["consequential_target_or_sender_unresolved"] });
+    expect(finalizeInstructionRoute(
+      classifyInstructionRoute({ instruction: "Email Alex the invoice", fastReadDecision: planner }),
+      [action({ actionType: "clarification_request", payload: { question: "Which Alex?", missingFields: ["target"] } })],
+    ).route).toBe("CLARIFY");
   });
 
   it.each([

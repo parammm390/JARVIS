@@ -8,8 +8,9 @@
 export type InstructionExecutionModel =
   | "QUERY"
   | "CONVERSATION"
-  | "ATOMIC_EFFECT"
-  | "OBJECTIVE";
+  | "ATOMIC_ACTION"
+  | "OBJECTIVE"
+  | "CLARIFY";
 
 export type AssistantSemanticKind =
   | "ANSWER"
@@ -48,10 +49,18 @@ export interface ConversationInstructionSubmission<TAction = never, TAnswer = un
   answer: TAnswer;
 }
 
-export interface AtomicEffectInstructionSubmission<TAction = unknown>
+export interface AtomicActionInstructionSubmission<TAction = unknown>
   extends InstructionSubmissionBase<TAction> {
-  executionModel: "ATOMIC_EFFECT";
-  actions: TAction[];
+  executionModel: "ATOMIC_ACTION";
+  /** At least one independently executable business action. */
+  actions: [TAction, ...TAction[]];
+}
+
+export interface ClarifyInstructionSubmission<TAction = unknown>
+  extends InstructionSubmissionBase<TAction> {
+  executionModel: "CLARIFY";
+  /** Exactly one durable clarification request; never a guessed business action. */
+  actions: [TAction];
 }
 
 export interface ObjectiveInstructionSubmission<TAction = never>
@@ -65,5 +74,6 @@ export interface ObjectiveInstructionSubmission<TAction = never>
 export type InstructionSubmissionResult<TAction = unknown, TQuery = unknown, TAnswer = unknown> =
   | QueryInstructionSubmission<TAction, TQuery, TAnswer>
   | ConversationInstructionSubmission<TAction, TAnswer>
-  | AtomicEffectInstructionSubmission<TAction>
-  | ObjectiveInstructionSubmission<TAction>;
+  | AtomicActionInstructionSubmission<TAction>
+  | ObjectiveInstructionSubmission<TAction>
+  | ClarifyInstructionSubmission<TAction>;

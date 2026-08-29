@@ -84,9 +84,13 @@ export function CommandPaletteV2({
         return
       }
       const result = await submitInstruction(instruction, { source: "typed" })
-      const actions = result.executionModel === "ATOMIC_EFFECT" ? result.actions as Planned[] : []
+      const actions = result.executionModel === "ATOMIC_ACTION" || result.executionModel === "CLARIFY" ? result.actions as Planned[] : []
       setPlanned(actions)
-      data.injectOptimisticPending(actions.map((action) => ({ ...action, summary: null, groundedPayload: undefined })))
+      // Clarification requests are visible questions, not pending business
+      // effects. Only executable actions belong in the optimistic approval queue.
+      data.injectOptimisticPending(actions
+        .filter((action) => action.actionType !== "clarification_request")
+        .map((action) => ({ ...action, summary: null, groundedPayload: undefined })))
     } catch (e) {
       setError(e instanceof JarvisApiError && e.status === 401 ? "Sign in to plan an instruction." : e instanceof Error ? e.message : "Instruction could not be planned.")
     } finally {

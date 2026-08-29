@@ -32,7 +32,7 @@ import {
 } from "@finnor/db";
 import { eq, and, ne } from "drizzle-orm";
 import { createDefaultPluginRegistry, FinnorOrchestrator } from "@finnor/orchestration";
-import { createLead } from "@finnor/data-platform";
+import { createLead, updateLeadStatus } from "@finnor/data-platform";
 import { seedDealerZero, DEALER_ZERO_TENANT_ID } from "../../scripts/seed-dealer-zero";
 import { seedTenantPolicies } from "../../scripts/seed-tenant-policies";
 import { PRICING_CATALOG_ACTION_TYPE } from "../../packages/domain-plugins/shared/pricing-catalog";
@@ -134,7 +134,14 @@ describe.skipIf(!available)("Phase 3.6 proof tests — policy conformance + Deal
     expect(leadRow!.status).toBe("new");
 
     // 2. Qualification.
-    await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.update(leads).set({ status: "qualified" }).where(eq(leads.id, leadResult.leadId)));
+    await withTenant(DEALER_ZERO_TENANT_ID, (db) =>
+      updateLeadStatus(db, {
+        tenantId: DEALER_ZERO_TENANT_ID,
+        leadId: leadResult.leadId,
+        status: "qualified",
+        source: "e2e_proof_test",
+      }),
+    );
     const [qualified] = await withTenant(DEALER_ZERO_TENANT_ID, (db) => db.select().from(leads).where(eq(leads.id, leadResult.leadId)));
     expect(qualified!.status).toBe("qualified");
 

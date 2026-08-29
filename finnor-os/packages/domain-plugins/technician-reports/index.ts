@@ -4,7 +4,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, serviceVisits, households, domainActions } from "@finnor/db";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { createServiceVisit, recordBusinessEvent, updateServiceVisit } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -63,10 +63,13 @@ export const technicianReportsPlugin: DomainEnginePlugin = {
         await withTenant(tenantId, async (db) => {
           const [v] = await db.select().from(serviceVisits).where(eq(serviceVisits.id, visitId));
           if (v) {
-            await db
-              .update(serviceVisits)
-              .set({ notes: [v.notes, `[ISSUE] ${issue}`].filter(Boolean).join(" | ") })
-              .where(eq(serviceVisits.id, visitId));
+            await updateServiceVisit(db, {
+              tenantId,
+              visitId,
+              patch: { notes: [v.notes, `[ISSUE] ${issue}`].filter(Boolean).join(" | ") },
+              eventType: "service_visit_issue_annotated",
+              eventPayload: { issue },
+            });
           }
         });
       }
@@ -103,39 +106,28 @@ export const technicianReportsPlugin: DomainEnginePlugin = {
 
     const updated = await withTenant(tenantId, async (db) => {
       if (visitId) {
-        const [row] = await db
-          .update(serviceVisits)
-          .set({ notes: report, ...(markCompleted ? { completedAt: new Date() } : {}) })
-          .where(eq(serviceVisits.id, visitId))
-          .returning();
-        if (row) {
-          await recordBusinessEvent(db, {
-            tenantId,
-            entityType: "service_visit",
-            entityId: row.id,
-            eventType: "visit_report_logged",
-            payload: { markCompleted },
-          });
-        }
-        return row ?? null;
+        return updateServiceVisit(db, {
+          tenantId,
+          visitId,
+          patch: { notes: report, ...(markCompleted ? { completedAt: new Date() } : {}) },
+          eventType: "visit_report_logged",
+          eventPayload: { markCompleted },
+        });
       }
       // No visit id: attach the report as a new ad-hoc visit on the household.
       const householdId = draft.payload.householdId ? String(draft.payload.householdId) : null;
       if (!householdId) return null;
       const [hh] = await db.select().from(households).where(eq(households.id, householdId));
       if (!hh) return null;
-      const [row] = await db
-        .insert(serviceVisits)
-        .values({ householdId, type: "ad_hoc_report", notes: report, completedAt: markCompleted ? new Date() : null })
-        .returning();
-      await recordBusinessEvent(db, {
+      return createServiceVisit(db, {
         tenantId,
-        entityType: "service_visit",
-        entityId: row!.id,
+        householdId,
+        type: "ad_hoc_report",
+        notes: report,
+        completedAt: markCompleted ? new Date() : null,
         eventType: "visit_report_logged",
-        payload: { markCompleted, adHoc: true },
+        eventPayload: { markCompleted, adHoc: true },
       });
-      return row;
     });
     if (!updated) {
       return { status: "failure", output: {}, error: "Could not find the visit or household to attach this report to.", errorKind: "validation" };

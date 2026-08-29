@@ -16,7 +16,7 @@ import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } fro
 import type { ToolRegistry } from "@finnor/tools";
 import { withTenant, proposals, quotes, ingestIntegrationEventTx } from "@finnor/db";
 import { submitCommand, receiveInboxEventTx } from "@finnor/workflow-runtime";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { setProposalStatus, setQuoteStatus } from "@finnor/data-platform";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -153,14 +153,14 @@ export async function applySignatureOutcome(params: {
       matchStepId: params.matchStepId,
     });
     if (received.status === "duplicate") return { duplicate: true } as const;
-    await db.update(quotes).set({ status: terminalStatus }).where(eq(quotes.id, params.quoteId));
-    await db.update(proposals).set({ status: terminalStatus }).where(eq(proposals.id, params.proposalId));
-    await recordBusinessEvent(db, {
-      tenantId: params.tenantId,
-      entityType: "quote",
-      entityId: params.quoteId,
-      eventType: `quote_${terminalStatus}`,
-      payload: { proposalId: params.proposalId, signatureRequestId: params.signatureRequestId },
+    await setQuoteStatus(db, {
+      tenantId: params.tenantId, quoteId: params.quoteId, status: terminalStatus,
+      eventPayload: { proposalId: params.proposalId, signatureRequestId: params.signatureRequestId },
+    });
+    await setProposalStatus(db, {
+      tenantId: params.tenantId, proposalId: params.proposalId, status: terminalStatus,
+      eventType: `proposal_${terminalStatus}`,
+      eventPayload: { quoteId: params.quoteId, signatureRequestId: params.signatureRequestId },
     });
     await ingestIntegrationEventTx(db, {
       tenantId: params.tenantId,

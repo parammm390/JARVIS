@@ -1,5 +1,5 @@
-// A4.T2 acceptance: scan-watchdog.ts's four signals — stuck runs, orphaned steps,
-// unfinalized receipts, aging-approval nudges — against real fixtures in local Postgres,
+// A4.T2 acceptance: scan-watchdog.ts's five signals — stuck runs, orphaned steps,
+// unfinalized receipts, aging-approval nudges, and stale Planning — against real fixtures in local Postgres,
 // with real backdated timestamps (same technique as
 // provider-circuit-breaker-budget.test.ts's openedAt manipulation), not mocked time.
 
@@ -18,6 +18,8 @@ import {
   decisionReceipts,
   domainActions,
   domainPolicies,
+  receiveWork,
+  works,
 } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { detectWatchdogFindings } from "../../apps/worker/src/handlers/scan-watchdog";
@@ -212,5 +214,24 @@ describe.skipIf(!available)("scan_watchdog detector (A4.T2)", () => {
 
     const second = await detectWatchdogFindings(SEED_TENANT_ID);
     expect(second.some((f) => f.kind === "aging_approval_nudge" && f.refId === actionId)).toBe(false); // deduped, no repeat nudge
+  });
+
+  it("closes legacy pre-execution Planning instead of leaving it indefinitely", async () => {
+    const claim = await receiveWork({
+      tenantId: SEED_TENANT_ID,
+      instruction: "legacy planning watchdog test",
+      channel: "text",
+      instructionId: randomUUID(),
+      idempotencyKey: `stale-planning-${randomUUID()}`,
+    });
+    await withTenant(SEED_TENANT_ID, (db) => db.update(works).set({
+      status: "planning",
+      updatedAt: new Date(Date.now() - 5 * 60_000),
+    }).where(eq(works.id, claim.workId)));
+
+    const findings = await detectWatchdogFindings(SEED_TENANT_ID);
+    expect(findings).toContainEqual(expect.objectContaining({ kind: "stale_interactive_planning", refId: claim.workId }));
+    const [work] = await withTenant(SEED_TENANT_ID, (db) => db.select().from(works).where(eq(works.id, claim.workId)));
+    expect(work).toMatchObject({ status: "failed", failure: expect.objectContaining({ code: "stale_interactive_planning" }) });
   });
 });

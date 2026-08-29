@@ -3,7 +3,7 @@
 import type { DomainEnginePlugin } from "../shared/plugin-interface";
 import type { DraftAction, ExecutionResult, ValidationResult, DomainPolicy } from "@finnor/shared-types";
 import { withTenant, inventoryItems } from "@finnor/db";
-import { recordBusinessEvent } from "@finnor/data-platform";
+import { adjustInventoryItem } from "@finnor/data-platform";
 import { findInventoryItem } from "../shared/db-helpers";
 import { eq, sql, lte } from "drizzle-orm";
 import { z } from "zod";
@@ -145,21 +145,13 @@ export const inventoryPlugin: DomainEnginePlugin = {
         errorKind: "validation",
       };
     }
-    const updated = await withTenant(tenantId, async (db) => {
-      const [row] = await db
-        .update(inventoryItems)
-        .set({ quantity: sql`${inventoryItems.quantity} - ${qty}` })
-        .where(eq(inventoryItems.id, item.id))
-        .returning();
-      await recordBusinessEvent(db, {
+    const updated = await withTenant(tenantId, (db) => adjustInventoryItem(db, {
         tenantId,
-        entityType: "inventory_item",
-        entityId: row!.id,
+        inventoryItemId: item.id,
+        delta: -qty,
         eventType: "stock_used_on_visit",
-        payload: { quantity: qty, remaining: row!.quantity, visitId: p.visitId ?? null },
-      });
-      return row!;
-    });
+        eventPayload: { quantity: qty, visitId: p.visitId ?? null },
+      }));
     return {
       status: "success",
       output: {

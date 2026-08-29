@@ -19,7 +19,6 @@ import {
   businessEvents,
   calls,
   closePool,
-  communicationsLog,
   contactMethods,
   contacts,
   conversations,
@@ -162,7 +161,6 @@ type OpportunityRow = typeof opportunities.$inferInsert;
 type EquipmentRow = typeof equipment.$inferInsert;
 type ServiceVisitRow = typeof serviceVisits.$inferInsert;
 type MaintenanceAgreementRow = typeof maintenanceAgreements.$inferInsert;
-type CommunicationRow = typeof communicationsLog.$inferInsert;
 type InventoryRow = typeof inventoryItems.$inferInsert;
 type WarehouseRow = typeof warehouses.$inferInsert;
 type WarehouseStockRow = typeof warehouseStock.$inferInsert;
@@ -225,7 +223,6 @@ export interface DemoSeedData {
   equipment: EquipmentRow[];
   serviceVisits: ServiceVisitRow[];
   maintenanceAgreements: MaintenanceAgreementRow[];
-  communicationsLog: CommunicationRow[];
   inventoryItems: InventoryRow[];
   warehouses: WarehouseRow[];
   warehouseStock: WarehouseStockRow[];
@@ -834,7 +831,15 @@ export function generateDemoSeedData(config: DemoTenantConfig): DemoSeedData {
     createdAt: dateOffset(asOf, -20),
   }));
 
-  const communicationRows: CommunicationRow[] = [];
+  const communicationRows: Array<{
+    id: string;
+    tenantId: string;
+    householdId: string;
+    channel: string;
+    direction: "inbound" | "outbound";
+    content: string;
+    timestamp: Date;
+  }> = [];
   for (let index = 0; index < leadCount; index++) {
     const lead = leadsRows[index]!;
     const daysAgo = 2 + (index % 260);
@@ -856,6 +861,45 @@ export function generateDemoSeedData(config: DemoTenantConfig): DemoSeedData {
     if (channel === "voice" || index % 5 === 0) {
       callRows.push({ id: stableUuid(tenantId, "call", index), tenantId, conversationId, direction: index % 2 === 0 ? "inbound" : "outbound", fromNumber: index % 2 === 0 ? `+1813555${String(1_000 + index).padStart(4, "0")}` : "+18135550002", toNumber: index % 2 === 0 ? "+18135550002" : `+1813555${String(1_000 + index).padStart(4, "0")}`, transcript: "Customer discussed hardness, iron, and timing for a home water test.", recordingUrl: null, startedAt: dateOffset(asOf, -4 - (index % 30), 13), endedAt: dateOffset(asOf, -4 - (index % 30), 13), endedReason: index % 6 === 0 ? "customer_hangup" : "completed", raw: { demoSeed: DEMO_SEED_SOURCE }, sourceSystem: DEMO_SEED_SOURCE, externalId: `call-${index}`, createdBy: "demo-seed", createdAt: dateOffset(asOf, -4 - (index % 30), 13) });
     }
+  }
+  // Former communications_log fixtures are canonical messages from birth. A
+  // dedicated conversation preserves each historical thread's customer/channel and
+  // the old communication UUID becomes the message UUID exposed by the read view.
+  for (const communication of communicationRows) {
+    const conversationId = stableUuid(tenantId, "communication-conversation", communication.id);
+    const channel: ConversationRow["channel"] = communication.channel === "call"
+      ? "voice"
+      : communication.channel === "email"
+        ? "email"
+        : communication.channel === "webchat"
+          ? "webchat"
+          : "sms";
+    conversationRows.push({
+      id: conversationId,
+      tenantId,
+      householdId: communication.householdId,
+      contactId: null,
+      channel,
+      status: "closed",
+      lastActivityAt: communication.timestamp,
+      sourceSystem: DEMO_SEED_SOURCE,
+      externalId: `communication-conversation:${communication.id}`,
+      createdBy: "demo-seed",
+      createdAt: communication.timestamp,
+    });
+    messageRows.push({
+      id: communication.id,
+      tenantId,
+      conversationId,
+      direction: communication.direction,
+      channel: communication.channel,
+      content: communication.content,
+      sentAt: communication.timestamp,
+      sourceSystem: DEMO_SEED_SOURCE,
+      externalId: `communication:${communication.id}`,
+      createdBy: "demo-seed",
+      createdAt: communication.timestamp,
+    });
   }
 
   const { policies, revisions, byAction } = policyRows(tenantId, asOf);
@@ -940,7 +984,6 @@ export function generateDemoSeedData(config: DemoTenantConfig): DemoSeedData {
     equipment: equipmentRows,
     serviceVisits: serviceVisitRows,
     maintenanceAgreements: maintenanceRows,
-    communicationsLog: communicationRows,
     inventoryItems: inventoryRows,
     warehouses: warehouseRows,
     warehouseStock: warehouseStockRows,
@@ -972,7 +1015,7 @@ export function generateDemoSeedData(config: DemoTenantConfig): DemoSeedData {
 
 function tableRows(data: DemoSeedData): Array<[string, readonly Record<string, unknown>[]]> {
   return [
-    ["technicians", data.technicians], ["users", data.users], ["employeeRoles", data.employeeRoles], ["approvalChains", data.approvalChains], ["approvalChainSteps", data.approvalChainSteps], ["employeeRoleAssignments", data.employeeRoleAssignments], ["roleAuthorityGrants", data.roleAuthorityGrants], ["rolePermissions", data.rolePermissions], ["households", data.households], ["contacts", data.contacts], ["contactMethods", data.contactMethods], ["leads", data.leads], ["opportunities", data.opportunities], ["equipment", data.equipment], ["serviceVisits", data.serviceVisits], ["maintenanceAgreements", data.maintenanceAgreements], ["communicationsLog", data.communicationsLog], ["inventoryItems", data.inventoryItems], ["warehouses", data.warehouses], ["warehouseStock", data.warehouseStock], ["procurementOrders", data.procurementOrders], ["priceBookItems", data.priceBookItems], ["quotes", data.quotes], ["quoteLineItems", data.quoteLineItems], ["proposals", data.proposals], ["workOrders", data.workOrders], ["appointments", data.appointments], ["tasks", data.tasks], ["invoices", data.invoices], ["payments", data.payments], ["conversations", data.conversations], ["calls", data.calls], ["messages", data.messages], ["workflowStates", data.workflowStates], ["businessEvents", data.businessEvents], ["domainPolicies", data.domainPolicies], ["domainPolicyRevisions", data.domainPolicyRevisions], ["domainActions", data.domainActions], ["authorityDecisions", data.authorityDecisions], ["authorityApprovalRequests", data.authorityApprovalRequests], ["authorityApprovalRequestSteps", data.authorityApprovalRequestSteps], ["actionLog", data.actionLog], ["scanFindings", data.scanFindings],
+    ["technicians", data.technicians], ["users", data.users], ["employeeRoles", data.employeeRoles], ["approvalChains", data.approvalChains], ["approvalChainSteps", data.approvalChainSteps], ["employeeRoleAssignments", data.employeeRoleAssignments], ["roleAuthorityGrants", data.roleAuthorityGrants], ["rolePermissions", data.rolePermissions], ["households", data.households], ["contacts", data.contacts], ["contactMethods", data.contactMethods], ["leads", data.leads], ["opportunities", data.opportunities], ["equipment", data.equipment], ["serviceVisits", data.serviceVisits], ["maintenanceAgreements", data.maintenanceAgreements], ["inventoryItems", data.inventoryItems], ["warehouses", data.warehouses], ["warehouseStock", data.warehouseStock], ["procurementOrders", data.procurementOrders], ["priceBookItems", data.priceBookItems], ["quotes", data.quotes], ["quoteLineItems", data.quoteLineItems], ["proposals", data.proposals], ["workOrders", data.workOrders], ["appointments", data.appointments], ["tasks", data.tasks], ["invoices", data.invoices], ["payments", data.payments], ["conversations", data.conversations], ["calls", data.calls], ["messages", data.messages], ["workflowStates", data.workflowStates], ["businessEvents", data.businessEvents], ["domainPolicies", data.domainPolicies], ["domainPolicyRevisions", data.domainPolicyRevisions], ["domainActions", data.domainActions], ["authorityDecisions", data.authorityDecisions], ["authorityApprovalRequests", data.authorityApprovalRequests], ["authorityApprovalRequestSteps", data.authorityApprovalRequestSteps], ["actionLog", data.actionLog], ["scanFindings", data.scanFindings],
   ];
 }
 
@@ -1142,7 +1185,6 @@ async function seedRows(data: DemoSeedData): Promise<void> {
     await insertChunks(db, conversations, data.conversations);
     await insertChunks(db, calls, data.calls);
     await insertChunks(db, messages, data.messages);
-    await insertChunks(db, communicationsLog, data.communicationsLog);
     await insertChunks(db, workflowStates, data.workflowStates);
     await insertChunks(db, businessEvents, data.businessEvents);
     await insertChunks(db, domainActions, data.domainActions);

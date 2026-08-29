@@ -7,6 +7,7 @@ const contract = loadContract()
 const sha = "a".repeat(40)
 const release = { ...expectedRelease(sha), traceable: true }
 const productionWorkflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
+const workerDeployScript = readFileSync(new URL("./azure/deploy-worker.sh", import.meta.url), "utf8")
 
 test("production release from a non-main SHA is rejected", () => {
   assert.throws(() => assertCanonicalRelease({ head: sha, remoteMain: "b".repeat(40), dirty: "" }), /not canonical remote main/)
@@ -74,4 +75,50 @@ test("production preparation consumes the exact commit core-certification artifa
 test("production certification uses the explicit deferred-load profile", () => {
   assert.match(productionWorkflow, /FINNOR_RELEASE_PROFILE:\s*production/)
   assert.match(productionWorkflow, /name: Materialize protected load identities[\s\S]*if: env\.FINNOR_RELEASE_PROFILE != 'production'/)
+})
+
+test("Azure worker rollback restores release identity before restarting previous code", () => {
+  assert.match(workerDeployScript, /previous_release_env_exists=0/)
+  assert.match(workerDeployScript, /if \[ "\$release_env_written" -eq 1 \]; then[\s\S]*install -o root -g finnor -m 0644 "\$previous_release_env" "\$release_env"/)
+  const restoreIdentity = workerDeployScript.indexOf('install -o root -g finnor -m 0644 "$previous_release_env" "$release_env"')
+  const restoreCheckout = workerDeployScript.indexOf('ln -sfn "$previous_target" "$next_link"')
+  const restartPrevious = workerDeployScript.indexOf('systemctl restart "$unit_name" || true')
+  assert.ok(restoreIdentity > -1 && restoreCheckout > restoreIdentity && restartPrevious > restoreCheckout)
+})
+
+test("Azure worker verifies TLS over loopback and leaves public reachability to parity verification", () => {
+  assert.match(workerDeployScript, /--resolve "\$\{sse_hostname\}:443:127\.0\.0\.1"/)
+  assert.doesNotMatch(workerDeployScript, /curl --fail --silent --max-time 15 "https:\/\/\$\{sse_hostname\}\/healthz"/)
+  const deploy = productionWorkflow.indexOf("Deploy Azure worker and embedded orchestrator")
+  const parity = productionWorkflow.indexOf("Verify cross-runtime release and migration parity")
+  assert.ok(deploy > -1 && parity > deploy)
+})
+
+test("production worker reserves interactive capacity", () => {
+  assert.match(workerDeployScript, /WORKER_CONCURRENCY=2/)
+  assert.match(workerDeployScript, /WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1/)
+})
+
+test("all deployed-certification credentials are required before the first production mutation", () => {
+  const credentialGate = productionWorkflow.indexOf("Require production credentials before any mutation")
+  const firstMutation = productionWorkflow.indexOf("configure-azure-sse-ingress.mjs")
+  assert.ok(credentialGate > -1 && firstMutation > credentialGate)
+  const block = productionWorkflow.slice(credentialGate, productionWorkflow.indexOf("- name:", credentialGate + 8))
+  for (const name of [
+    "VERCEL_TOKEN",
+    "AZURE_CLIENT_ID",
+    "AZURE_TENANT_ID",
+    "AZURE_SUBSCRIPTION_ID",
+    "PRODUCT_TRUTH_AUTH_BEARER",
+    "PRODUCT_TRUTH_OTHER_AUTH_BEARER",
+    "PRODUCT_TRUTH_CERTIFICATION_KEY",
+  ]) assert.match(block, new RegExp(`\\b${name}\\b`))
+})
+
+test("operational closure requires two complete deployed Human Black-Box runs on one SHA", () => {
+  assert.match(productionWorkflow, /npm run release:human-operability -- --check/)
+  assert.match(productionWorkflow, /for run in 1 2; do/)
+  assert.match(productionWorkflow, /PRODUCT_TRUTH_CERTIFICATION_RUN="\$run" node scripts\/release\/certify-product-truth-deployed\.mjs/)
+  assert.match(productionWorkflow, /verify-consecutive-human-certifications\.mjs/)
+  assert.match(productionWorkflow, /human-black-box-certification-\$\{\{ github\.sha \}\}/)
 })

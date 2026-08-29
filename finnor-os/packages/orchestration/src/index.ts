@@ -57,7 +57,9 @@ import {
   type ObjectiveDecisionPlanner,
   type StartObjectiveOptions,
 } from "./objective-loop";
-import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
+import { finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
+import { assertCompiledHumanOperation, compileHumanInstructionRoute, compileTypedHumanOperation } from "./human-operating-compiler";
+import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
 
 export * from "./llm";
 export * from "./planner";
@@ -91,6 +93,10 @@ export * from "./interaction-targeting";
 export * from "./runtime-bridge";
 export * from "./durable-execution";
 export * from "./instruction-routing";
+export * from "./user-capability-registry";
+export * from "./dealer-zero-preconditions";
+export * from "./human-operability-matrix";
+export * from "./human-operating-compiler";
 export * from "./objective-success";
 export * from "./external-observation";
 export * from "./conversation-kernel";
@@ -126,6 +132,7 @@ export interface InstructionOptions {
   signal?: AbortSignal;
   deadlineAt?: number;
   deadlineMs?: number;
+  intakeDeadlineAt?: Date;
   /** Set by an API boundary that already performed the pure read classification. */
   fastReadDecision?: OperationalQueryDecision;
   /** Skip the legacy router classification entirely after a planner decision. */
@@ -142,6 +149,7 @@ export interface OperationalQueryOptions {
   executionKey?: string;
   activeContext?: OperatingInteractionContext | Record<string, unknown>;
   channel?: "voice" | "text" | "console";
+  intakeDeadlineAt?: Date;
 }
 
 export interface OperationalQueryRun extends OperationalQueryExecution {
@@ -150,6 +158,13 @@ export interface OperationalQueryRun extends OperationalQueryExecution {
   instructionId: string;
   duplicate?: boolean;
   answer?: AnswerEnvelope;
+}
+
+export interface RepairPlanningOptions {
+  signal?: AbortSignal;
+  /** One absolute deadline shared by planning, schema repair, and candidate scoring. */
+  deadlineAt?: number;
+  deadlineMs?: number;
 }
 
 export interface Orchestrator {
@@ -164,7 +179,7 @@ export interface Orchestrator {
     opts?: InstructionOptions,
   ): Promise<InstructionResult>;
   runAction(actionId: string, tenantId: string): Promise<ExecutionResult>;
-  repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void>;
+  repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string, options?: RepairPlanningOptions): Promise<void>;
 }
 
 /** A policy row is required for execution; absent one, a safe default gates everything. */
@@ -257,6 +272,7 @@ export class FinnorOrchestrator implements Orchestrator {
   readonly reflection: Reflection;
   readonly fastReadOnlyRouter: FastReadOnlyRouter;
   readonly conversationResponder: ConversationResponder;
+  readonly userCapabilities: UserCapabilityRegistry;
 
   constructor(deps?: {
     plugins?: PluginRegistry;
@@ -269,6 +285,7 @@ export class FinnorOrchestrator implements Orchestrator {
     objectiveDecisionPlanner?: ObjectiveDecisionPlanner;
   }) {
     this.plugins = deps?.plugins ?? createDefaultPluginRegistry();
+    this.userCapabilities = createUserCapabilityRegistry(this.plugins);
     this.tools = deps?.tools ?? createDefaultRegistry();
     this.planner = deps?.planner ?? new LLMPlanner(this.plugins);
     this.reflection = deps?.reflection ?? new OutcomeReflection();
@@ -482,6 +499,7 @@ export class FinnorOrchestrator implements Orchestrator {
       idempotencyKey: opts.idempotencyKey,
       activeContext: opts.activeContext as Record<string, unknown> | undefined,
       authorityContext: await authorityContextForWork(ctx),
+      intakeDeadlineAt: opts.intakeDeadlineAt,
     });
     if (received.duplicate) {
       const finalOutcome = received.finalOutcome && typeof received.finalOutcome === "object" ? received.finalOutcome as Record<string, unknown> : {};
@@ -546,6 +564,8 @@ export class FinnorOrchestrator implements Orchestrator {
           // Resolve it after the durable Work/Input claim before persisting it.
           activeContext: undefined,
           authorityContext: intakeAuthorityContext(ctx),
+          intakeDeadlineAt: opts.intakeDeadlineAt
+            ?? (Number.isFinite(opts.deadlineAt) ? new Date(Number(opts.deadlineAt)) : undefined),
         });
     opts = {
       ...opts,
@@ -590,20 +610,23 @@ export class FinnorOrchestrator implements Orchestrator {
         fastDecision = interpreted ? interactionAwareOperationalDecision(interpreted, opts.activeContext as OperatingInteractionContext | undefined) : undefined;
       }
       const routeReadDecision: OperationalQueryDecision = fastDecision ?? { route: "planner", reason: "unsupported" };
-      instructionRoute ??= classifyInstructionRoute({
+      instructionRoute ??= compileHumanInstructionRoute({
         instruction,
         fastReadDecision: routeReadDecision,
         activeContext: opts.activeContext,
         conversational: isConversationalTurn(instruction),
+        conversationContext: opts.conversationContext,
       });
-      if (opts.conversationContext?.resolution.status === "clarification_required") {
-        instructionRoute = { version: 1, route: "ATOMIC_EFFECT", reasonCodes: ["phase6_reference_or_sender_ambiguous"] };
+      // A deterministic business read does not acquire a consequential target,
+      // so unrelated conversation ambiguity must never demote QUERY to CLARIFY.
+      if (instructionRoute.route !== "QUERY" && opts.conversationContext?.resolution.status === "clarification_required") {
+        instructionRoute = { version: 1, route: "CLARIFY", reasonCodes: ["consequential_target_or_sender_unresolved"] };
       }
       await transitionWork(ctx.tenantId, workId, "understanding", "instruction_routed", {
         policyVersion: instructionRoute.version,
         route: instructionRoute.route,
         reasonCodes: instructionRoute.reasonCodes,
-      }, { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "CONVERSATION" ? "conversation" : instructionRoute.route === "ATOMIC_EFFECT" ? "atomic_effect" : "objective", expectedWorkInputId: workInputId });
+      }, { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "CONVERSATION" ? "conversation" : instructionRoute.route === "ATOMIC_ACTION" ? "atomic_action" : instructionRoute.route === "CLARIFY" ? "clarify" : "objective", expectedWorkInputId: workInputId });
       if (instructionRoute.route === "QUERY" && routeReadDecision.route === "fast_read" && this.fastReadOnlyRouter.execute) {
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
@@ -781,13 +804,18 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
       throw err;
     }
+    const failPlannerFinalization = async (err: unknown): Promise<never> => {
+      const failure = workFailure(err, "Planning finalization failed");
+      await finishWorkPlannerAttempt({ tenantId: ctx.tenantId, attemptId: plannerAttempt.id, status: failure.timeout ? "timed_out" : "failed", failure });
+      await transitionWork(ctx.tenantId, workId, "failed", "planning_failed", failure, { failure, expectedWorkInputId: workInputId });
+      await emitInstructionEvent(ctx.tenantId, instructionId, "failed", { error: failure.message, workId, recoverable: true });
+      throw err;
+    };
     if (await isInstructionCancelled(ctx.tenantId, instructionId)) {
       await this.rejectCancelledDrafts(ctx.tenantId, instructionId);
       return { actions: [], workId, workInputId, instructionId };
     }
-    const finalRoute = opts.conversationContext?.resolution.status === "clarification_required"
-      ? instructionRoute!
-      : finalizeInstructionRoute(instructionRoute!, actions);
+    const finalRoute = finalizeInstructionRoute(instructionRoute!, actions);
     if (finalRoute.route === "OBJECTIVE") {
       if (actions.length > 0) {
         await withTenant(ctx.tenantId, async (db) => {
@@ -825,16 +853,41 @@ export class FinnorOrchestrator implements Orchestrator {
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { route: "objective", objectiveLoopId: started.objectiveLoopId, boundedIterations: true });
       return { executionModel: "OBJECTIVE", actions: [], workId, workInputId, instructionId, objective: { objectiveLoopId: started.objectiveLoopId, state: started.state, route: "OBJECTIVE" } };
     }
+    if (finalRoute.route === "CLARIFY" && (actions.length !== 1 || actions[0]?.actionType !== "clarification_request")) {
+      return failPlannerFinalization(new Error("Instruction contract violation: CLARIFY must contain exactly one clarification_request and no business action"));
+    }
     if (actions.length === 0) {
       return this.conversationalResult(instruction, ctx, memory, effectiveOpts, "empty_plan_recovery", { workId, workInputId, instructionId, plannerAttemptId: plannerAttempt.id });
+    }
+    let compiledOperation: ReturnType<typeof compileTypedHumanOperation>;
+    try {
+      compiledOperation = compileTypedHumanOperation({
+        instruction,
+        fastReadDecision: fastDecision ?? { route: "planner", reason: "unsupported" },
+        activeContext: opts.activeContext,
+        conversationContext: opts.conversationContext,
+        preliminary: instructionRoute!,
+        actions,
+        registry: this.userCapabilities,
+      });
+      assertCompiledHumanOperation(compiledOperation);
+    } catch (err) {
+      return failPlannerFinalization(err);
+    }
+    if (finalRoute.route === "CLARIFY" && instructionRoute!.route !== "CLARIFY") {
+      await transitionWork(ctx.tenantId, workId, "planning", "instruction_route_refined", {
+        from: instructionRoute!.route,
+        to: "CLARIFY",
+        reasonCodes: finalRoute.reasonCodes,
+      }, { executionModel: "clarify", expectedWorkInputId: workInputId });
     }
     await finishWorkPlannerAttempt({
       tenantId: ctx.tenantId,
       attemptId: plannerAttempt.id,
       status: "succeeded",
-      plannerResult: { actionCount: actions.length, actionIds: actions.map((action) => action.id), actionTypes: actions.map((action) => action.actionType) },
+      plannerResult: { actionCount: actions.length, actionIds: actions.map((action) => action.id), actionTypes: actions.map((action) => action.actionType), compiledOperation },
     });
-    await transitionWork(ctx.tenantId, workId, "ready", "planner_succeeded", { plannerAttemptId: plannerAttempt.id, actionCount: actions.length }, { expectedWorkInputId: workInputId });
+    await transitionWork(ctx.tenantId, workId, "ready", "planner_succeeded", { plannerAttemptId: plannerAttempt.id, actionCount: actions.length, compiledOperation }, { expectedWorkInputId: workInputId });
     {
       await emitInstructionEvent(ctx.tenantId, instructionId, "plan_ready", { count: actions.length });
       for (const action of actions) {
@@ -961,7 +1014,7 @@ export class FinnorOrchestrator implements Orchestrator {
       }).catch(() => undefined);
     }
     await reconcileWorkStatus(ctx.tenantId, workId);
-    return { executionModel: "ATOMIC_EFFECT", actions, workId, workInputId, instructionId };
+    return { executionModel: finalRoute.route, actions, workId, workInputId, instructionId };
   }
 
   /**
@@ -1219,7 +1272,7 @@ export class FinnorOrchestrator implements Orchestrator {
    * planner for a revised remainder, then put the resulting roots through the same
    * validation/confirmation executor every other plan uses.
    */
-  async repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string): Promise<void> {
+  async repairPlanAfterTerminalFailure(tenantId: string, domainActionId: string, workflowStepId: string, options: RepairPlanningOptions = {}): Promise<void> {
     const [sourceAction, receipt] = await withTenant(tenantId, async (db) => {
       const [action] = await db
         .select()
@@ -1312,6 +1365,9 @@ export class FinnorOrchestrator implements Orchestrator {
         instructionId: sourceAction.instructionId ?? undefined,
         workId: sourceAction.workId ?? undefined,
         plannerAttemptId: repairPlannerAttemptId ?? undefined,
+        signal: options.signal,
+        deadlineAt: options.deadlineAt,
+        deadlineMs: options.deadlineMs,
       });
       if (repairPlannerAttemptId) {
         await finishWorkPlannerAttempt({

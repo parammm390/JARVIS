@@ -6,7 +6,7 @@
 
 import { withTenant, appointments } from "@finnor/db";
 import { and, eq, lt } from "drizzle-orm";
-import { recordBusinessEvent, createTask } from "@finnor/data-platform";
+import { createTask, updateAppointmentStatus } from "@finnor/data-platform";
 import type { JobHandler } from "../queue";
 
 const GRACE_PERIOD_MS = 60 * 60 * 1000; // an hour past the scheduled time before calling it a no-show
@@ -25,13 +25,12 @@ export const scanAppointmentNoShows: JobHandler = async (payload) => {
 
   for (const appt of overdue) {
     await withTenant(tenantId, async (db) => {
-      await db.update(appointments).set({ status: "no_show" }).where(eq(appointments.id, appt.id));
-      await recordBusinessEvent(db, {
+      await updateAppointmentStatus(db, {
         tenantId,
-        entityType: "appointment",
-        entityId: appt.id,
+        appointmentId: appt.id,
+        status: "no_show",
         eventType: "appointment_no_show",
-        payload: { subjectType: appt.subjectType, subjectId: appt.subjectId, scheduledAt: appt.scheduledAt.toISOString() },
+        eventPayload: { subjectType: appt.subjectType, subjectId: appt.subjectId, scheduledAt: appt.scheduledAt.toISOString() },
       });
       await createTask(db, {
         tenantId,

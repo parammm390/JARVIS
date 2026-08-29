@@ -6,9 +6,10 @@ import { getOrchestrator } from "../../../lib/orchestrator";
 import { enforceBatchBackpressure } from "../../../lib/backpressure";
 import { requireWorkerFleetReady } from "../../../lib/worker-readiness";
 import { receiveWork, recordWorkResponse, transitionWork, workAggregate } from "@finnor/db";
-import { classifyInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
+import { compileHumanInstructionRoute, interactionAwareOperationalDecision, interpretOperationalQuery, isConversationalTurn, OperatingInteractionContextError, resolveOperatingInteractionContext } from "@finnor/orchestration";
 import { linkEmployeeConversationTurnToWork, persistEmployeeAssistantTurn, prepareEmployeeConversationTurn } from "@finnor/orchestration";
 import { randomUUID } from "node:crypto";
+import { createInteractiveIntakeDeadline, requireInteractiveIntakeTime } from "../../../lib/intake-deadline";
 
 function intakeAuthorityContext(ctx: {
   userId: string;
@@ -39,7 +40,8 @@ async function recoverableWorkError(
   extra: Record<string, unknown> = {},
 ): Promise<Response> {
   const message = error instanceof Error ? error.message : "Instruction processing failed";
-  const failure = { message, recoverable: true, at: new Date().toISOString() };
+  const code = typeof extra.code === "string" ? extra.code : "intake_pre_orchestration_failed";
+  const failure = { kind: code, code, message, recoverable: true, at: new Date().toISOString() };
   // Only a Work that is still at the intake boundary may be failed here. The
   // expected status prevents a late pre-orchestration error from relabelling a
   // Work whose core orchestration already committed progress.
@@ -66,15 +68,17 @@ type ProjectionWarning = {
   code: "projection_persistence_failed" | "projection_missing_on_replay";
 };
 
-type CanonicalExecutionModel = "QUERY" | "CONVERSATION" | "ATOMIC_EFFECT" | "OBJECTIVE";
+type CanonicalExecutionModel = "QUERY" | "CONVERSATION" | "ATOMIC_ACTION" | "OBJECTIVE" | "CLARIFY";
 
 function executionModelForResult(
   result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>,
 ): CanonicalExecutionModel {
+  if (result.executionModel) return result.executionModel;
   if (result.objective) return "OBJECTIVE";
   if (result.query) return "QUERY";
   if (result.answer) return "CONVERSATION";
-  return "ATOMIC_EFFECT";
+  if (result.actions.length === 1 && result.actions[0]?.actionType === "clarification_request") return "CLARIFY";
+  return "ATOMIC_ACTION";
 }
 
 function assistantSemanticKind(
@@ -183,6 +187,7 @@ export async function POST(req: Request): Promise<Response> {
         { status: 400 },
       );
     }
+    const intakeDeadlineAt = createInteractiveIntakeDeadline(body.data.channel);
     const instructionId = body.data.instructionId ?? randomUUID();
     // The Work/Input claim is the first durable operation after auth and schema
     // validation. Everything below it is enrichment, policy, or orchestration and
@@ -201,6 +206,7 @@ export async function POST(req: Request): Promise<Response> {
       // Do not persist it on the initial claim before that check succeeds.
       activeContext: undefined,
       authorityContext: intakeAuthorityContext(ctx),
+      intakeDeadlineAt: new Date(intakeDeadlineAt),
     });
     if (received.duplicate) {
       // A duplicate is already a durable claim. Replay its stored response (or a
@@ -281,14 +287,20 @@ export async function POST(req: Request): Promise<Response> {
       // authenticated-route limiter already ran in requireContext; this tighter
       // intake bucket and batch backpressure are reserved for planner work.
       fastReadDecision = interactionAwareOperationalDecision(interpretOperationalQuery(body.data.instruction), activeContext);
-      instructionRouteDecision = classifyInstructionRoute({ instruction: body.data.instruction, fastReadDecision, activeContext, conversational: isConversationalTurn(body.data.instruction) });
+      instructionRouteDecision = compileHumanInstructionRoute({
+        instruction: body.data.instruction,
+        fastReadDecision,
+        activeContext,
+        conversational: isConversationalTurn(body.data.instruction),
+        conversationContext: prepared.context,
+      });
       if (instructionRouteDecision.route !== "QUERY") {
         await enforceRouteRateLimit(`intake:${ctx.tenantId}`, Number(process.env.RATE_LIMIT_INTAKE_PER_MINUTE ?? 20));
       }
     } catch (error) {
       return await recoverableWorkError(error, ctx.tenantId, received);
     }
-    if (instructionRouteDecision.route === "OBJECTIVE" || instructionRouteDecision.route === "ATOMIC_EFFECT") {
+    if (instructionRouteDecision.route === "OBJECTIVE" || instructionRouteDecision.route === "ATOMIC_ACTION") {
       try {
         await requireWorkerFleetReady();
       } catch (error) {
@@ -309,7 +321,8 @@ export async function POST(req: Request): Promise<Response> {
     }
     let result: Awaited<ReturnType<ReturnType<typeof getOrchestrator>["handleInstructionResult"]>>;
     try {
-      if (instructionRouteDecision.route === "ATOMIC_EFFECT" || instructionRouteDecision.route === "CONVERSATION") await enforceBatchBackpressure();
+      if (instructionRouteDecision.route === "ATOMIC_ACTION" || instructionRouteDecision.route === "CONVERSATION") await enforceBatchBackpressure();
+      requireInteractiveIntakeTime(intakeDeadlineAt);
       result = await getOrchestrator().handleInstructionResult(body.data.instruction, humanCtx, {
         sessionId: body.data.sessionId,
         instructionId: received.instructionId,
@@ -322,6 +335,8 @@ export async function POST(req: Request): Promise<Response> {
         fastReadDecision,
         instructionRouteDecision,
         skipFastReadClassification: true,
+        signal: req.signal,
+        deadlineAt: intakeDeadlineAt,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Instruction processing failed";
@@ -402,7 +417,10 @@ export async function POST(req: Request): Promise<Response> {
         if (!result.objective) throw new Error("Instruction contract violation: OBJECTIVE has no durable loop identity");
         response = { executionModel, actions: [], objectiveLoopId: result.objective.objectiveLoopId, objectiveState: result.objective.state, ...common, assistantMessage };
         break;
-      case "ATOMIC_EFFECT":
+      case "ATOMIC_ACTION":
+        response = { executionModel, actions: result.actions, ...common, assistantMessage };
+        break;
+      case "CLARIFY":
         response = { executionModel, actions: result.actions, ...common, assistantMessage };
         break;
     }

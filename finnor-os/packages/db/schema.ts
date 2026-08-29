@@ -13,6 +13,7 @@ import {
   vector,
   index,
   unique,
+  uniqueIndex,
   real,
   date,
   primaryKey,
@@ -60,17 +61,17 @@ export const tenantSettings = pgTable("tenant_settings", {
   // integrations, and credentials remain in their existing governed contracts.
   workspaceConfig: jsonb("workspace_config").notNull().default({
     version: 2,
-    enabledSurfaces: ["home", "work", "customers", "schedule", "money", "agents"],
-    terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "Agents" },
+    enabledSurfaces: ["home", "customers", "schedule", "money", "work", "agents"],
+    terminology: { home: "Home", work: "Work", customers: "Customers", schedule: "Schedule", money: "Money", agents: "AI Team" },
     vocabulary: { customer: "Customer", homeowner: "Homeowner", account: "Account", technician: "Technician", installer: "Installer", serviceVisit: "Service Visit", appointment: "Appointment", quote: "Quote", proposal: "Proposal", invoice: "Invoice", job: "Job", work: "Work" },
     voiceEnabled: true,
-    navigationPriority: ["home", "work", "customers", "schedule", "money", "agents"],
+    navigationPriority: ["home", "customers", "schedule", "money", "work", "agents"],
     brand: { accent: "cyan", surfaceTone: "ink", radius: "soft", density: "balanced", typography: "system", motion: "standard", mark: "F", logoAssetKey: "finnor" },
     visibility: { policy: true, authority: true },
     roles: {
-      owner: { startView: "command", visibleSurfaces: ["home", "work", "customers", "schedule", "money", "agents"], ready: { primaryFocus: "operational_attention", heroMetric: "pending_approvals", pulseMetrics: ["pending_approvals", "collected_usd", "overdue_invoice_value", "open_leads", "runs_in_flight"], attentionCategories: ["recovery", "approval", "schedule", "money", "customer", "work"], quickActions: [{ key: "inspect_blocked_work" }, { key: "review_overdue_invoices" }, { key: "review_pending_approvals" }], primaryProjection: "work" } },
-      dispatcher: { startView: "schedule", visibleSurfaces: ["home", "work", "customers", "schedule", "agents"], ready: { primaryFocus: "dispatch", heroMetric: "technician_load", pulseMetrics: ["technician_load", "pending_approvals", "runs_in_flight", "stuck_runs"], attentionCategories: ["recovery", "approval", "schedule", "customer", "work"], quickActions: [{ key: "review_schedule" }, { key: "review_technician_load" }, { key: "inspect_blocked_work" }], primaryProjection: "schedule" } },
-      technician: { startView: "my-day", visibleSurfaces: ["home", "work", "customers", "schedule"], ready: { primaryFocus: "assigned_work", heroMetric: "assigned_work_today", pulseMetrics: ["assigned_work_today"], attentionCategories: ["recovery", "schedule", "customer", "work"], quickActions: [{ key: "open_my_day" }], primaryProjection: "assigned-day" } },
+      owner: { startView: "command", visibleSurfaces: ["home", "customers", "schedule", "money", "work", "agents"], ready: { primaryFocus: "operational_attention", heroMetric: "pending_approvals", pulseMetrics: ["pending_approvals", "collected_usd", "overdue_invoice_value", "open_leads", "runs_in_flight"], attentionCategories: ["recovery", "approval", "schedule", "money", "customer", "work"], quickActions: [{ key: "inspect_blocked_work" }, { key: "review_overdue_invoices" }, { key: "review_pending_approvals" }], primaryProjection: "work" } },
+      dispatcher: { startView: "schedule", visibleSurfaces: ["home", "customers", "schedule", "work", "agents"], ready: { primaryFocus: "dispatch", heroMetric: "technician_load", pulseMetrics: ["technician_load", "pending_approvals", "runs_in_flight", "stuck_runs"], attentionCategories: ["recovery", "approval", "schedule", "customer", "work"], quickActions: [{ key: "review_schedule" }, { key: "review_technician_load" }, { key: "inspect_blocked_work" }], primaryProjection: "schedule" } },
+      technician: { startView: "my-day", visibleSurfaces: ["home", "customers", "schedule", "work"], ready: { primaryFocus: "assigned_work", heroMetric: "assigned_work_today", pulseMetrics: ["assigned_work_today"], attentionCategories: ["recovery", "schedule", "customer", "work"], quickActions: [{ key: "open_my_day" }], primaryProjection: "assigned-day" } },
     },
     scenes: { ready: { detail: "balanced", emphasis: "presence" }, listening: { detail: "compact", emphasis: "presence" }, plan: { detail: "balanced", emphasis: "context" }, approval: { detail: "detailed", emphasis: "evidence" }, working: { detail: "balanced", emphasis: "evidence" }, outcome: { detail: "detailed", emphasis: "evidence" }, recovery: { detail: "detailed", emphasis: "context" } },
     extensions: {},
@@ -884,7 +885,7 @@ export const works = pgTable(
     sessionId: text("session_id"),
     initialChannel: text("initial_channel", { enum: ["voice", "text", "console"] }).notNull(),
     initialInstruction: text("initial_instruction").notNull(),
-    executionModel: text("execution_model", { enum: ["query", "conversation", "atomic_effect", "objective"] }),
+    executionModel: text("execution_model", { enum: ["query", "conversation", "atomic_action", "objective", "clarify", "atomic_effect"] }),
     createdBy: uuid("created_by").references(() => users.id),
     currentOwnerId: uuid("current_owner_id").references(() => users.id),
     assignedTo: uuid("assigned_to").references(() => users.id),
@@ -920,6 +921,7 @@ export const workInputs = pgTable(
     contextSnapshot: jsonb("context_snapshot"),
     contextSnapshotHash: text("context_snapshot_hash"),
     contextCapturedAt: timestamp("context_captured_at", { withTimezone: true }),
+    intakeDeadlineAt: timestamp("intake_deadline_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -927,6 +929,7 @@ export const workInputs = pgTable(
     unique("work_inputs_tenant_instruction_idx").on(t.tenantId, t.instructionId),
     unique("work_inputs_work_idempotency_idx").on(t.workId, t.idempotencyKey),
     index("work_inputs_work_created_idx").on(t.workId, t.createdAt),
+    index("work_inputs_tenant_intake_deadline_idx").on(t.tenantId, t.intakeDeadlineAt),
   ],
 );
 
@@ -1321,6 +1324,9 @@ export const proposals = pgTable("proposals", {
   quoteId: uuid("quote_id"),
 });
 
+/** Read-only compatibility projection backed by canonical messages + conversations.
+ * Kept as pgTable metadata so existing Drizzle read paths remain source-compatible;
+ * migration 0107 makes the database object a non-updatable security-invoker view. */
 export const communicationsLog = pgTable("communications_log", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().default(sql`finnor_os.request_tenant_id()`).references(() => tenants.id),
@@ -2499,9 +2505,8 @@ export const procurementOrders = pgTable("procurement_orders", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Persists what communications_log/sandbox_outbox never captured: a queryable,
-// permanent record of calls/messages, replacing the old "transcript embedded once in
-// jobs.payload, then discarded" pattern in webhooks/vapi/route.ts.
+// Authoritative, writable communication model. communications_log is a read-only
+// compatibility projection of these messages joined to their conversation/customer.
 export const conversations = pgTable("conversations", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
@@ -2535,17 +2540,25 @@ export const calls = pgTable(
   (t) => [unique("calls_tenant_source_external_idx").on(t.tenantId, t.sourceSystem, t.externalId)],
 );
 
-export const messages = pgTable("messages", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
-  conversationId: uuid("conversation_id").references(() => conversations.id),
-  direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
-  channel: text("channel").notNull(),
-  content: text("content").notNull(),
-  sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
-  ...provenanceColumns(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+    conversationId: uuid("conversation_id").references(() => conversations.id),
+    direction: text("direction", { enum: ["inbound", "outbound"] }).notNull(),
+    channel: text("channel").notNull(),
+    content: text("content").notNull(),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
+    ...provenanceColumns(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("messages_tenant_source_external_unique")
+      .on(table.tenantId, table.sourceSystem, table.externalId)
+      .where(sql`${table.sourceSystem} IS NOT NULL AND ${table.externalId} IS NOT NULL`),
+  ],
+);
 
 // Canonical document entity; embeddings.documentId (added above) can point here.
 export const documents = pgTable("documents", {

@@ -2,19 +2,25 @@
 // docs/jarvis-90-execution-blueprint.md §1). Every function here takes an already-open
 // `db` handle — the caller opens the single withTenant() — so the entity write and its
 // business_events row land in one transaction. This is the enforcement point for
-// "plugins must stop writing arbitrary tables directly." Only 3 plugins (crm,
-// quotation, accounting) are migrated to it this phase; the rest are tracked follow-up.
+// "plugins must stop writing arbitrary tables directly." The Business Truth Registry
+// names the one owner and approved mutation/import boundary for each business fact.
 
 export * from "./events";
 export * from "./contacts";
 export * from "./leads";
 export * from "./tasks";
 export * from "./appointments";
+export * from "./service-visits";
+export * from "./equipment";
 export * from "./work-orders";
 export * from "./price-book";
 export * from "./quotes";
 export * from "./payments";
+export * from "./invoices";
+export * from "./inventory";
+export * from "./maintenance-agreements";
 export * from "./conversations";
 export * from "./documents";
 export * from "./import-writes";
 export * from "./source-truth";
+export * from "./business-truth-registry";

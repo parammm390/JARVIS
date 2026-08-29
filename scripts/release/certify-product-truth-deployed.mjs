@@ -4,6 +4,12 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assertCanonicalRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 import { GOLDEN_JOURNEYS, materializeGoldenInstruction, validateGoldenMatrix } from "./product-truth-golden-matrix.mjs"
+import {
+  HUMAN_OPERABILITY_MATRIX,
+  HUMAN_OPERABILITY_SCENARIOS,
+  materializeHumanOperabilityInstruction,
+  validateHumanOperabilityArtifact,
+} from "./human-operability-matrix.mjs"
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
 const contract = loadContract()
@@ -22,6 +28,8 @@ const commonHeaders = {
   ...(bypass ? { "x-vercel-protection-bypass": bypass } : {}),
 }
 const fixtureKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
+const certificationRun = Number(process.env.PRODUCT_TRUTH_CERTIFICATION_RUN ?? "1")
+if (![1, 2].includes(certificationRun)) throw new Error("PRODUCT_TRUTH_CERTIFICATION_RUN must be 1 or 2")
 
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, {
@@ -287,7 +295,8 @@ async function browserJourney(browser, degradeRealtime) {
 function durableModelFor(model) {
   return model === "QUERY" ? "query"
     : model === "CONVERSATION" ? "conversation"
-      : model === "ATOMIC_EFFECT" ? "atomic_effect"
+      : model === "ATOMIC_ACTION" ? "atomic_action"
+      : model === "CLARIFY" ? "clarify"
         : "objective"
 }
 
@@ -303,6 +312,19 @@ function responseHasCanonicalIdentity(body) {
     && typeof body.assistantMessage.id === "string"
     && typeof body.assistantMessage.originalText === "string"
     && ["ANSWER", "ACKNOWLEDGEMENT", "CLARIFICATION"].includes(body.assistantMessage.semanticKind))
+}
+
+function assertExpectedCapability(row, responseBody) {
+  if (!row.expectedCapability) return null
+  const observed = responseBody.executionModel === "QUERY"
+    ? responseBody.query?.request?.intent ?? responseBody.query?.intent ?? responseBody.answer?.intent
+    : responseBody.executionModel === "CLARIFY"
+      ? responseBody.actions?.find((action) => action.actionType === "clarification_request")?.actionType
+      : responseBody.actions?.find((action) => action.actionType === row.expectedCapability)?.actionType
+  if (observed !== row.expectedCapability) {
+    throw new Error(`${row.id} compiled capability ${observed ?? "<missing>"}; expected ${row.expectedCapability}`)
+  }
+  return observed
 }
 
 async function fetchWorkCase(workId, headers = commonHeaders) {
@@ -622,6 +644,7 @@ async function browserGoldenJourney(browser, row, index) {
     const responseAt = Date.now()
     const submission = await submitFromBrowser(page, input, row, instruction)
     const responseBody = submission.response
+    const compiledCapability = assertExpectedCapability(row, responseBody)
     const fixture = await applyGoldenFixture(responseBody.workId, row, instructionNonce)
     if (row.workerRestart) await restartWorkerGateway()
     const canonical = await waitForWorkCase(responseBody.workId)
@@ -668,6 +691,7 @@ async function browserGoldenJourney(browser, row, index) {
       instructionId: responseBody.instructionId,
       threadId: responseBody.threadId,
       executionModel: responseBody.executionModel,
+      compiledCapability,
       objectiveLoopId: responseBody.objectiveLoopId ?? null,
       canonicalState: canonical?.objectiveLoop?.state ?? canonical?.durableWork?.status ?? canonical?.status ?? null,
       pixelState: pixel.instructionState,
@@ -702,6 +726,112 @@ async function runGoldenBrowserMatrix(browser) {
     }
   }
   if (results.length !== GOLDEN_JOURNEYS.length || results.some((result) => result.status !== "PASS")) throw new Error("Product Truth golden browser matrix did not pass all 30 journeys")
+  return results
+}
+
+async function clickCanonicalSurface(page, surface) {
+  const href = surface === "home" ? "/jarvis" : `/jarvis/${surface}`
+  const link = page.locator(`[data-jarvis-surface-nav] a[href="${href}"], [data-jarvis-surface-nav] a[href^="${href}?"]`).first()
+  await link.waitFor({ state: "visible", timeout: 30_000 })
+  await link.click()
+  await page.waitForURL((url) => url.pathname === href, { timeout: 30_000 })
+}
+
+function assertSurfaceContext(page, surface, householdId, workId) {
+  const url = new URL(page.url())
+  const expectedPath = surface === "home" ? "/jarvis" : `/jarvis/${surface}`
+  if (url.pathname !== expectedPath) throw new Error(`surface journey reached ${url.pathname}, expected ${expectedPath}`)
+  if (surface !== "home" && url.searchParams.get("householdId") !== householdId) throw new Error(`${surface} lost the selected customer context`)
+  if (surface !== "home" && url.searchParams.get("workCaseId") !== workId) throw new Error(`${surface} lost the canonical Work context`)
+}
+
+async function browserOperatingSurfaceJourney(browser, row, index) {
+  const { context, page, input } = await prepareBrowserPage(browser)
+  try {
+    await page.waitForFunction(() => window.__JARVIS_REALTIME_STATUS__?.status === "live", null, { timeout: 30_000 })
+    const instruction = materializeHumanOperabilityInstruction(row, `${index + 1}-${randomUUID()}`)
+    const submission = await submitFromBrowser(page, input, row, instruction)
+    const responseBody = submission.response
+    const compiledCapability = assertExpectedCapability(row, responseBody)
+    const canonical = await waitForWorkCase(responseBody.workId)
+    const initialPixel = await assertBrowserProjection(page, responseBody.workId, responseBody, canonical, row)
+
+    const sidebar = page.locator("#jarvis-thread-sidebar")
+    await sidebar.waitFor({ state: "visible", timeout: 30_000 })
+    await sidebar.locator('.jarvis-thread-sidebar__row[data-active="true"]').first().waitFor({ state: "visible", timeout: 30_000 })
+
+    await clickCanonicalSurface(page, "customers")
+    const firstCustomer = page.locator("[data-household-id]").first()
+    await firstCustomer.waitFor({ state: "visible", timeout: 30_000 })
+    const householdId = await firstCustomer.getAttribute("data-household-id")
+    if (!householdId) throw new Error("Customers surface returned no selectable canonical household")
+    await firstCustomer.click()
+    await page.waitForURL((url) => url.pathname === "/jarvis/customers" && url.searchParams.get("householdId") === householdId && url.searchParams.get("workCaseId") === responseBody.workId, { timeout: 30_000 })
+    assertSurfaceContext(page, "customers", householdId, responseBody.workId)
+
+    const visited = ["customers"]
+    for (const surface of ["money", "work"]) {
+      await clickCanonicalSurface(page, surface)
+      assertSurfaceContext(page, surface, householdId, responseBody.workId)
+      visited.push(surface)
+    }
+
+    // Refresh on a deep surface proves that the selected thread, Work, and
+    // customer are reconstructed independently of component lifetime.
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 45_000 })
+    await page.locator(`[data-context-work="${responseBody.workId}"]`).waitFor({ state: "visible", timeout: 45_000 })
+    await page.locator('#jarvis-thread-sidebar .jarvis-thread-sidebar__row[data-active="true"]').first().waitFor({ state: "visible", timeout: 45_000 })
+    assertSurfaceContext(page, "work", householdId, responseBody.workId)
+
+    await clickCanonicalSurface(page, "schedule")
+    assertSurfaceContext(page, "schedule", householdId, responseBody.workId)
+    visited.push("schedule")
+
+    await page.locator('#jarvis-thread-sidebar .jarvis-thread-sidebar__row[data-active="true"]').first().click()
+    await page.waitForURL((url) => url.pathname === "/jarvis", { timeout: 30_000 })
+    await page.locator(`[data-thread-document][data-jarvis-work-id="${responseBody.workId}"]`).first().waitFor({ state: "attached", timeout: 45_000 })
+    await page.locator(`[data-context-work="${responseBody.workId}"]`).waitFor({ state: "visible", timeout: 30_000 })
+
+    return {
+      id: row.id,
+      index: index + 1,
+      status: "PASS",
+      executionModel: responseBody.executionModel,
+      compiledCapability,
+      workId: responseBody.workId,
+      threadId: responseBody.threadId,
+      householdId,
+      visited,
+      refreshedSurface: "work",
+      returnedToThread: true,
+      pixel: initialPixel,
+    }
+  } finally {
+    await context.close()
+  }
+}
+
+async function runHumanOperabilityMatrix(browser, goldenResults) {
+  validateHumanOperabilityArtifact()
+  const goldenById = new Map(goldenResults.map((result) => [result.id, result]))
+  const results = []
+  for (const [index, row] of HUMAN_OPERABILITY_SCENARIOS.entries()) {
+    try {
+      if (row.linkedGoldenJourneyId) {
+        const linked = goldenById.get(row.linkedGoldenJourneyId)
+        if (!linked || linked.status !== "PASS") throw new Error(`linked real JARVIS journey ${row.linkedGoldenJourneyId} did not pass`)
+        results.push({ id: row.id, index: index + 1, status: "PASS", category: row.category, linkedGoldenJourneyId: row.linkedGoldenJourneyId, workId: linked.workId, executionModel: linked.executionModel })
+      } else if (row.surfaceJourney) {
+        results.push({ ...(await browserOperatingSurfaceJourney(browser, row, GOLDEN_JOURNEYS.length + index)), category: row.category })
+      } else {
+        results.push({ ...(await browserGoldenJourney(browser, row, GOLDEN_JOURNEYS.length + index)), category: row.category, heldOut: row.heldOut === true })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`human operability ${index + 1}/${HUMAN_OPERABILITY_SCENARIOS.length} (${row.id}) failed: ${message}`)
+    }
+  }
+  if (results.length !== HUMAN_OPERABILITY_SCENARIOS.length || results.some((result) => result.status !== "PASS")) throw new Error("Human Operability Matrix did not pass every executable scenario")
   return results
 }
 
@@ -747,8 +877,10 @@ if (replayStream.collector.deltas.filter((delta) => delta.cursor === replayedDel
 
 const browser = await chromium.launch({ headless: true })
 let goldenMatrix
+let humanOperabilityMatrix
 try {
   goldenMatrix = await runGoldenBrowserMatrix(browser)
+  humanOperabilityMatrix = await runHumanOperabilityMatrix(browser, goldenMatrix)
 } finally {
   await browser.close()
 }
@@ -757,11 +889,13 @@ const latency = [
   firstDelta.receivedAt - Date.parse(firstDelta.occurredAt),
   replayedDelta.receivedAt - Date.parse(replayedDelta.occurredAt),
   ...goldenMatrix.map((journey) => journey.commitToPixelMs),
+  ...humanOperabilityMatrix.map((journey) => journey.commitToPixelMs),
 ].filter((value) => Number.isFinite(value)).sort((a, b) => a - b)
 const percentile = (p) => latency[Math.min(latency.length - 1, Math.max(0, Math.ceil(latency.length * p) - 1))]
 console.log(JSON.stringify({
   ok: true,
-  certificationStatus: "PRODUCT_TRUTH_95_PASS",
+  certificationStatus: "HUMAN_BLACK_BOX_RUN_PASS",
+  certificationRun,
   commitSha: expectedSha,
   releases: {
     frontend: frontendRelease,
@@ -779,6 +913,13 @@ console.log(JSON.stringify({
     replayedCursor: replayedDelta.cursor,
     duplicateReplayCursors: 0,
   },
-  browser: { goldenMatrix: goldenMatrix, journeyCount: goldenMatrix.length },
+  browser: {
+    goldenMatrix,
+    goldenJourneyCount: goldenMatrix.length,
+    humanOperabilityMatrix,
+    humanOperabilityScenarioCount: humanOperabilityMatrix.length,
+    registeredCapabilityCount: HUMAN_OPERABILITY_MATRIX.capabilityCoverage.length,
+    totalRealJarvisJourneys: goldenMatrix.length + humanOperabilityMatrix.filter((row) => !row.linkedGoldenJourneyId).length,
+  },
   latencyMs: { samples: latency, p50: percentile(0.5), p95: percentile(0.95), p99: percentile(0.99) },
 }, null, 2))
