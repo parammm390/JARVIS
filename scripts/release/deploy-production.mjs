@@ -175,6 +175,11 @@ const deployOutput = run("vercel", deployArgs, appDir, env)
 const urls = [...deployOutput.matchAll(/https:\/\/[^\s)]+/g)].map((match) => match[0].replace(/[.,]+$/, ""))
 const deploymentUrl = urls.at(-1)
 if (!deploymentUrl) throw new Error("Vercel did not return a deployment URL")
+const productionUrl = target.productionUrl
+if (!productionUrl || !/^https:\/\//.test(productionUrl)) {
+  throw new Error(`Canonical ${appName} production URL is missing or invalid`)
+}
+run("vercel", ["alias", "set", deploymentUrl, productionUrl, ...tokenArgs], appDir, env)
 
 const result = {
   app: appName,
@@ -190,6 +195,7 @@ const result = {
   dirty: false,
   remoteMain,
   deploymentUrl,
+  productionUrl,
 }
 if (outputFile) {
   writeFileSync(resolve(outputFile), `${JSON.stringify(result, null, 2)}\n`)
