@@ -325,7 +325,15 @@ export class BusinessProjectionCache {
 
   /** Compatibility shorthand for the stream owner, which only needs live/polling. */
   setRealtimeMode(mode: "live" | "polling"): void {
-    this.setRealtimeStatus(mode === "polling" ? "polling" : "live")
+    const status = mode === "polling" ? "polling" : "live"
+    const changed = this.realtimeStatus !== status
+    this.setRealtimeStatus(status)
+    if (!changed || mode !== "polling") return
+    for (const entry of this.entries.values()) {
+      if (entry.listeners.size > 0 && this.visible && this.online) {
+        void this.ensure(entry.id, true).catch(() => undefined)
+      }
+    }
   }
 
   reset(): void {
