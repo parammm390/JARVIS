@@ -46,12 +46,13 @@ describe("projectThreadWorkspace", () => {
     expect(projected.query?.result.intent).toBe("customer_cohort")
   })
 
-  it("keeps a pre-execution infrastructure failure in a receipt", () => {
-    expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null, everExecuted: false })).kind).toBe("receipt")
+  it("keeps a pre-canonical transport failure in a receipt", () => {
+    expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null, workId: null, everExecuted: false, workPosture: null })).kind).toBe("receipt")
   })
 
-  it("uses recovery only for actual execution failure or canonical recovery", () => {
-    expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null, everExecuted: true })).kind).toBe("recovery")
+  it("uses recovery for canonical failed Work, actual execution failure, or canonical recovery", () => {
+    expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null, workId: "work-1", everExecuted: false })).kind).toBe("recovery")
+    expect(projectThreadWorkspace(thread({ machine: { instructionState: "failed" }, answerResult: null, workId: null, everExecuted: true })).kind).toBe("recovery")
     expect(projectThreadWorkspace(thread({ machine: { instructionState: "recovering" }, answerResult: null })).kind).toBe("recovery")
   })
 
