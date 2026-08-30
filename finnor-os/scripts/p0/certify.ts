@@ -140,7 +140,16 @@ function changedPaths(): string[] {
 function validateChangeScope(): string[] {
   assert.equal(git(["merge-base", "--is-ancestor", BASELINE_SHA, "HEAD"]) === "", true, "baseline SHA is not an ancestor of HEAD");
   assert.equal(git(["merge-base", "--is-ancestor", P0_CERTIFIED_SHA, "HEAD"]) === "", true, "certified P0 SHA is not an ancestor of HEAD");
-  assert.equal(git(["branch", "--show-current"], root), P0_BRANCH, "P0 must run on its dedicated branch");
+  // Local certification runs on the dedicated branch. GitHub Actions checks out
+  // pull requests detached, so use the trusted event ref there; once the change
+  // is merged, main is the expected certified descendant.
+  const localBranch = git(["branch", "--show-current"], root);
+  const ciBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "";
+  if (localBranch) {
+    assert.equal(localBranch, P0_BRANCH, "P0 must run on its dedicated branch");
+  } else if (ciBranch && ciBranch !== "main") {
+    assert.equal(ciBranch, P0_BRANCH, "P0 pull-request certification must use its dedicated branch");
+  }
   const paths = changedPaths();
   const allowed = paths.filter((path) =>
     path === "package.json"
