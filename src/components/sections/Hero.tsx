@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import { CalendarDays, FileText, Play, ShieldCheck, Waves } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -101,7 +102,7 @@ export function Hero() {
         }`}
       >
         <div className="container flex h-20 items-center justify-between px-4 md:px-6">
-          <a
+          <Link
             href="/"
             className="flex items-center gap-3 text-xl font-black tracking-tight text-slate-950"
           >
@@ -109,7 +110,7 @@ export function Hero() {
               F
             </span>
             {siteConfig.name}
-          </a>
+          </Link>
           <div className="hidden items-center gap-5 lg:gap-8 md:flex">
             {navItems.map((item) => (
               <a

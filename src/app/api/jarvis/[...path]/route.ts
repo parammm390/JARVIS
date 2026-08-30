@@ -292,8 +292,8 @@ async function forwardTest(req: NextRequest, segments: string[], method: "GET" |
   }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
-  const segments = params.path;
+export async function GET(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  const segments = (await params).path;
   if (!validSegments(segments) || !validQuery(req.nextUrl)) return proxyError("Invalid request", 400);
   if (!isAllowedGet(segments)) return proxyError("Not found", 404);
 
@@ -313,8 +313,8 @@ export async function GET(req: NextRequest, { params }: { params: { path: string
   return doForward(req, segments, "GET", auth);
 }
 
-export async function POST(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
-  const segments = params.path;
+export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  const segments = (await params).path;
   if (!validSegments(segments) || !validQuery(req.nextUrl)) return proxyError("Invalid request", 400);
   if (!isAllowedPost(segments)) return proxyError("Not found", 404);
 
@@ -334,8 +334,8 @@ function isAllowedPut(segments: string[]): boolean {
   return isUserPrefs(segments) || (segments.length === 1 && segments[0] === "workspace-config") || (segments.length === 3 && segments[0] === "policies") || (segments.length === 2 && segments[0] === "price-book");
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
-  const segments = params.path;
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  const segments = (await params).path;
   if (!validSegments(segments) || !validQuery(req.nextUrl) || !isAllowedPut(segments)) return proxyError("Not found", 404);
   if (hasTestKey(req)) return forwardTest(req, segments, "PUT");
   const auth = hasBearer(req);
@@ -343,8 +343,8 @@ export async function PUT(req: NextRequest, { params }: { params: { path: string
   return doForward(req, segments, "PUT", auth);
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { path: string[] } }): Promise<Response> {
-  const segments = params.path;
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }): Promise<Response> {
+  const segments = (await params).path;
   if (!validSegments(segments) || !validQuery(req.nextUrl) || !isUserPrefs(segments)) return proxyError("Not found", 404);
   if (hasTestKey(req)) return forwardTest(req, segments, "DELETE");
   const auth = hasBearer(req);
