@@ -82,7 +82,16 @@ function currentChangedPaths(): string[] {
 }
 
 function validateReconciliationAndScope(): string[] {
-  assert.equal(git(["branch", "--show-current"]), P1_BRANCH, "P1 certification must run on its dedicated branch");
+  // Local certification runs on the dedicated branch. GitHub Actions checks out
+  // pull requests detached, so use the trusted event ref there; once merged,
+  // main is the expected certified descendant.
+  const localBranch = git(["branch", "--show-current"]);
+  const ciBranch = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "";
+  if (localBranch) {
+    assert.equal(localBranch, P1_BRANCH, "P1 certification must run on its dedicated branch");
+  } else if (ciBranch && ciBranch !== "main") {
+    assert.equal(ciBranch, P1_BRANCH, "P1 pull-request certification must use its dedicated branch");
+  }
   assert.equal(git(["merge-base", "HEAD", P0_CERTIFIED_SHA]), P0_CERTIFIED_SHA, "P1 is not reconciled onto the certified P0 SHA");
   assert.equal(git(["rev-parse", `${P0_CERTIFIED_SHA}^`]), P1_BASELINE_SHA, "certified P0 does not descend from the recorded P1 baseline");
 
