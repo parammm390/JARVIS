@@ -58,6 +58,10 @@
     "release:migrate:production": "tsx scripts/release/migrate-production.ts",
     "recovery:preflight": "tsx scripts/recovery-preflight.ts",
     "tenant:data-inventory": "tsx scripts/tenant-data-inventory.ts",
+    "test:p0:contract": "vitest run tests/unit/p0-architecture-contract.test.ts tests/unit/p0-locked-replay.test.ts",
+    "test:p0:replay": "tsx scripts/p0/run-locked-replay.ts",
+    "p0:inventory": "tsx scripts/p0/generate-capability-inventory.ts --write && tsx scripts/p0/reference-inventory.ts --write",
+    "p0:certify": "tsx scripts/p0/certify.ts --run",
     "release:certify": "tsx scripts/release/run-release-certification.ts",
     "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts"
   },
