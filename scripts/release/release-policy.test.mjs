@@ -8,6 +8,7 @@ const sha = "a".repeat(40)
 const release = { ...expectedRelease(sha), traceable: true }
 const productionWorkflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
 const workerDeployScript = readFileSync(new URL("./azure/deploy-worker.sh", import.meta.url), "utf8")
+const ingressScript = readFileSync(new URL("./configure-azure-sse-ingress.mjs", import.meta.url), "utf8")
 
 test("production release from a non-main SHA is rejected", () => {
   assert.throws(() => assertCanonicalRelease({ head: sha, remoteMain: "b".repeat(40), dirty: "" }), /not canonical remote main/)
@@ -97,6 +98,14 @@ test("Azure worker verifies TLS over loopback and leaves public reachability to 
 test("production worker reserves interactive capacity", () => {
   assert.match(workerDeployScript, /WORKER_CONCURRENCY=2/)
   assert.match(workerDeployScript, /WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1/)
+})
+
+test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {
+  assert.match(ingressScript, /const transientCliFailure = \/.*_ModuleLock/)
+  assert.match(ingressScript, /deadlock detected/)
+  assert.match(ingressScript, /requests\\\.structures/)
+  assert.match(ingressScript, /for \(let attempt = 1; attempt <= 3; attempt\+\+\)/)
+  assert.match(ingressScript, /attempt === 3 \|\| !transientCliFailure\.test\(diagnostic\)/)
 })
 
 test("all deployed-certification credentials are required before the first production mutation", () => {

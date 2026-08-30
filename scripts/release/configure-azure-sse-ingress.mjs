@@ -12,10 +12,29 @@ if (!worker.sseGatewayEnabled || !worker.sseGatewayDnsLabel || !worker.sseGatewa
 }
 
 const az = process.env.AZURE_CLI || "az"
-const azText = (args) => execFileSync(az, [...args, "--only-show-errors", "-o", "tsv"], {
-  encoding: "utf8",
-  timeout: 5 * 60_000,
-}).trim()
+const transientCliFailure = /_ModuleLock|deadlock detected|requests\.structures/i
+const azText = (args) => {
+  let lastError
+  // Azure CLI is a Python process on the hosted runner.  Its Python 3.14
+  // requests import has a rare module-lock race; retry only that known
+  // transient failure so a real authorization/topology error still fails fast.
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return execFileSync(az, [...args, "--only-show-errors", "-o", "tsv"], {
+        encoding: "utf8",
+        timeout: 5 * 60_000,
+      }).trim()
+    } catch (error) {
+      lastError = error
+      const diagnostic = [error?.stdout, error?.stderr, error instanceof Error ? error.message : String(error)]
+        .filter((value) => typeof value === "string")
+        .join("\n")
+      if (attempt === 3 || !transientCliFailure.test(diagnostic)) throw error
+      execFileSync("sleep", [String(attempt)])
+    }
+  }
+  throw lastError
+}
 const azOptionalText = (args) => {
   try { return azText(args) } catch { return "" }
 }
