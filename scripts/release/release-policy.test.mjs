@@ -110,7 +110,10 @@ test("Azure ingress retries only the known hosted-CLI module-lock transient", ()
 })
 
 test("worker health contract exposes realtime capability", () => {
-  assert.match(workerGateway, /JSON\.stringify\(\{ ok: true, realtime: true, release \}\)/)
+  assert.match(workerGateway, /const capabilities = Array\.from\(new Set\(/)
+  assert.match(workerGateway, /["']realtime["']/)
+  assert.match(workerGateway, /["']sse["']/)
+  assert.match(workerGateway, /JSON\.stringify\(\{ ok: true, realtime: true, capabilities, release \}\)/)
 })
 
 test("all deployed-certification credentials are required before the first production mutation", () => {

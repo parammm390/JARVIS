@@ -155,6 +155,12 @@ export function createSseGateway(): http.Server {
     }
     if (req.method === "GET" && url.pathname === "/healthz") {
       const release = getRuntimeReleaseMetadata("finnor-worker");
+      const capabilities = Array.from(new Set([
+        ...(process.env.FINNOR_WORKER_CAPABILITIES ?? "jobs,orchestration,computer,event-wake,connection-health")
+          .split(",").map((value) => value.trim()).filter(Boolean),
+        "realtime",
+        "sse",
+      ]));
       res.writeHead(200, {
         "content-type": "application/json",
         "cache-control": "no-store, max-age=0",
@@ -166,7 +172,7 @@ export function createSseGateway(): http.Server {
       // Health is the deployment contract consumed by the Azure release guard.
       // Keep the explicit realtime capability here so a worker that only serves
       // the job loop cannot be mistaken for a ready SSE gateway.
-      res.end(JSON.stringify({ ok: true, realtime: true, release }));
+      res.end(JSON.stringify({ ok: true, realtime: true, capabilities, release }));
       return;
     }
     if (req.method === "GET" && url.pathname === "/events") {
