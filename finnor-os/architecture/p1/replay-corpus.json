@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "corpusId": "finnor-p0-plus-operational-ir-p1-v1",
+  "p1BaselineSha": "d87a256e87d9a2f4308135dd8383848a6b137b85",
+  "p0CertifiedSha": "507a75a73ef3faf93f492098a4e473feee608c7a",
+  "determinism": {
+    "liveLlm": false,
+    "liveProviders": false,
+    "network": false,
+    "fixedClock": "2026-08-30T04:00:00.000Z",
+    "fixedPropertySeed": 20260830
+  },
+  "p0Corpus": {
+    "manifest": "architecture/p0/replay-corpus.json",
+    "categoryCases": 24,
+    "selectorEntries": 40,
+    "uniqueSelectors": 40,
+    "corpusHash": "68383cc0070064ffa64935ada38bcb62f6435ff2633061c9c4bd3e1ada9faf4f"
+  },
+  "p1Extension": {
+    "manifest": "packages/operational-ir/fixtures/locked-cases.json",
+    "categoryCases": 31,
+    "selectorEntries": 71,
+    "uniqueSelectors": 70,
+    "corpusHash": "f14775c8982fd4be5a811c41540b352ee806b6b9fbc13baab3f6e3df6ac4739c"
+  },
+  "combined": {
+    "categoryCases": 55,
+    "selectorEntries": 111,
+    "uniqueSelectors": 110,
+    "corpusHash": "519a384f4537afb7b2cae9465fed98377956b5baa83cc2f7cda840575029f010"
+  }
+}
