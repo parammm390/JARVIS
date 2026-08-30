@@ -108,31 +108,45 @@ async function seedFixture(tenantId: string): Promise<void> {
      ON CONFLICT (id) DO NOTHING`,
     [tenantId, SEED_HOUSEHOLDS],
   );
+  // Keep the canonical parent insert separate from the child insert. PostgreSQL
+  // does not guarantee execution order between independent data-modifying CTEs;
+  // putting both in one WITH can therefore run the message trigger before its
+  // conversation exists and fail the tenant-scope guard on a fresh database.
   await pool.query(
-    `WITH conversation_rows AS (
-       INSERT INTO finnor_os.conversations(
-         id,tenant_id,household_id,channel,status,last_activity_at,source_system,external_id,created_by,created_at
-       )
-       SELECT md5($1::text || ':communication-conversation:' || n)::uuid,$1::uuid,
-         md5($1::text || ':household:' || n)::uuid,'email','closed',now()-interval '120 days',
-         'query_certification','conversation:' || n,'query-certification',now()-interval '120 days'
-       FROM generate_series(1,$2::int) AS n WHERE n%4=0
-       ON CONFLICT (id) DO NOTHING RETURNING id
-     ), message_rows AS (
-       INSERT INTO finnor_os.messages(
-         id,tenant_id,conversation_id,channel,direction,content,sent_at,source_system,external_id,created_by,created_at
-       )
-       SELECT md5($1::text || ':communication:' || n)::uuid,$1::uuid,
-         md5($1::text || ':communication-conversation:' || n)::uuid,
-         'email','inbound','certification activity',now()-interval '120 days',
-         'query_certification','message:' || n,'query-certification',now()-interval '120 days'
-       FROM generate_series(1,$2::int) AS n WHERE n%4=0
-       ON CONFLICT (id) DO NOTHING RETURNING id
+    `INSERT INTO finnor_os.conversations(
+       id,tenant_id,household_id,channel,status,last_activity_at,source_system,external_id,created_by,created_at
      )
-     INSERT INTO finnor_os.business_events(tenant_id,entity_type,entity_id,event_type,payload,source)
-     SELECT $1::uuid,'message',id,'message_recorded','{"certification":true}'::jsonb,'query_certification'
-     FROM message_rows`,
+     SELECT md5($1::text || ':communication-conversation:' || n)::uuid,$1::uuid,
+       md5($1::text || ':household:' || n)::uuid,'email','closed',now()-interval '120 days',
+       'query_certification','conversation:' || n,'query-certification',now()-interval '120 days'
+     FROM generate_series(1,$2::int) AS n WHERE n%4=0
+     ON CONFLICT (id) DO NOTHING`,
     [tenantId, SEED_HOUSEHOLDS],
+  );
+  await pool.query(
+    `INSERT INTO finnor_os.messages(
+       id,tenant_id,conversation_id,channel,direction,content,sent_at,source_system,external_id,created_by,created_at
+     )
+     SELECT md5($1::text || ':communication:' || n)::uuid,$1::uuid,
+       md5($1::text || ':communication-conversation:' || n)::uuid,
+       'email','inbound','certification activity',now()-interval '120 days',
+       'query_certification','message:' || n,'query-certification',now()-interval '120 days'
+     FROM generate_series(1,$2::int) AS n WHERE n%4=0
+     ON CONFLICT (id) DO NOTHING`,
+    [tenantId, SEED_HOUSEHOLDS],
+  );
+  await pool.query(
+    `INSERT INTO finnor_os.business_events(tenant_id,entity_type,entity_id,event_type,payload,source)
+     SELECT $1::uuid,'message',id,'message_recorded','{"certification":true}'::jsonb,'query_certification'
+     FROM finnor_os.messages
+     WHERE tenant_id=$1::uuid AND source_system='query_certification'
+       AND external_id LIKE 'message:%'
+       AND NOT EXISTS (
+         SELECT 1 FROM finnor_os.business_events
+         WHERE tenant_id=$1::uuid AND entity_type='message' AND entity_id=messages.id
+           AND event_type='message_recorded'
+       )`,
+    [tenantId],
   );
   await pool.query(
     `INSERT INTO finnor_os.service_visits (id, tenant_id, household_id, technician_id, type, scheduled_at, completed_at, notes)
