@@ -32,7 +32,12 @@ jobs:
       run:
         working-directory: .
     steps:
+      # P0/P1 certification compares against immutable historical SHAs. A shallow
+      # checkout makes those commits unavailable on pull-request merge refs and
+      # turns a valid certification into a false CI failure.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -60,7 +65,12 @@ jobs:
       REDIS_URL: redis://localhost:6379
       AUTH_DEV_BYPASS: "1"
     steps:
+      # P0/P1 certification compares against immutable historical SHAs. A shallow
+      # checkout makes those commits unavailable on pull-request merge refs and
+      # turns a valid certification into a false CI failure.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
