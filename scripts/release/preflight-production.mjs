@@ -77,9 +77,21 @@ if (!frontendProductionEnvNames.has("JARVIS_SSE_GATEWAY_URL")) {
 }
 
 const az = process.env.AZURE_CLI || "az"
+const AZURE_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
 function azJson(args) {
-  const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 })
-  return JSON.parse(output)
+  try {
+    const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: AZURE_COMMAND_TIMEOUT_MS,
+    })
+    return JSON.parse(output)
+  } catch (error) {
+    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+    const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+    throw new Error(`Azure preflight command failed:\n${diagnostic}`, { cause: error })
+  }
 }
 
 const worker = contract.topology.worker

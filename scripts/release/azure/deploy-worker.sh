@@ -40,7 +40,7 @@ run_bounded() {
     step_budget="$remaining"
   fi
   echo "FINNOR_AZURE_STEP_START ${label} budget=${step_budget}s" >&2
-  if timeout --foreground --signal=TERM --kill-after=30s "${step_budget}s" "$@"; then
+  if timeout --signal=TERM --kill-after=30s "${step_budget}s" "$@"; then
     echo "FINNOR_AZURE_STEP_OK ${label}" >&2
     return 0
   else
@@ -109,7 +109,7 @@ rollback() {
       if [ -n "$previous_target" ]; then
         ln -sfn "$previous_target" "$next_link"
         mv -Tf "$next_link" "$current_link"
-        timeout --foreground --signal=TERM --kill-after=30s 60s systemctl restart "$unit_name" || true
+        timeout --signal=TERM --kill-after=30s 60s systemctl restart "$unit_name" || true
       else
         systemctl stop "$unit_name" || true
         rm -f "$current_link"

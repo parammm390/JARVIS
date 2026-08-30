@@ -251,7 +251,11 @@ function submissionFromWorkAggregate(value: unknown): DurableSubmissionSnapshot 
     : null
   if (!response) return empty
   const storedModel = typeof response.executionModel === "string" ? response.executionModel.toUpperCase() : ""
-  const planned = (["ATOMIC_ACTION", "ATOMIC_EFFECT", "CLARIFY"] as string[]).includes(storedModel) && Array.isArray(response.actions)
+  // The durable projector normalizes the legacy rolling-deploy value before it
+  // reaches the UI. Duplicate replay must likewise consume only the canonical
+  // action vocabulary; an old response is re-read from canonical Work instead
+  // of being advertised as a current ATOMIC_EFFECT operation.
+  const planned = (["ATOMIC_ACTION", "CLARIFY"] as string[]).includes(storedModel) && Array.isArray(response.actions)
     ? response.actions.filter((row): row is PlannedActionResponse => {
         if (!row || typeof row !== "object" || Array.isArray(row)) return false
         const candidate = row as Record<string, unknown>

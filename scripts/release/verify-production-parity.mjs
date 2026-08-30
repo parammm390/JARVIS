@@ -88,15 +88,23 @@ test "$(sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${e
 grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentFile}'
 echo FINNOR_AZURE_PARITY_OK`
 const az = process.env.AZURE_CLI || "az"
-const azureRaw = execFileSync(az, [
-  "vm", "run-command", "invoke",
-  "--resource-group", worker.resourceGroup,
-  "--name", worker.resourceName,
-  "--command-id", "RunShellScript",
-  "--scripts", azureVerifyScript,
-  "--only-show-errors",
-  "-o", "json",
-], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 })
+let azureRaw
+try {
+  azureRaw = execFileSync(az, [
+    "vm", "run-command", "invoke",
+    "--resource-group", worker.resourceGroup,
+    "--name", worker.resourceName,
+    "--command-id", "RunShellScript",
+    "--scripts", azureVerifyScript,
+    "--only-show-errors",
+    "-o", "json",
+  ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60 * 1000 })
+} catch (error) {
+  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+  const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+  throw new Error(`Azure parity command failed:\n${diagnostic}`, { cause: error })
+}
 const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)

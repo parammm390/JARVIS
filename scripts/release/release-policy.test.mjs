@@ -108,7 +108,15 @@ test("Azure worker deployment bounds remote package and ingress operations", () 
   assert.match(workerDeployScript, /run_bounded "npm-ci" 900/)
   assert.match(workerDeployScript, /run_bounded "apt-install-ingress" 600/)
   assert.match(workerDeployScript, /run_bounded "certbot" 300/)
-  assert.match(workerDeployScript, /timeout --foreground --signal=TERM --kill-after=30s/)
+  assert.match(workerDeployScript, /timeout --signal=TERM --kill-after=30s/)
+})
+
+test("Azure preflight and parity probes have bounded RunCommand clients", () => {
+  const preflight = readFileSync(new URL("./preflight-production.mjs", import.meta.url), "utf8")
+  const parity = readFileSync(new URL("./verify-production-parity.mjs", import.meta.url), "utf8")
+  assert.match(preflight, /AZURE_COMMAND_TIMEOUT_MS = 5 \* 60 \* 1000/)
+  assert.match(preflight, /timeout: AZURE_COMMAND_TIMEOUT_MS/)
+  assert.match(parity, /timeout: 5 \* 60 \* 1000/)
 })
 
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {
