@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import { readFile, readdir } from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 import {
@@ -27,7 +27,7 @@ import {
 import { WORK_STATUSES } from "../../packages/db/index";
 import { buildCapabilityInventory } from "./generate-capability-inventory";
 import { buildReferenceInventory, REFERENCE_PATTERNS } from "./reference-inventory";
-import { BASELINE_SHA, deterministicHash, P0_BRANCH, P0_RUNTIME_CORRECTION_PATHS, readJson } from "./lib";
+import { BASELINE_SHA, deterministicHash, P0_BRANCH, P0_CERTIFIED_SHA, P0_RUNTIME_CORRECTION_PATHS, readJson } from "./lib";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDirectory, "../..");
@@ -132,16 +132,14 @@ function normalizeChangedPath(path: string): string {
 }
 
 function changedPaths(): string[] {
-  const committed = git(["diff", "--name-only", BASELINE_SHA, "--", "finnor-os"])
+  const committed = git(["diff", "--name-only", BASELINE_SHA, P0_CERTIFIED_SHA, "--", "finnor-os"])
     .split("\n").filter(Boolean).map(normalizeChangedPath);
-  const status = git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
-    .split("\n").filter(Boolean)
-    .map((line) => normalizeChangedPath(line.slice(3).split(" -> ").at(-1)!));
-  return [...new Set([...committed, ...status])].sort();
+  return [...new Set(committed)].sort();
 }
 
 function validateChangeScope(): string[] {
   assert.equal(git(["merge-base", "--is-ancestor", BASELINE_SHA, "HEAD"]) === "", true, "baseline SHA is not an ancestor of HEAD");
+  assert.equal(git(["merge-base", "--is-ancestor", P0_CERTIFIED_SHA, "HEAD"]) === "", true, "certified P0 SHA is not an ancestor of HEAD");
   assert.equal(git(["branch", "--show-current"], root), P0_BRANCH, "P0 must run on its dedicated branch");
   const paths = changedPaths();
   const allowed = paths.filter((path) =>
@@ -266,20 +264,6 @@ async function validateReplay(manifest: ReplayManifest): Promise<void> {
   }
 }
 
-async function packageJsonPaths(directory: string): Promise<string[]> {
-  const paths: string[] = [];
-  const walk = async (current: string) => {
-    for (const entry of await readdir(current, { withFileTypes: true })) {
-      if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
-      const path = join(current, entry.name);
-      if (entry.isDirectory()) await walk(path);
-      else if (entry.name === "package.json") paths.push(path);
-    }
-  };
-  await walk(directory);
-  return paths.sort();
-}
-
 type PackageGraph = Map<string, string[]>;
 function graphCycles(graph: PackageGraph): string[][] {
   const visiting = new Set<string>();
@@ -302,16 +286,19 @@ function graphCycles(graph: PackageGraph): string[][] {
 }
 
 async function packageGraphs(): Promise<{ baseline: PackageGraph; current: PackageGraph }> {
-  const paths = await packageJsonPaths(root);
+  const paths = git(["ls-tree", "-r", "--name-only", P0_CERTIFIED_SHA, "--", "finnor-os"])
+    .split("\n")
+    .filter((path) => path.endsWith("/package.json"))
+    .map((path) => path.replace(/^finnor-os\//, ""))
+    .sort();
   const current = new Map<string, string[]>();
   const baseline = new Map<string, string[]>();
   for (const path of paths) {
-    const relativePath = relative(root, path);
-    const currentJson = JSON.parse(await readFile(path, "utf8")) as { name?: string; dependencies?: JsonObject; devDependencies?: JsonObject; peerDependencies?: JsonObject };
+    const currentJson = JSON.parse(git(["show", `${P0_CERTIFIED_SHA}:finnor-os/${path}`])) as { name?: string; dependencies?: JsonObject; devDependencies?: JsonObject; peerDependencies?: JsonObject };
     if (!currentJson.name) continue;
     const dependencies = Object.keys({ ...currentJson.dependencies, ...currentJson.devDependencies, ...currentJson.peerDependencies }).filter((name) => name.startsWith("@finnor/"));
     current.set(currentJson.name, dependencies.sort());
-    const baselineText = git(["show", `${BASELINE_SHA}:finnor-os/${relativePath}`]);
+    const baselineText = git(["show", `${BASELINE_SHA}:finnor-os/${path}`]);
     const baselineJson = JSON.parse(baselineText) as typeof currentJson;
     const baselineDependencies = Object.keys({ ...baselineJson.dependencies, ...baselineJson.devDependencies, ...baselineJson.peerDependencies }).filter((name) => name.startsWith("@finnor/"));
     baseline.set(baselineJson.name!, baselineDependencies.sort());

@@ -23,6 +23,7 @@
     "test:p1:locked": "tsx scripts/p1/run-locked-replay.ts",
     "test:p1:db": "tsx scripts/p1/run-ephemeral-db-tests.ts tests/integration/client-lifecycle.test.ts",
     "test:p1:release-contract": "tsx scripts/p1/run-ephemeral-db-tests.ts --npm-script=release:contract",
+    "test:full:ephemeral": "tsx scripts/p1/run-ephemeral-db-tests.ts --npm-script=test",
     "test:live:steel": "vitest run tests/live/steel-provider.live.test.ts",
     "test:planner-evals": "vitest run tests/planner-evals",
     "eval:planner:live": "tsx scripts/eval-planner.ts",

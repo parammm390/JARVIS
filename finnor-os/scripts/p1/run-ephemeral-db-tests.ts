@@ -9,7 +9,7 @@ import EmbeddedPostgres from "embedded-postgres";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const npmScript = process.argv.find((argument) => argument.startsWith("--npm-script="))?.slice("--npm-script=".length);
 const files = process.argv.slice(2).filter((argument) => !argument.startsWith("--"));
-const allowedNpmScripts = new Set(["release:contract"]);
+const allowedNpmScripts = new Set(["release:contract", "test"]);
 if (npmScript && !allowedNpmScripts.has(npmScript)) throw new Error(`Unsupported ephemeral DB npm script: ${npmScript}`);
 if (!npmScript && (files.length === 0 || files.some((file) => !/^tests\/(?:integration|unit)\/[a-z0-9._/-]+\.test\.ts$/i.test(file)))) {
   throw new Error("Pass explicit test paths or an allowlisted --npm-script value");
@@ -47,7 +47,7 @@ async function main(): Promise<void> {
       DATABASE_URL: databaseUrl,
       MIGRATIONS_DATABASE_URL: databaseUrl,
       AUTH_DEV_BYPASS: "1",
-      ...(npmScript === "release:contract" ? {
+      ...(["release:contract", "test"].includes(npmScript ?? "") ? {
         CERTIFICATION_SEED_ALLOWED: "1",
         CERTIFICATION_TEST_EMAILS: "certification@example.invalid",
         CERTIFICATION_TEST_PHONES: "+15550000001",
@@ -59,31 +59,31 @@ async function main(): Promise<void> {
       if (/^(OPENAI|ANTHROPIC|GROQ|BEDROCK|AWS_|VAPI|GHL|QUICKBOOKS|STRIPE|DOCUSIGN|EXA|FIRECRAWL|VOYAGE|ZEP|STEEL|SENTRY)/i.test(key)) delete environment[key];
       if (["POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "SUPABASE_DB_URL"].includes(key)) delete environment[key];
     }
-    if (npmScript) {
-      if (npmScript === "release:contract") {
-        const manifest = spawnSync("npm", ["run", "release:manifest"], {
-          cwd: root,
-          env: environment,
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "pipe"],
-          maxBuffer: 64 * 1024 * 1024,
-        });
-        process.stdout.write(manifest.stdout ?? "");
-        process.stderr.write(manifest.stderr ?? "");
-        if (manifest.error) throw manifest.error;
-        if (manifest.status !== 0) throw new Error(`Action manifest generation failed with exit code ${manifest.status}`);
-      }
-      const migration = spawnSync("npm", ["run", "db:migrate"], {
+    if (npmScript === "release:contract") {
+      const manifest = spawnSync("npm", ["run", "release:manifest"], {
         cwd: root,
         env: environment,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
         maxBuffer: 64 * 1024 * 1024,
       });
-      process.stdout.write(migration.stdout ?? "");
-      process.stderr.write(migration.stderr ?? "");
-      if (migration.error) throw migration.error;
-      if (migration.status !== 0) throw new Error(`Ephemeral DB migration failed with exit code ${migration.status}`);
+      process.stdout.write(manifest.stdout ?? "");
+      process.stderr.write(manifest.stderr ?? "");
+      if (manifest.error) throw manifest.error;
+      if (manifest.status !== 0) throw new Error(`Action manifest generation failed with exit code ${manifest.status}`);
+    }
+    for (const [label, script] of [["migration", "db:migrate"], ["LangGraph setup", "setup:langgraph"]] as const) {
+      const setup = spawnSync("npm", ["run", script], {
+        cwd: root,
+        env: environment,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      process.stdout.write(setup.stdout ?? "");
+      process.stderr.write(setup.stderr ?? "");
+      if (setup.error) throw setup.error;
+      if (setup.status !== 0) throw new Error(`Ephemeral DB ${label} failed with exit code ${setup.status}`);
     }
     const command = npmScript ? "npm" : process.execPath;
     const args = npmScript

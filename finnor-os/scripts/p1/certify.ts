@@ -94,6 +94,9 @@ function validateReconciliationAndScope(): string[] {
     || path === "vitest.config.ts"
     || path.startsWith("architecture/p1/")
     || path.startsWith("scripts/p1/")
+    || path === "scripts/p0/certify.ts"
+    || path === "scripts/p0/lib.ts"
+    || path === "scripts/p0/reference-inventory.ts"
     || path.startsWith("packages/operational-ir/")
     || path === "packages/orchestration/package.json"
     || path === "packages/orchestration/src/index.ts"
@@ -104,7 +107,6 @@ function validateReconciliationAndScope(): string[] {
 
   const protectedPaths = [
     "finnor-os/architecture/p0",
-    "finnor-os/scripts/p0",
     "finnor-os/packages/db",
     "finnor-os/packages/authority",
     "finnor-os/packages/workflow-runtime",

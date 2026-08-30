@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { BASELINE_SHA, P0_BRANCH, P0_RUNTIME_CORRECTION_PATHS } from "./lib";
+import { BASELINE_SHA, P0_BRANCH, P0_CERTIFIED_SHA, P0_RUNTIME_CORRECTION_PATHS } from "./lib";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDirectory, "../..");
@@ -53,10 +53,10 @@ function commandLines(command: string, args: string[]): string[] {
   }
 }
 
-function summarize(lines: string[], baseline: boolean): ScopeSummary {
+function summarize(lines: string[], gitRef?: string): ScopeSummary {
   const counts = new Map<string, number>();
   for (const line of lines) {
-    const normalized = baseline ? line.replace(new RegExp(`^${BASELINE_SHA}:`), "") : line;
+    const normalized = gitRef ? line.replace(new RegExp(`^${gitRef}:`), "") : line;
     const match = normalized.match(/^(.+?):\d+:/);
     if (!match) throw new Error(`Cannot parse reference line: ${line}`);
     counts.set(match[1]!, (counts.get(match[1]!) ?? 0) + 1);
@@ -66,11 +66,11 @@ function summarize(lines: string[], baseline: boolean): ScopeSummary {
 }
 
 function baselineMatches(pattern: string, paths: string[]): ScopeSummary {
-  return summarize(commandLines("git", ["grep", "-n", "-E", pattern, BASELINE_SHA, "--", ...paths]), true);
+  return summarize(commandLines("git", ["grep", "-n", "-E", pattern, BASELINE_SHA, "--", ...paths]), BASELINE_SHA);
 }
 
-function currentMatches(pattern: string, paths: string[]): ScopeSummary {
-  return summarize(commandLines("rg", ["-n", "--no-heading", "--color", "never", "-g", "*.ts", "-g", "*.tsx", "-g", "*.js", "-g", "*.mjs", "-g", "*.sql", "-g", "*.json", pattern, ...paths]), false);
+function certifiedMatches(pattern: string, paths: string[]): ScopeSummary {
+  return summarize(commandLines("git", ["grep", "-n", "-E", pattern, P0_CERTIFIED_SHA, "--", ...paths]), P0_CERTIFIED_SHA);
 }
 
 function movedFiles(pre: ScopeSummary, post: ScopeSummary): string[] {
@@ -84,9 +84,9 @@ function movedFiles(pre: ScopeSummary, post: ScopeSummary): string[] {
 export function buildReferenceInventory() {
   const concepts = Object.entries(REFERENCE_PATTERNS).map(([concept, pattern]) => {
     const productionPre = baselineMatches(pattern, ["apps", "packages"]);
-    const productionPost = currentMatches(pattern, ["apps", "packages"]);
+    const productionPost = certifiedMatches(pattern, ["apps", "packages"]);
     const assurancePre = baselineMatches(pattern, ["scripts", "tests"]);
-    const assurancePost = currentMatches(pattern, ["scripts", "tests"]);
+    const assurancePost = certifiedMatches(pattern, ["scripts", "tests"]);
     const productionChangedFiles = movedFiles(productionPre, productionPost);
     const unexpectedProductionChangedFiles = productionChangedFiles.filter((path) => !P0_RUNTIME_CORRECTION_PATHS.includes(path as typeof P0_RUNTIME_CORRECTION_PATHS[number]));
     return {

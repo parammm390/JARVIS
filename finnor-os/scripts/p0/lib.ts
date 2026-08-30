@@ -6,6 +6,9 @@ import { readFile } from "node:fs/promises";
  * separately; this certification is anchored to the Human Compiler substrate
  * that is actually being released. */
 export const BASELINE_SHA = "d87a256e87d9a2f4308135dd8383848a6b137b85";
+/** Immutable commit produced by the P0 reconciliation. Descendant phases certify
+ * this exact diff instead of incorrectly folding their own files into P0. */
+export const P0_CERTIFIED_SHA = "507a75a73ef3faf93f492098a4e473feee608c7a";
 export const P0_BRANCH = "codex/three-phase-production-closure";
 export const P0_RUNTIME_CORRECTION_PATHS: readonly string[] = [];
 
