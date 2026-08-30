@@ -81,6 +81,17 @@ describe("normalized semantic diff", () => {
     ]));
   });
 
+  it("fails a changed Operational Query request as REGRESSION", () => {
+    const query = queryProgram();
+    const legacy = semanticSnapshotFromOperationalProgram(query);
+    const changed = cloneSnapshot(legacy);
+    changed.queryIntents = ['{"request":{"intent":"business_state"}}'];
+    expect(compareSemanticSnapshots({ legacy, ir: changed })).toMatchObject({
+      classification: "REGRESSION",
+      reasonCodes: ["semantic_mismatch:queryIntents"],
+    });
+  });
+
   it("classifies unsupported and invalid seams explicitly", () => {
     expect(compareSemanticSnapshots({ fixtureValid: false })).toMatchObject({ classification: "FIXTURE_INVALID" });
     expect(compareSemanticSnapshots({ legacyStatus: "UNSUPPORTED", irStatus: "SUPPORTED", ir: baseline })).toMatchObject({ classification: "LEGACY_UNSUPPORTED" });

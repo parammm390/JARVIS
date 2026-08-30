@@ -10,6 +10,7 @@
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
     "@finnor/memory": "*",
+    "@finnor/operational-ir": "*",
     "@finnor/policy-schema": "*",
     "@finnor/plugins-shared": "*",
     "@finnor/read-models": "*",

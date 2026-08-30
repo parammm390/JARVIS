@@ -49,6 +49,11 @@ Every `OperationalProgram` contains:
 - a structural body composed from `Query`, planning-level `Effect`, `Sequence`,
   `Parallel`, `Branch`, `Wait`, and `Compensation`.
 
+`OperationalProgram` is P1's only independently serialized IR artifact. Nested
+Goal/node/evidence values are AST members and cannot be emitted as standalone
+versioned artifacts; every actual IR artifact therefore carries the four root
+version/provenance/hash fields above.
+
 Constraints are exactly `HARD` or `SOFT`. A statically known violated HARD
 constraint is rejected; it is never converted into a score. Entity references
 are `resolved`, `unresolved`, or `ambiguous`. They contain canonical entity
@@ -129,18 +134,19 @@ The lowerer produces an in-memory plan only:
 - multi-step Sequence/Parallel/Branch/Compensation OBJECTIVE -> `UNSUPPORTED`
   until a later phase owns program execution/search semantics.
 
-It preserves an IR sidecar containing the Goal, HARD constraints, expected
-observations, success condition, provenance, and IR hash. The returned invariant
-flags prove that it does not authorize, execute, persist, select a provider,
-compile a BusinessEffect, derive idempotency, bypass grounding, or weaken
-verification.
+It preserves an IR sidecar containing execution model, Goal, HARD constraints,
+entities, scope, structural body, expected observations, success condition,
+provenance, and IR hash. The returned invariant flags prove that it does not
+authorize, execute, persist, select a provider, compile a BusinessEffect, derive
+idempotency, bypass grounding, or weaken verification.
 
 ## Semantic diff and pure shadow mode
 
 Semantic comparison normalizes and compares execution model, canonical targets,
-scope/exclusions, Goal, effect intent, dependencies, HARD constraints, required
-capabilities, expected observations, success condition, compensation, and
-consequential classification. It does not compare raw artifact JSON.
+scope/exclusions, Goal, exact Operational Query request intent, effect intent,
+dependencies, HARD constraints, required capabilities, expected observations,
+success condition, compensation, and consequential classification. It does not
+compare raw artifact JSON.
 
 Results are exactly `EQUIVALENT`, `EXPECTED_IMPROVEMENT`, `REGRESSION`,
 `LEGACY_UNSUPPORTED`, `IR_UNSUPPORTED`, or `FIXTURE_INVALID`. Only additive
@@ -157,6 +163,15 @@ existing route/planner/controller candidate plus its explicit same-candidate
 semantic envelope becomes IR, is validated, is compatibility-lowered, and is
 semantically compared. Unsupported and conversation seams are recorded without
 constructing an executable program.
+
+After reconciliation with certified P0, orchestration wires this pipeline into
+the lossless QUERY seam. It consumes the already-produced
+`InstructionRouteDecision` and `OperationalQueryInterpretation`, validates and
+lowers IR back to the exact `OperationalQueryRequest`, and logs only a redacted
+diff/hash summary before the unchanged query path executes. The hook contains all
+shadow and logging failures, makes no second model call, and has no business-state
+mutation interface. Atomic and Objective action shadowing remains unsupported
+until the same planner candidate carries explicit desired-state semantics.
 
 ## Dependency boundary
 

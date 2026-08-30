@@ -44,6 +44,7 @@ const REQUIRED_CASES = [
   "semantic_diff",
   "shadow_no_mutation",
   "verification_nonweakening",
+  "production_query_shadow",
 ] as const;
 
 interface CorpusManifest {
@@ -80,8 +81,8 @@ describe("P1 locked deterministic Operational IR corpus", () => {
     }));
     expect(manifest.cases.map((entry) => entry.id).sort()).toEqual([...REQUIRED_CASES].sort());
     expect(new Set(manifest.cases.map((entry) => entry.id)).size).toBe(manifest.cases.length);
-    expect(manifest.cases).toHaveLength(30);
-    expect(manifest.cases.reduce((count, entry) => count + entry.selectors.length, 0)).toBe(62);
+    expect(manifest.cases).toHaveLength(31);
+    expect(manifest.cases.reduce((count, entry) => count + entry.selectors.length, 0)).toBe(70);
     for (const entry of manifest.cases) {
       expect(entry.selectors.length, entry.id).toBeGreaterThan(0);
       for (const selector of entry.selectors) {

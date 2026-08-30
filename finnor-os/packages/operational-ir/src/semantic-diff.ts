@@ -1,5 +1,5 @@
 import { canonicalizeIrFragment, canonicalSerialize } from "./canonical";
-import type { Effect, EntityRef, OperationalProgram, ProgramNode } from "./contracts";
+import type { Effect, EntityRef, OperationalProgram, ProgramNode, Query } from "./contracts";
 import { analyzeProgramGraph } from "./graph";
 
 export const SEMANTIC_DIFF_CLASSIFICATIONS = [
@@ -26,6 +26,10 @@ export interface SemanticSnapshot {
   canonicalTargets: string[];
   scope: SemanticScopeSnapshot;
   goal: string;
+  /** Exact tenant-less requests delegated to the existing Operational Query
+   * Plane. A changed read intent or selector is therefore never hidden by equal
+   * Goal prose. */
+  queryIntents: string[];
   effectIntents: string[];
   dependencies: string[];
   hardConstraints: string[];
@@ -99,6 +103,7 @@ function compensationNodes(node: ProgramNode): Array<Extract<ProgramNode, { kind
 export function semanticSnapshotFromOperationalProgram(program: OperationalProgram): SemanticSnapshot {
   const graph = analyzeProgramGraph(program.body);
   const entityById = new Map(program.entities.map((entity) => [entity.semanticId, entity]));
+  const queries = [...graph.nodes.values()].filter((node): node is typeof node & { node: Query } => node.kind === "query");
   const effects = [...graph.nodes.values()].filter((node): node is typeof node & { node: Effect } => node.kind === "effect");
   const ordinaryEffects = effects.filter((node) => !node.compensationForEffectId);
   const targetKeys = ordinaryEffects.flatMap(({ node }) => node.targets.map((target) => entityKey(entityById.get(target.entityRef), target.entityRef)));
@@ -117,6 +122,7 @@ export function semanticSnapshotFromOperationalProgram(program: OperationalProgr
       cohortQueryRef: program.scope.cohortQueryRef ?? null,
     },
     goal: canonicalSerialize(canonicalizeIrFragment({ statement: program.goal.statement, predicate: program.goal.predicate, subjects: program.goal.subjectRefs.map(scopeKey) })),
+    queryIntents: sorted(queries.map(({ node }) => canonicalSerialize(canonicalizeIrFragment({ request: node.request })))),
     effectIntents: sorted(ordinaryEffects.map(({ node }) => effectSnapshot(node, entityById))),
     dependencies: sorted(graph.edges
       .filter((edge) => graph.nodes.has(edge.from) && graph.nodes.has(edge.to))
@@ -173,6 +179,7 @@ export function compareSemanticSnapshots(input: SemanticComparisonInput): Semant
   exactField("executionModel");
   exactField("canonicalTargets");
   exactField("goal");
+  exactField("queryIntents");
   exactField("effectIntents");
   exactField("dependencies");
   exactField("requiredCapabilities");

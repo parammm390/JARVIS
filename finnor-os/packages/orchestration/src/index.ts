@@ -58,9 +58,10 @@ import {
   type ObjectiveDecisionPlanner,
   type StartObjectiveOptions,
 } from "./objective-loop";
-import { finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
+import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
 import { assertCompiledHumanOperation, compileHumanInstructionRoute, compileTypedHumanOperation } from "./human-operating-compiler";
 import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
+import { observeOperationalQueryIrShadow } from "./operational-ir-shadow";
 
 export * from "./llm";
 export * from "./planner";
@@ -98,6 +99,7 @@ export * from "./user-capability-registry";
 export * from "./dealer-zero-preconditions";
 export * from "./human-operability-matrix";
 export * from "./human-operating-compiler";
+export * from "./operational-ir-shadow";
 export * from "./objective-success";
 export * from "./external-observation";
 export * from "./conversation-kernel";
@@ -650,6 +652,14 @@ export class FinnorOrchestrator implements Orchestrator {
         reasonCodes: instructionRoute.reasonCodes,
       }, { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "CONVERSATION" ? "conversation" : instructionRoute.route === "ATOMIC_ACTION" ? "atomic_action" : instructionRoute.route === "CLARIFY" ? "clarify" : "objective", expectedWorkInputId: workInputId });
       if (instructionRoute.route === "QUERY" && routeReadDecision.route === "fast_read" && this.fastReadOnlyRouter.execute) {
+        observeOperationalQueryIrShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: new Date().toISOString(),
+        });
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
           instruction,

@@ -242,6 +242,7 @@
       "selectors": [
         { "file": "packages/operational-ir/src/semantic-shadow.test.ts", "title": "classifies only restrictive additions as EXPECTED_IMPROVEMENT" },
         { "file": "packages/operational-ir/src/semantic-shadow.test.ts", "title": "fails target, effect, capability, and verification weakening as REGRESSION" },
+        { "file": "packages/operational-ir/src/semantic-shadow.test.ts", "title": "fails a changed Operational Query request as REGRESSION" },
         { "file": "packages/operational-ir/src/semantic-shadow.test.ts", "title": "classifies unsupported and invalid seams explicitly" }
       ]
     },
@@ -263,7 +264,20 @@
         { "file": "packages/operational-ir/src/validation.test.ts", "title": "rejects a supplemental observation used as an Effect's expected proof" },
         { "file": "packages/operational-ir/src/semantic-shadow.test.ts", "title": "fails target, effect, capability, and verification weakening as REGRESSION" }
       ]
+    },
+    {
+      "id": "production_query_shadow",
+      "category": "production-wired same-candidate query shadow with contained recording",
+      "selectors": [
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "uses the same route candidate, validates, lowers exactly, and records EQUIVALENT with zero mutations" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "keeps semantic hash stable across provenance timestamps and ids" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "normalizes object-key ordering without changing candidate or IR hashes" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "represents an unresolved text entity explicitly instead of guessing" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "rejects a forged tenant selector before lowering" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "contains recorder failures and never exposes raw query selectors in the logged summary" },
+        { "file": "packages/orchestration/src/operational-ir-shadow.test.ts", "title": "has no model, provider, authority, persistence, or execution callback seam" }
+      ]
     }
   ],
-  "corpusHash": "26bc36a0cda5b12fcada66532b62d754bd98858fccd0468c57ddd4018ecb87d0"
+  "corpusHash": "2efea961984d5a1b819dd85aa4001c414bac779353023ab4ea7cfd1df86fada1"
 }
