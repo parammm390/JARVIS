@@ -9,6 +9,7 @@ const release = { ...expectedRelease(sha), traceable: true }
 const productionWorkflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
 const workerDeployScript = readFileSync(new URL("./azure/deploy-worker.sh", import.meta.url), "utf8")
 const ingressScript = readFileSync(new URL("./configure-azure-sse-ingress.mjs", import.meta.url), "utf8")
+const workerGateway = readFileSync(new URL("../../finnor-os/apps/worker/src/sse/gateway.ts", import.meta.url), "utf8")
 
 test("production release from a non-main SHA is rejected", () => {
   assert.throws(() => assertCanonicalRelease({ head: sha, remoteMain: "b".repeat(40), dirty: "" }), /not canonical remote main/)
@@ -106,6 +107,10 @@ test("Azure ingress retries only the known hosted-CLI module-lock transient", ()
   assert.match(ingressScript, /requests\\\.structures/)
   assert.match(ingressScript, /for \(let attempt = 1; attempt <= 3; attempt\+\+\)/)
   assert.match(ingressScript, /attempt === 3 \|\| !transientCliFailure\.test\(diagnostic\)/)
+})
+
+test("worker health contract exposes realtime capability", () => {
+  assert.match(workerGateway, /JSON\.stringify\(\{ ok: true, realtime: true, release \}\)/)
 })
 
 test("all deployed-certification credentials are required before the first production mutation", () => {
