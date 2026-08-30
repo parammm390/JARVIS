@@ -93,6 +93,11 @@ FINNOR_SSE_GATEWAY_ENABLED=1
 # machine secrets and make this capacity contract deterministic.
 WORKER_CONCURRENCY=2
 WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1
+# The queue, auth resolver, and tenant-wide SSE gateway share this long-lived
+# process. Keep four bounded sessions so a slow Objective transaction cannot
+# starve an interactive command or the realtime read lane; Vercel/API callers
+# retain the conservative one-session default.
+FINNOR_DB_POOL_MAX=4
 SSE_PORT=$sse_port
 JARVIS_SSE_ALLOWED_ORIGINS=https://finnorai.com
 # The embedded worker also owns the operational SSE gateway.

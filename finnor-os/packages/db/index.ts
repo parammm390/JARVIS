@@ -47,7 +47,9 @@ export function pgConnectionConfig(url: string): pg.ClientConfig {
  * pooled resource, exactly like Supabase's Supavisor pooler already was. A generous
  * per-invocation `max` against a shared pool multiplies with every concurrent
  * serverless invocation — under real load this starved PgBouncer's own pool far faster
- * than raising PgBouncer's pool size alone could fix.
+ * than raising PgBouncer's pool size alone could fix. A long-lived worker is the one
+ * deliberate exception: its queue, auth resolver, and SSE gateway share one process,
+ * so its release-owned FINNOR_DB_POOL_MAX value gives those lanes independent slots.
  */
 function isUnpooledLocal(url: string): boolean {
   return url.includes("localhost") || url.includes("127.0.0.1");
@@ -78,12 +80,17 @@ export function getPool(): pg.Pool {
     // connection — required because we set search_path per session, which a transaction-
     // mode pooler would reset between clients. We run our own small pg.Pool regardless.
     const cfg = pgConnectionConfig(url);
-    // Every session-mode pooler this app talks to caps total concurrent backend connections
-    // low relative to how many serverless invocations can run at once. A generous
-    // per-invocation max against a shared pool multiplies with concurrency and starves
-    // it fast — only a genuinely unshared localhost/127.0.0.1 target gets to be
-    // generous. See isUnpooledLocal()'s own comment for the real bug this fixed.
+    // Every session-mode pooler this app talks to caps total concurrent backend
+    // connections low relative to how many serverless invocations can run at once. A
+    // generous per-invocation max against a shared pool multiplies with concurrency and
+    // starves it fast. Serverless callers therefore keep the conservative default of one;
+    // the long-lived worker sets FINNOR_DB_POOL_MAX explicitly so a slow Objective
+    // transaction cannot block auth or the operational SSE lane.
     const unpooledLocal = isUnpooledLocal(url);
+    const configuredMax = Number(process.env.FINNOR_DB_POOL_MAX);
+    const max = Number.isSafeInteger(configuredMax) && configuredMax >= 1
+      ? Math.min(configuredMax, unpooledLocal ? 10 : 4)
+      : unpooledLocal ? 10 : 1;
     // The REAL root cause found running Task 6.4's load test at scale, 2026-07-20 --
     // not pool size, a missing timeout. Neither `connectionTimeoutMillis` nor a
     // statement_timeout was ever set, so node-postgres's default is "wait forever" for
@@ -110,8 +117,9 @@ export function getPool(): pg.Pool {
       // Vercel can run enough API instances concurrently that even two sessions per
       // instance exhaust Supavisor's 40-session production pool (observed as
       // EMAXCONNSESSION under Bridge polling). Production functions therefore use
-      // one short-lived session each; localhost/CI remains intentionally generous.
-      max: unpooledLocal ? 10 : 1,
+      // one short-lived session each by default; the release-owned worker override is
+      // bounded at four so its independent queue/SSE lanes cannot starve one another.
+      max,
       idleTimeoutMillis,
       // CI and local test runners must fail with a real connection error when their
       // disposable database is unavailable. Leaving localhost unbounded made Vitest

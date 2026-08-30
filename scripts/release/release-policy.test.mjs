@@ -99,6 +99,7 @@ test("Azure worker verifies TLS over loopback and leaves public reachability to 
 test("production worker reserves interactive capacity", () => {
   assert.match(workerDeployScript, /WORKER_CONCURRENCY=2/)
   assert.match(workerDeployScript, /WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1/)
+  assert.match(workerDeployScript, /FINNOR_DB_POOL_MAX=4/)
 })
 
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {
