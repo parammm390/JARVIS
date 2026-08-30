@@ -15,7 +15,48 @@ sse_port="__FINNOR_SSE_PORT__"
 sse_hostname="__FINNOR_SSE_HOSTNAME__"
 
 [[ "$release_sha" =~ ^[0-9a-f]{40}$ ]]
-remote_main=$(git ls-remote "https://github.com/${repository}.git" refs/heads/main | awk '{print $1}')
+if ! command -v timeout >/dev/null 2>&1; then
+  echo "FINNOR_AZURE_DEPLOY_ERROR coreutils timeout is required for bounded worker deployment" >&2
+  exit 1
+fi
+
+# Azure RunCommand returns only after the complete script exits.  Every network,
+# package, and certificate operation therefore gets both a per-step budget and a
+# shared absolute deadline.  This prevents a dead package-manager or ACME call
+# from holding the VM command open until the GitHub client times out with unknown
+# remote state.  The EXIT trap below restores the previous release on any such
+# bounded failure.
+deploy_deadline=$(( $(date +%s) + 25 * 60 ))
+run_bounded() {
+  local label="$1"
+  local step_budget="$2"
+  shift 2
+  local remaining=$(( deploy_deadline - $(date +%s) ))
+  if [ "$remaining" -le 0 ]; then
+    echo "FINNOR_AZURE_DEPLOY_TIMEOUT deadline expired before ${label}" >&2
+    return 124
+  fi
+  if [ "$step_budget" -gt "$remaining" ]; then
+    step_budget="$remaining"
+  fi
+  echo "FINNOR_AZURE_STEP_START ${label} budget=${step_budget}s" >&2
+  if timeout --foreground --signal=TERM --kill-after=30s "${step_budget}s" "$@"; then
+    echo "FINNOR_AZURE_STEP_OK ${label}" >&2
+    return 0
+  else
+    local status=$?
+    if [ "$status" -eq 124 ] || [ "$status" -eq 137 ]; then
+      echo "FINNOR_AZURE_DEPLOY_TIMEOUT ${label} after ${step_budget}s" >&2
+    else
+      echo "FINNOR_AZURE_STEP_FAILED ${label} status=${status}" >&2
+    fi
+    return "$status"
+  fi
+}
+
+run_bounded "git-remote-main" 120 git ls-remote "https://github.com/${repository}.git" refs/heads/main > /tmp/finnor-remote-main
+remote_main=$(awk '{print $1}' /tmp/finnor-remote-main)
+rm -f /tmp/finnor-remote-main
 test "$remote_main" = "$release_sha"
 test -r "$secret_env"
 
@@ -25,12 +66,12 @@ staging_dir="${release_root}/.staging-${release_sha}"
 
 if [ ! -d "${release_dir}/.git" ]; then
   rm -rf "$staging_dir"
-  sudo -u finnor git clone --quiet --filter=blob:none --no-checkout "https://github.com/${repository}.git" "$staging_dir"
-  sudo -u finnor git -C "$staging_dir" fetch --quiet origin "$release_sha"
-  sudo -u finnor git -C "$staging_dir" checkout --quiet --detach "$release_sha"
+  run_bounded "git-clone" 300 sudo -u finnor git clone --quiet --filter=blob:none --no-checkout "https://github.com/${repository}.git" "$staging_dir"
+  run_bounded "git-fetch" 300 sudo -u finnor git -C "$staging_dir" fetch --quiet origin "$release_sha"
+  run_bounded "git-checkout" 120 sudo -u finnor git -C "$staging_dir" checkout --quiet --detach "$release_sha"
   test "$(sudo -u finnor git -C "$staging_dir" rev-parse HEAD)" = "$release_sha"
   test -z "$(sudo -u finnor git -C "$staging_dir" status --porcelain=v1 --untracked-files=all)"
-  sudo -u finnor bash -lc "cd '$staging_dir/finnor-os' && npm ci --no-audit --no-fund"
+  run_bounded "npm-ci" 900 sudo -u finnor bash -lc "cd '$staging_dir/finnor-os' && exec npm ci --no-audit --no-fund"
   mv "$staging_dir" "$release_dir"
 else
   test "$(sudo -u finnor git -C "$release_dir" rev-parse HEAD)" = "$release_sha"
@@ -68,7 +109,7 @@ rollback() {
       if [ -n "$previous_target" ]; then
         ln -sfn "$previous_target" "$next_link"
         mv -Tf "$next_link" "$current_link"
-        systemctl restart "$unit_name" || true
+        timeout --foreground --signal=TERM --kill-after=30s 60s systemctl restart "$unit_name" || true
       else
         systemctl stop "$unit_name" || true
         rm -f "$current_link"
@@ -148,7 +189,7 @@ install -o root -g root -m 0644 "$unit_tmp" "/etc/systemd/system/$unit_name"
 unit_path="/etc/systemd/system/$unit_name"
 verify_output=$(mktemp)
 verify_status=0
-systemd-analyze verify "$unit_path" >"$verify_output" 2>&1 || verify_status=$?
+run_bounded "systemd-verify" 60 systemd-analyze verify "$unit_path" >"$verify_output" 2>&1 || verify_status=$?
 if [ -s "$verify_output" ]; then
   cat "$verify_output"
 fi
@@ -165,10 +206,10 @@ rm -f "$verify_output"
 ln -sfn "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
 switched=1
-systemctl daemon-reload
-systemctl enable "$unit_name" >/dev/null
+run_bounded "systemd-daemon-reload" 60 systemctl daemon-reload
+run_bounded "systemd-enable" 60 systemctl enable "$unit_name" >/dev/null
 restart_status=0
-systemctl restart "$unit_name" || restart_status=$?
+run_bounded "systemd-restart" 60 systemctl restart "$unit_name" || restart_status=$?
 if [ "$restart_status" -ne 0 ]; then
   systemctl status "$unit_name" --no-pager >&2 || true
   journalctl -u "$unit_name" --since "10 minutes ago" --no-pager -o cat >&2 || true
@@ -212,8 +253,8 @@ rm -f "$health_file"
 # authenticated stream to the worker's loopback port.
 if ! command -v nginx >/dev/null 2>&1 || ! command -v certbot >/dev/null 2>&1; then
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update -qq
-  apt-get install -y -qq nginx certbot python3-certbot-nginx
+  run_bounded "apt-update" 480 apt-get update -qq
+  run_bounded "apt-install-ingress" 600 apt-get install -y -qq nginx certbot python3-certbot-nginx
 fi
 cat > /etc/nginx/sites-available/finnor-sse <<EOF
 server {
@@ -235,10 +276,10 @@ server {
 EOF
 ln -sfn /etc/nginx/sites-available/finnor-sse /etc/nginx/sites-enabled/finnor-sse
 rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl enable --now nginx >/dev/null
-systemctl reload nginx
-certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email --redirect -d "$sse_hostname"
+run_bounded "nginx-config-test" 60 nginx -t
+run_bounded "nginx-enable" 60 systemctl enable --now nginx >/dev/null
+run_bounded "nginx-reload" 60 systemctl reload nginx
+run_bounded "certbot" 300 certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email --redirect -d "$sse_hostname"
 # Validate TLS, SNI, nginx, and the worker without relying on Azure public-IP
 # hairpin routing. The GitHub runner performs the independent public check in
 # verify-production-parity immediately after this command returns.

@@ -102,6 +102,15 @@ test("production worker reserves interactive capacity", () => {
   assert.match(workerDeployScript, /FINNOR_DB_POOL_MAX=4/)
 })
 
+test("Azure worker deployment bounds remote package and ingress operations", () => {
+  assert.match(workerDeployScript, /deploy_deadline=\$\(\( \$\(date \+%s\) \+ 25 \* 60 \)\)/)
+  assert.match(workerDeployScript, /run_bounded "git-clone" 300/)
+  assert.match(workerDeployScript, /run_bounded "npm-ci" 900/)
+  assert.match(workerDeployScript, /run_bounded "apt-install-ingress" 600/)
+  assert.match(workerDeployScript, /run_bounded "certbot" 300/)
+  assert.match(workerDeployScript, /timeout --foreground --signal=TERM --kill-after=30s/)
+})
+
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {
   assert.match(ingressScript, /const transientCliFailure = \/.*_ModuleLock/)
   assert.match(ingressScript, /deadlock detected/)
