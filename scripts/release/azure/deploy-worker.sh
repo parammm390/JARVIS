@@ -134,14 +134,41 @@ SyslogIdentifier=finnor-worker
 WantedBy=multi-user.target
 EOF
 install -o root -g root -m 0644 "$unit_tmp" "/etc/systemd/system/$unit_name"
-systemd-analyze verify "/etc/systemd/system/$unit_name"
+# `systemd-analyze verify` also walks the host's dependency graph.  Azure images
+# can carry warnings in unrelated vendor units (the production VM currently has
+# snapd's unsupported `RestartMode` key); with `set -e` that turns a valid FINNOR
+# unit into a false deployment failure.  Preserve verification of our unit while
+# ignoring only diagnostics that name another unit.  Any diagnostic mentioning
+# FINNOR's unit remains fatal.
+unit_path="/etc/systemd/system/$unit_name"
+verify_output=$(mktemp)
+verify_status=0
+systemd-analyze verify "$unit_path" >"$verify_output" 2>&1 || verify_status=$?
+if [ -s "$verify_output" ]; then
+  cat "$verify_output"
+fi
+if [ "$verify_status" -ne 0 ]; then
+  if grep -Eqi "(^|[[:space:]/])${unit_name}([:.[:space:]]|$)|${unit_path}" "$verify_output"; then
+    echo "systemd verification failed for $unit_name" >&2
+    rm -f "$verify_output"
+    exit "$verify_status"
+  fi
+  echo "systemd verification returned $verify_status for unrelated host units; continuing" >&2
+fi
+rm -f "$verify_output"
 
 ln -sfn "$release_dir" "$next_link"
 mv -Tf "$next_link" "$current_link"
 switched=1
 systemctl daemon-reload
 systemctl enable "$unit_name" >/dev/null
-systemctl restart "$unit_name"
+restart_status=0
+systemctl restart "$unit_name" || restart_status=$?
+if [ "$restart_status" -ne 0 ]; then
+  systemctl status "$unit_name" --no-pager >&2 || true
+  journalctl -u "$unit_name" --since "10 minutes ago" --no-pager -o cat >&2 || true
+  exit "$restart_status"
+fi
 
 for _ in $(seq 1 30); do
   if systemctl is-active --quiet "$unit_name"; then
@@ -150,7 +177,11 @@ for _ in $(seq 1 30); do
   fi
   sleep 2
 done
-systemctl is-active --quiet "$unit_name"
+if ! systemctl is-active --quiet "$unit_name"; then
+  systemctl status "$unit_name" --no-pager >&2 || true
+  journalctl -u "$unit_name" --since "10 minutes ago" --no-pager -o cat >&2 || true
+  exit 1
+fi
 test "$(readlink -f "$current_link")" = "$release_dir"
 systemctl show "$unit_name" -p ExecStart -p WorkingDirectory --value | grep -q "$current_link"
 if journalctl -u "$unit_name" --since "5 minutes ago" --no-pager -o cat | grep -Eqi 'run loop crashed|refused to boot|fatal'; then
@@ -163,7 +194,12 @@ for _ in $(seq 1 30); do
   if curl --fail --silent --max-time 2 "http://127.0.0.1:${sse_port}/healthz" >"$health_file"; then break; fi
   sleep 2
 done
-node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)' "$release_sha" "$health_file"
+if ! node -e 'const fs=require("fs");const h=JSON.parse(fs.readFileSync(process.argv[2],"utf8"));if(!h.ok||!h.realtime||h.release.commitSha!==process.argv[1])process.exit(1)' "$release_sha" "$health_file"; then
+  echo "worker health response did not match the release" >&2
+  cat "$health_file" >&2 || true
+  journalctl -u "$unit_name" --since "10 minutes ago" --no-pager -o cat >&2 || true
+  exit 1
+fi
 rm -f "$health_file"
 
 # Public SSE ingress is HTTPS-only. Azure DNS/NSG are configured by the guarded
