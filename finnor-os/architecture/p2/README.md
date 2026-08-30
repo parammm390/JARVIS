@@ -16,11 +16,14 @@ historical provenance. Closure certification runs the unchanged P0/P1/P2 proofs 
 explicit closure mode, while the normal phase certifiers keep their dedicated-branch
 guards.
 
-`release:chaos` creates a disposable local database per integration group. The runner
-provisions the existing restricted `finnor_app` role only inside that disposable
-database, runs the normal migrations, invokes the canonical LangGraph checkpointer
-setup, and applies grants only to the disposable schemas. This fixes the historical
-`0001_local_app_role`/temporary-database setup gap without changing production
+When no explicit local `DATABASE_URL` is supplied, `release:chaos` owns an embedded,
+ephemeral PostgreSQL server and then creates a disposable database per integration
+group. The runner provisions the existing restricted `finnor_app` role only in that
+local test cluster, runs the normal migrations, invokes the canonical LangGraph
+checkpointer setup, and applies grants only to the disposable schemas. This fixes the
+historical `0001_local_app_role`/temporary-database setup gap and removes the hidden
+dependency on a pre-existing developer database without changing production
 migrations, RLS policies, tenant isolation, auth, or security assertions. All four
 groups and all fourteen fault scenarios remain required to pass; credentials are still
-removed from child processes and every temporary database is dropped after its group.
+removed from child processes, every group database is dropped, and the embedded
+cluster is stopped and deleted after the run.

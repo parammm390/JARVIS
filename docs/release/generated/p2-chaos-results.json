@@ -1,6 +1,6 @@
 {
   "phase": "P2",
-  "generatedAt": "2026-08-30T23:01:02.847Z",
+  "generatedAt": "2026-08-30T23:53:48.724Z",
   "guardedContext": true,
   "localDatabaseOnly": true,
   "productionEgress": false,
@@ -54,7 +54,7 @@
         "tests/integration/reflection-error-kind-gate.test.ts",
         "tests/integration/terminal-plan-repair.test.ts"
       ],
-      "database": "finnor_p2_55178_1788130805550_e0b0f06b",
+      "database": "finnor_p2_36960_1788133972937_4988c3e5",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",
@@ -74,7 +74,7 @@
         "tests/integration/policy-engine-v2.test.ts",
         "tests/integration/reasoning-tier.test.ts"
       ],
-      "database": "finnor_p2_55178_1788130832513_0bdb9663",
+      "database": "finnor_p2_36960_1788134000266_86fe27b2",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",
@@ -93,7 +93,7 @@
         "tests/integration/payment-webhook-auth.test.ts",
         "tests/integration/payment-webhook-receipt.test.ts"
       ],
-      "database": "finnor_p2_55178_1788130850762_db3dc0a1",
+      "database": "finnor_p2_36960_1788134017092_c44672fc",
       "exitCode": 0,
       "signal": null,
       "status": "PASS",

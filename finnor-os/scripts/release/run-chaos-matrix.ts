@@ -8,10 +8,13 @@
 // rejected before any test process is started.
 
 import { spawn } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { dirname, resolve } from "node:path";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import EmbeddedPostgres from "embedded-postgres";
 import pg from "pg";
 import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { redactText } from "@finnor/security";
@@ -24,7 +27,6 @@ const REPO_ROOT = resolve(FINNOR_OS_ROOT, "..");
 const EVIDENCE_DIR = resolve(REPO_ROOT, "docs/release/evidence/P2");
 const JSON_REPORT_PATH = resolve(REPO_ROOT, "docs/release/generated/p2-chaos-results.json");
 const MARKDOWN_REPORT_PATH = resolve(REPO_ROOT, "docs/release/chaos-results.md");
-const DEFAULT_DATABASE_URL = "postgres://finnor:finnor@localhost:5432/finnor";
 
 type GroupKind = "unit" | "integration";
 type GroupStatus = "PASS" | "FAIL";
@@ -163,10 +165,13 @@ const PROVIDER_ENV_KEYS = [
   "DOCUSIGN_INTEGRATION_KEY", "RESEND_API_KEY", "SENTRY_DSN", "AXIOM_TOKEN",
 ] as const;
 
-function assertGuardedContext(databaseUrl: string): void {
+function assertInvocationGuard(): void {
   if (process.env.NODE_ENV === "production") throw new Error("P2 chaos runner refuses NODE_ENV=production");
   if (process.env.FINNOR_CHAOS_TEST_CONTEXT !== "1") throw new Error("P2 chaos runner requires FINNOR_CHAOS_TEST_CONTEXT=1");
   if (process.env.LIVE_SMOKE_ALLOWED === "1") throw new Error("P2 chaos runner refuses LIVE_SMOKE_ALLOWED=1");
+}
+
+function assertGuardedContext(databaseUrl: string): void {
   const target = new URL(databaseUrl);
   if (!(["localhost", "127.0.0.1", "::1"].includes(target.hostname))) {
     throw new Error(`P2 chaos runner requires a local Postgres target; received ${target.hostname}`);
@@ -194,6 +199,52 @@ function sanitizedChildEnvironment(databaseUrl?: string, group?: string): NodeJS
 function quoteIdentifier(value: string): string {
   if (!/^finnor_p2_[a-z0-9_]+$/.test(value)) throw new Error(`Unsafe temporary database identifier: ${value}`);
   return `"${value}"`;
+}
+
+function freeLocalPort(): Promise<number> {
+  return new Promise((resolvePort, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close();
+        reject(new Error("Could not allocate an ephemeral Postgres port"));
+        return;
+      }
+      server.close((error) => error ? reject(error) : resolvePort(address.port));
+    });
+  });
+}
+
+async function acquireBaseDatabase(databaseUrl?: string): Promise<{ url: string; close: () => Promise<void> }> {
+  if (databaseUrl) return { url: databaseUrl, close: async () => undefined };
+
+  const databaseDirectory = await mkdtemp(join(tmpdir(), "finnor-p2-chaos-"));
+  const port = await freeLocalPort();
+  const postgres = new EmbeddedPostgres({
+    databaseDir: databaseDirectory,
+    user: "finnor",
+    password: "finnor",
+    port,
+    persistent: false,
+  });
+  try {
+    await postgres.initialise();
+    await postgres.start();
+    await postgres.createDatabase("finnor");
+  } catch (error) {
+    await postgres.stop().catch(() => undefined);
+    await rm(databaseDirectory, { recursive: true, force: true });
+    throw error;
+  }
+  return {
+    url: `postgres://finnor:finnor@127.0.0.1:${port}/finnor`,
+    close: async () => {
+      await postgres.stop().catch(() => undefined);
+      await rm(databaseDirectory, { recursive: true, force: true });
+    },
+  };
 }
 
 async function createTemporaryDatabase(baseUrl: string): Promise<{ name: string; url: string }> {
@@ -427,51 +478,57 @@ function markdownReport(groups: GroupResult[], faults: FaultResult[]): string {
   return lines.join("\n");
 }
 
-export async function runChaosMatrix(databaseUrl = process.env.DATABASE_URL ?? DEFAULT_DATABASE_URL): Promise<{ groups: GroupResult[]; faults: FaultResult[] }> {
-  assertGuardedContext(databaseUrl);
-  await mkdir(EVIDENCE_DIR, { recursive: true });
-  await mkdir(dirname(JSON_REPORT_PATH), { recursive: true });
+export async function runChaosMatrix(databaseUrl = process.env.DATABASE_URL): Promise<{ groups: GroupResult[]; faults: FaultResult[] }> {
+  assertInvocationGuard();
+  const baseDatabase = await acquireBaseDatabase(databaseUrl);
+  try {
+    assertGuardedContext(baseDatabase.url);
+    await mkdir(EVIDENCE_DIR, { recursive: true });
+    await mkdir(dirname(JSON_REPORT_PATH), { recursive: true });
 
-  const groups: GroupResult[] = [];
-  for (const group of GROUPS) {
-    const result = await runGroup(group, databaseUrl);
-    groups.push(result);
-    console.log(`P2_GROUP_${result.status} ${result.id} ${result.summary}`);
+    const groups: GroupResult[] = [];
+    for (const group of GROUPS) {
+      const result = await runGroup(group, baseDatabase.url);
+      groups.push(result);
+      console.log(`P2_GROUP_${result.status} ${result.id} ${result.summary}`);
+    }
+
+    const byId = new Map(groups.map((group) => [group.id, group]));
+    const faults = FAULTS.map((fault) => {
+      const group = byId.get(fault.group);
+      if (!group) throw new Error(`Fault ${fault.kind} references missing group ${fault.group}`);
+      return emitFaultObservation(fault, group);
+    });
+    const report = {
+      phase: "P2",
+      generatedAt: new Date().toISOString(),
+      guardedContext: true,
+      localDatabaseOnly: true,
+      productionEgress: false,
+      providerCredentialsPassedToChildren: false,
+      groups,
+      faults,
+      providerConfiguration: {
+        glm: "bedrock:zai.glm-4.7",
+        mistral: "bedrock:mistral.mistral-small-2402-v1:0",
+        deepseek: "bedrock:deepseek.v3.2",
+        liveSmoke: "separate guarded Bedrock smoke",
+      },
+      pass: groups.every((group) => group.status === "PASS") && faults.every((fault) => fault.status === "PASS" && fault.piiSafe),
+    };
+    await writeFile(JSON_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
+    await writeFile(MARKDOWN_REPORT_PATH, markdownReport(groups, faults), "utf8");
+    if (!report.pass) throw new Error("P2 chaos matrix failed; inspect docs/release/chaos-results.md and docs/release/evidence/P2/");
+    console.log(`P2_CHAOS_MATRIX_PASS groups=${groups.length} faults=${faults.length}`);
+    return { groups, faults };
+  } finally {
+    await baseDatabase.close();
   }
-
-  const byId = new Map(groups.map((group) => [group.id, group]));
-  const faults = FAULTS.map((fault) => {
-    const group = byId.get(fault.group);
-    if (!group) throw new Error(`Fault ${fault.kind} references missing group ${fault.group}`);
-    return emitFaultObservation(fault, group);
-  });
-  const report = {
-    phase: "P2",
-    generatedAt: new Date().toISOString(),
-    guardedContext: true,
-    localDatabaseOnly: true,
-    productionEgress: false,
-    providerCredentialsPassedToChildren: false,
-    groups,
-    faults,
-    providerConfiguration: {
-      glm: "bedrock:zai.glm-4.7",
-      mistral: "bedrock:mistral.mistral-small-2402-v1:0",
-      deepseek: "bedrock:deepseek.v3.2",
-      liveSmoke: "separate guarded Bedrock smoke",
-    },
-    pass: groups.every((group) => group.status === "PASS") && faults.every((fault) => fault.status === "PASS" && fault.piiSafe),
-  };
-  await writeFile(JSON_REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-  await writeFile(MARKDOWN_REPORT_PATH, markdownReport(groups, faults), "utf8");
-  if (!report.pass) throw new Error("P2 chaos matrix failed; inspect docs/release/chaos-results.md and docs/release/evidence/P2/");
-  console.log(`P2_CHAOS_MATRIX_PASS groups=${groups.length} faults=${faults.length}`);
-  return { groups, faults };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   runChaosMatrix().catch((error) => {
     console.error(`P2_CHAOS_MATRIX_FAIL ${error instanceof Error ? error.message : "unknown error"}`);
-    process.exitCode = 1;
+    process.exit(1);
   });
 }
