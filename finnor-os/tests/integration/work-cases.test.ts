@@ -3,6 +3,7 @@
 // roots to prove those records do not merge. No customer/time/text grouping is used.
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { migrate } from "../../packages/db/migrate";
 import { workCases } from "../../packages/read-models";
@@ -29,8 +30,11 @@ import { GET } from "../../apps/api/app/api/read-models/[view]/route";
 import { and, eq, sql } from "drizzle-orm";
 
 const DB_URL = process.env.DATABASE_URL ?? "postgres://finnor:finnor@localhost:5432/finnor";
-const TENANT_ID = "00000000-0000-4000-8000-0000000002f1";
-const OTHER_TENANT_ID = "00000000-0000-4000-8000-0000000002f2";
+// Legacy fallback is selected only when the tenant has no canonical Work rows.
+// Unique tenants keep this durable-state test repeatable without deleting Work or
+// append-only operational deltas from a prior local run.
+const TENANT_ID = randomUUID();
+const OTHER_TENANT_ID = randomUUID();
 const HOUSEHOLD_ID = "00000000-0000-4000-8000-0000000002a1";
 const INVOICE_ID = "00000000-0000-4000-8000-0000000002a2";
 const INSTRUCTION_A = "00000000-0000-4000-8000-0000000002b1";
@@ -60,9 +64,9 @@ async function dbUp(): Promise<boolean> {
 
 const available = await dbUp();
 
-function request(query = ""): Request {
+function request(query = "", tenantId = TENANT_ID): Request {
   return new Request(`http://localhost/api/read-models/work-cases${query}`, {
-    headers: { "x-tenant-id": TENANT_ID, "x-user-role": "owner" },
+    headers: { "x-tenant-id": tenantId, "x-user-role": "owner" },
   });
 }
 
@@ -196,20 +200,33 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
   });
 
   it("continues from canonical Work into legacy history without hiding either scope", async () => {
-    const [work] = await withTenant(TENANT_ID, (db) => db.insert(works).values({
-      tenantId: TENANT_ID,
-      initialChannel: "text",
-      initialInstruction: "Canonical root before legacy history",
-      status: "executing",
-    }).returning());
-    try {
-      const canonical = await GET(request("?limit=1"), { params: Promise.resolve({ view: "work-cases" }) });
-      const canonicalBody = await canonical.json() as {
-        data: WorkCaseProjection[];
-        page: { rootScope: string; hasMore: boolean; nextCursor: string | null };
-      };
-      expect(canonicalBody.data.map((item) => item.root.id)).toEqual([work!.id]);
-      expect(canonicalBody.page).toMatchObject({ rootScope: "canonical_work", hasMore: true });
+    // Durable Work emits append-only operational deltas and is intentionally not a
+    // deletable fixture. Isolate this proof in a unique tenant instead of turning
+    // append-only evidence into a hidden teardown write path.
+    const canonicalTenantId = randomUUID();
+    const legacyInstructionId = randomUUID();
+    const [work] = await withTenant(canonicalTenantId, async (db) => {
+      await db.insert(tenants).values({ id: canonicalTenantId, name: "P0 Work Cases Cursor Proof" });
+      await db.insert(instructionSessions).values({
+        id: legacyInstructionId,
+        tenantId: canonicalTenantId,
+        instructionText: "Legacy history after the canonical root",
+        source: "typed",
+      });
+      return db.insert(works).values({
+        tenantId: canonicalTenantId,
+        initialChannel: "text",
+        initialInstruction: "Canonical root before legacy history",
+        status: "executing",
+      }).returning();
+    });
+    const canonical = await GET(request("?limit=1", canonicalTenantId), { params: Promise.resolve({ view: "work-cases" }) });
+    const canonicalBody = await canonical.json() as {
+      data: WorkCaseProjection[];
+      page: { rootScope: string; hasMore: boolean; nextCursor: string | null };
+    };
+    expect(canonicalBody.data.map((item) => item.root.id)).toEqual([work!.id]);
+    expect(canonicalBody.page).toMatchObject({ rootScope: "canonical_work", hasMore: true });
 
       const legacy = await GET(request(`?limit=1&cursor=${encodeURIComponent(canonicalBody.page.nextCursor!)}`), { params: Promise.resolve({ view: "work-cases" }) });
       const legacyBody = await legacy.json() as { data: WorkCaseProjection[]; page: { rootScope: string } };

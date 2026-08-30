@@ -831,7 +831,7 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
       ? await db.select().from(works).where(and(eq(works.tenantId, tenantId), options.workId ? eq(works.id, options.workId) : workCursor)).orderBy(asc(activityBucket), desc(works.updatedAt), desc(works.id)).limit(options.workId ? 1 : limit + 1)
       : [];
     const fetchedLegacyInstructions = rootScope === "legacy_instruction"
-      ? await db.select().from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), isNull(instructionSessions.workId), legacyCursor)).orderBy(desc(instructionSessions.updatedAt), desc(instructionSessions.id)).limit(limit + 1)
+      ? await db.select().from(instructionSessions).where(and(eq(instructionSessions.tenantId, tenantId), isNull(instructionSessions.workId), legacyCursor)).orderBy(desc(legacyUpdatedAt), desc(instructionSessions.id)).limit(limit + 1)
       : [];
     const scopeHasMore = !options.workId && (rootScope === "canonical_work" ? fetchedWorkRows : fetchedLegacyInstructions).length > limit;
     const workRows = fetchedWorkRows.slice(0, limit);

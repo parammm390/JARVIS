@@ -6,6 +6,7 @@ import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
   beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
+  workAggregate,
   authorizeBusinessOperationTx, businessOperations,
   attachWorkEntity,
   authorityStates,
@@ -567,6 +568,27 @@ export class FinnorOrchestrator implements Orchestrator {
           intakeDeadlineAt: opts.intakeDeadlineAt
             ?? (Number.isFinite(opts.deadlineAt) ? new Date(Number(opts.deadlineAt)) : undefined),
         });
+    // An idempotent replay of an already-created Objective is a read of canonical
+    // controller state, not a new intake transition. Re-entering routing here used
+    // to regress active Work from executing back to understanding and append a
+    // second route trace even though startWorkObjective correctly deduplicated the
+    // loop later. Return the existing loop before any Work/event mutation.
+    if ("duplicate" in received && received.duplicate) {
+      const aggregate = await workAggregate(ctx.tenantId, received.workId);
+      if (aggregate?.objectiveLoop) {
+        return {
+          actions: [],
+          workId: received.workId,
+          workInputId: received.workInputId,
+          instructionId: received.instructionId,
+          objective: {
+            objectiveLoopId: aggregate.objectiveLoop.id,
+            state: aggregate.objectiveLoop.state,
+            route: "OBJECTIVE",
+          },
+        };
+      }
+    }
     opts = {
       ...opts,
       activeContext: await resolveOperatingInteractionContext({

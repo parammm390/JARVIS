@@ -20,6 +20,7 @@ import {
   domainPolicies,
   receiveWork,
   works,
+  domainPolicyRevisions,
 } from "@finnor/db";
 import { eq } from "drizzle-orm";
 import { detectWatchdogFindings } from "../../apps/worker/src/handlers/scan-watchdog";
@@ -197,9 +198,19 @@ describe.skipIf(!available)("scan_watchdog detector (A4.T2)", () => {
         .insert(domainPolicies)
         .values({ tenantId: SEED_TENANT_ID, actionType, policy: {}, requiresConfirmation: true, confirmationTimeoutHours: 2 })
         .returning();
+      await db.insert(domainPolicyRevisions).values({
+        tenantId: SEED_TENANT_ID,
+        policyId: policy!.id,
+        actionType,
+        version: policy!.version,
+        policy: {},
+        requiresConfirmation: true,
+        confirmationTimeoutHours: 2,
+        effectiveFrom: policy!.effectiveFrom,
+      });
       const [action] = await db
         .insert(domainActions)
-        .values({ tenantId: SEED_TENANT_ID, actionType, payload: {}, policyId: policy!.id, status: "pending" })
+        .values({ tenantId: SEED_TENANT_ID, actionType, payload: {}, policyId: policy!.id, policyVersion: policy!.version, status: "pending" })
         .returning();
       // 1.5h old vs a 2h timeout — past the 50% (1h) nudge threshold, not yet expired.
       await db.update(domainActions).set({ createdAt: new Date(Date.now() - 90 * 60_000) }).where(eq(domainActions.id, action!.id));

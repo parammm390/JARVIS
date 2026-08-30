@@ -221,7 +221,9 @@ describe.skipIf(!available)("Upgrade 10 whole-system integration", () => {
       },
     ]) });
     expect(await restartedProcess.runObjectiveIteration({ tenantId, workId: started.workId, objectiveLoopId: started.objectiveLoopId })).toBe("completed");
-    expect((await restartedProcess.decide(action.id, tenantId, "approve", ownerId, { role: "owner" })).status).toBe("success");
+    const staleApproval = await restartedProcess.decide(action.id, tenantId, "approve", ownerId, { role: "owner" });
+    expect(staleApproval.status).toBe("failure");
+    expect(staleApproval.error).toMatch(/refused|cancelled|completed/i);
     await recoverRunnableObjectives(tenantId);
 
     const projectionStarted = performance.now();

@@ -245,7 +245,11 @@ async function withActiveOperationEffectFence<T>(
       .limit(1);
     if (!operation || !["queued", "running"].includes(operation.status)) return { active: false as const };
     if (operation.workId) {
-      await db.execute(sql`SELECT id FROM ${works} WHERE ${works.tenantId}=${tenantId} AND ${works.id}=${operation.workId} FOR UPDATE`);
+      // Cancellation/status updates still conflict with NO KEY UPDATE, preserving
+      // the dispatch fence. FK evidence written by the separately-scoped provider
+      // operation only needs KEY SHARE, so it can commit without self-deadlocking
+      // behind this parent Work lock.
+      await db.execute(sql`SELECT id FROM ${works} WHERE ${works.tenantId}=${tenantId} AND ${works.id}=${operation.workId} FOR NO KEY UPDATE`);
       const [work] = await db.select({ status: works.status }).from(works).where(and(
         eq(works.tenantId, tenantId),
         eq(works.id, operation.workId),
