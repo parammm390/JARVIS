@@ -78,20 +78,30 @@ if (!frontendProductionEnvNames.has("JARVIS_SSE_GATEWAY_URL")) {
 
 const az = process.env.AZURE_CLI || "az"
 const AZURE_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
+const AZURE_RUN_COMMAND_RETRIES = 20
+const AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS = 15
 function azJson(args) {
-  try {
-    const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], {
-      encoding: "utf8",
-      maxBuffer: 16 * 1024 * 1024,
-      timeout: AZURE_COMMAND_TIMEOUT_MS,
-    })
-    return JSON.parse(output)
-  } catch (error) {
-    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
-    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
-    const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
-    throw new Error(`Azure preflight command failed:\n${diagnostic}`, { cause: error })
+  for (let attempt = 1; attempt <= AZURE_RUN_COMMAND_RETRIES; attempt += 1) {
+    try {
+      const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], {
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: AZURE_COMMAND_TIMEOUT_MS,
+      })
+      return JSON.parse(output)
+    } catch (error) {
+      const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+      const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+      const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+      const commandBusy = /Run command extension execution is in progress/i.test(diagnostic)
+      if (!commandBusy || attempt === AZURE_RUN_COMMAND_RETRIES) {
+        throw new Error(`Azure preflight command failed:\n${diagnostic}`, { cause: error })
+      }
+      console.warn(`Azure RunCommand is busy; waiting ${AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS}s before preflight retry ${attempt + 1}/${AZURE_RUN_COMMAND_RETRIES}`)
+      execFileSync("sleep", [String(AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS)])
+    }
   }
+  throw new Error("Azure preflight command exhausted its bounded retry budget")
 }
 
 const worker = contract.topology.worker

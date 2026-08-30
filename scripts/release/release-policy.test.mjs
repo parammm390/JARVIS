@@ -116,7 +116,10 @@ test("Azure preflight and parity probes have bounded RunCommand clients", () => 
   const parity = readFileSync(new URL("./verify-production-parity.mjs", import.meta.url), "utf8")
   assert.match(preflight, /AZURE_COMMAND_TIMEOUT_MS = 5 \* 60 \* 1000/)
   assert.match(preflight, /timeout: AZURE_COMMAND_TIMEOUT_MS/)
+  assert.match(preflight, /Run command extension execution is in progress/)
+  assert.match(preflight, /AZURE_RUN_COMMAND_RETRIES = 20/)
   assert.match(parity, /timeout: 5 \* 60 \* 1000/)
+  assert.match(parity, /Run command extension execution is in progress/)
 })
 
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {

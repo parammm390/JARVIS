@@ -89,22 +89,29 @@ grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentF
 echo FINNOR_AZURE_PARITY_OK`
 const az = process.env.AZURE_CLI || "az"
 let azureRaw
-try {
-  azureRaw = execFileSync(az, [
-    "vm", "run-command", "invoke",
-    "--resource-group", worker.resourceGroup,
-    "--name", worker.resourceName,
-    "--command-id", "RunShellScript",
-    "--scripts", azureVerifyScript,
-    "--only-show-errors",
-    "-o", "json",
-  ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60 * 1000 })
-} catch (error) {
-  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
-  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
-  const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
-  throw new Error(`Azure parity command failed:\n${diagnostic}`, { cause: error })
+for (let attempt = 1; attempt <= 20; attempt += 1) {
+  try {
+    azureRaw = execFileSync(az, [
+      "vm", "run-command", "invoke",
+      "--resource-group", worker.resourceGroup,
+      "--name", worker.resourceName,
+      "--command-id", "RunShellScript",
+      "--scripts", azureVerifyScript,
+      "--only-show-errors",
+      "-o", "json",
+    ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60 * 1000 })
+    break
+  } catch (error) {
+    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+    const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+    const commandBusy = /Run command extension execution is in progress/i.test(diagnostic)
+    if (!commandBusy || attempt === 20) throw new Error(`Azure parity command failed:\n${diagnostic}`, { cause: error })
+    console.warn(`Azure RunCommand is busy; waiting 15s before parity retry ${attempt + 1}/20`)
+    execFileSync("sleep", ["15"])
+  }
 }
+if (!azureRaw) throw new Error("Azure parity command exhausted its bounded retry budget")
 const azureResult = JSON.parse(azureRaw)
 const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
