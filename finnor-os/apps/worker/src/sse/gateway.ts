@@ -13,6 +13,14 @@ type IdentityContext = Omit<TenantContext, "correlationId">;
 type DeltaPage = Awaited<ReturnType<typeof readOperationalDeltas>>;
 
 const HEARTBEAT_MS = 15_000;
+// NOTIFY is only a wake-up hint.  A worker can restart between the initial
+// ledger read and LISTEN, or a managed Postgres connection can drop one
+// notification while the durable row is still committed.  Reconcile the
+// tenant's append-only ledger on a short, bounded cadence so an open SSE
+// connection cannot remain silently stale.  This is deliberately a read-only
+// fallback; canonical state still comes from readOperationalDeltas(), never
+// process memory or the notification payload.
+const RECONCILIATION_POLL_MS = 1_000;
 
 function allowedOrigins(): string[] {
   return (process.env.JARVIS_SSE_ALLOWED_ORIGINS ?? "http://localhost:3000,https://finnorai.com")
@@ -129,9 +137,11 @@ function handleEvents(req: IncomingMessage, res: ServerResponse, url: URL): void
       void drain();
 
       const heartbeat = setInterval(() => res.write(": heartbeat\n\n"), HEARTBEAT_MS);
+      const reconciliationPoll = setInterval(() => void drain(), RECONCILIATION_POLL_MS);
       const cleanup = () => {
         closed = true;
         clearInterval(heartbeat);
+        clearInterval(reconciliationPoll);
         unsubscribe();
       };
       req.on("close", cleanup);
