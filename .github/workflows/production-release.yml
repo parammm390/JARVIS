@@ -254,9 +254,6 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Configure canonical Azure SSE DNS and HTTPS ingress
-        run: node scripts/release/configure-azure-sse-ingress.mjs
-
       - name: Frontend quality gate
         run: |
           npm run lint
@@ -330,6 +327,9 @@ jobs:
 
       - name: Verify staged API artifact
         run: node scripts/release/verify-live-release.mjs "${{ steps.api.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+
+      - name: Configure canonical Azure SSE DNS and HTTPS ingress
+        run: node scripts/release/configure-azure-sse-ingress.mjs
 
       - name: Deploy and verify Azure worker and embedded orchestrator
         run: node scripts/release/deploy-azure-worker.mjs --preflight-evidence "$FINNOR_PREFLIGHT_EVIDENCE"

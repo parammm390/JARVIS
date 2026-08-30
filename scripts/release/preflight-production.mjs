@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { runManagedAzureCommand } from "./azure-managed-run-command.mjs"
 import { assertCanonicalRelease, assertResolvedTarget, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
@@ -78,30 +79,20 @@ if (!frontendProductionEnvNames.has("JARVIS_SSE_GATEWAY_URL")) {
 
 const az = process.env.AZURE_CLI || "az"
 const AZURE_COMMAND_TIMEOUT_MS = 5 * 60 * 1000
-const AZURE_RUN_COMMAND_RETRIES = 20
-const AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS = 15
 function azJson(args) {
-  for (let attempt = 1; attempt <= AZURE_RUN_COMMAND_RETRIES; attempt += 1) {
-    try {
-      const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], {
-        encoding: "utf8",
-        maxBuffer: 16 * 1024 * 1024,
-        timeout: AZURE_COMMAND_TIMEOUT_MS,
-      })
-      return JSON.parse(output)
-    } catch (error) {
-      const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
-      const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
-      const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
-      const commandBusy = /Run command extension execution is in progress/i.test(diagnostic)
-      if (!commandBusy || attempt === AZURE_RUN_COMMAND_RETRIES) {
-        throw new Error(`Azure preflight command failed:\n${diagnostic}`, { cause: error })
-      }
-      console.warn(`Azure RunCommand is busy; waiting ${AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS}s before preflight retry ${attempt + 1}/${AZURE_RUN_COMMAND_RETRIES}`)
-      execFileSync("sleep", [String(AZURE_RUN_COMMAND_RETRY_DELAY_SECONDS)])
-    }
+  try {
+    const output = execFileSync(az, [...args, "--only-show-errors", "-o", "json"], {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: AZURE_COMMAND_TIMEOUT_MS,
+    })
+    return JSON.parse(output)
+  } catch (error) {
+    const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
+    const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
+    const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+    throw new Error(`Azure preflight command failed:\n${diagnostic}`, { cause: error })
   }
-  throw new Error("Azure preflight command exhausted its bounded retry budget")
 }
 
 const worker = contract.topology.worker
@@ -149,14 +140,15 @@ grep -Eq '^FINNOR_SECRET_IDS=.+$' '${worker.secretEnvironmentFile}' || { echo "w
 git ls-remote https://github.com/${contract.canonicalGit.repository}.git refs/heads/${contract.canonicalGit.branch} | grep -q '^${gitRelease.head}'
 test "$(df -Pk /srv/finnor | awk 'NR==2 {print $4}')" -gt 524288
 echo FINNOR_AZURE_PREFLIGHT_OK`
-const runCommand = azJson([
-  "vm", "run-command", "invoke",
-  "--resource-group", worker.resourceGroup,
-  "--name", worker.resourceName,
-  "--command-id", "RunShellScript",
-  "--scripts", remotePreflight,
-])
-const runOutput = (runCommand.value ?? []).map((entry) => entry.message ?? "").join("\n")
+const runCommand = runManagedAzureCommand({
+  stage: "preflight",
+  commitSha: expected.commitSha,
+  script: remotePreflight,
+  timeoutSeconds: 5 * 60,
+  worker,
+  az,
+})
+const runOutput = runCommand.output
 if (!runOutput.includes("FINNOR_AZURE_PREFLIGHT_OK")) throw new Error("Azure worker runtime preflight did not return its success marker")
 
 process.loadEnvFile(resolve(databaseEnvPath))

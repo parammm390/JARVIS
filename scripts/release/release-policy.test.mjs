@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
+import { managedRunCommandName, runManagedAzureCommand } from "./azure-managed-run-command.mjs"
 import { assertCanonicalRelease, assertDeploymentPlan, assertResolvedTarget, assertRuntimeParity, expectedRelease, loadContract } from "./release-policy.mjs"
 
 const contract = loadContract()
@@ -91,7 +92,7 @@ test("Azure worker rollback restores release identity before restarting previous
 test("Azure worker verifies TLS over loopback and leaves public reachability to parity verification", () => {
   assert.match(workerDeployScript, /--resolve "\$\{sse_hostname\}:443:127\.0\.0\.1"/)
   assert.doesNotMatch(workerDeployScript, /curl --fail --silent --max-time 15 "https:\/\/\$\{sse_hostname\}\/healthz"/)
-  const deploy = productionWorkflow.indexOf("Deploy Azure worker and embedded orchestrator")
+  const deploy = productionWorkflow.indexOf("deploy-azure-worker.mjs")
   const parity = productionWorkflow.indexOf("Verify cross-runtime release and migration parity")
   assert.ok(deploy > -1 && parity > deploy)
 })
@@ -111,15 +112,70 @@ test("Azure worker deployment bounds remote package and ingress operations", () 
   assert.match(workerDeployScript, /timeout --signal=TERM --kill-after=30s/)
 })
 
-test("Azure preflight and parity probes have bounded RunCommand clients", () => {
+test("Azure release stages use bounded, self-cleaning managed RunCommand resources", () => {
   const preflight = readFileSync(new URL("./preflight-production.mjs", import.meta.url), "utf8")
+  const deploy = readFileSync(new URL("./deploy-azure-worker.mjs", import.meta.url), "utf8")
   const parity = readFileSync(new URL("./verify-production-parity.mjs", import.meta.url), "utf8")
+  const managed = readFileSync(new URL("./azure-managed-run-command.mjs", import.meta.url), "utf8")
   assert.match(preflight, /AZURE_COMMAND_TIMEOUT_MS = 5 \* 60 \* 1000/)
   assert.match(preflight, /timeout: AZURE_COMMAND_TIMEOUT_MS/)
-  assert.match(preflight, /Run command extension execution is in progress/)
-  assert.match(preflight, /AZURE_RUN_COMMAND_RETRIES = 20/)
-  assert.match(parity, /timeout: 5 \* 60 \* 1000/)
-  assert.match(parity, /Run command extension execution is in progress/)
+  for (const source of [preflight, deploy, parity]) {
+    assert.match(source, /runManagedAzureCommand/)
+    assert.doesNotMatch(source, /"run-command",\s*"invoke"/)
+  }
+  assert.match(managed, /"run-command", "create"/)
+  assert.match(managed, /"--async-execution", "false"/)
+  assert.match(managed, /"--timeout-in-seconds"/)
+  assert.match(managed, /"run-command", "show"/)
+  assert.match(managed, /"--instance-view"/)
+  assert.match(managed, /"run-command", "delete"/)
+  assert.match(managed, /finally/)
+})
+
+test("managed RunCommand retries cancel stale same-stage resources and fail closed", () => {
+  const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
+  const calls = []
+  let deletes = 0
+  const exec = (_az, args) => {
+    calls.push(args)
+    const operation = args[2]
+    if (operation === "delete") {
+      deletes += 1
+      if (deletes === 1) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound: command was not found" })
+      return "{}"
+    }
+    if (operation === "create") return "{}"
+    if (operation === "show") return JSON.stringify({ instanceView: { executionState: "Succeeded", exitCode: 0, output: "FINNOR_OK", error: "" } })
+    throw new Error(`unexpected Azure operation: ${operation}`)
+  }
+  const commitSha = "b".repeat(40)
+  assert.equal(managedRunCommandName("preflight", commitSha), "finnor-preflight-bbbbbbbbbbbb")
+  assert.deepEqual(runManagedAzureCommand({ stage: "preflight", commitSha, script: "echo FINNOR_OK", timeoutSeconds: 60, worker }, { exec }), {
+    name: "finnor-preflight-bbbbbbbbbbbb",
+    executionState: "Succeeded",
+    exitCode: 0,
+    output: "FINNOR_OK",
+    error: "",
+  })
+  assert.deepEqual(calls.map((args) => args[2]), ["delete", "create", "show", "delete"])
+
+  let failureDeletes = 0
+  const failingExec = (_az, args) => {
+    const operation = args[2]
+    if (operation === "delete") {
+      failureDeletes += 1
+      if (failureDeletes === 1) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      return "{}"
+    }
+    if (operation === "create") return "{}"
+    if (operation === "show") return JSON.stringify({ instanceView: { executionState: "Failed", exitCode: 23, output: "", error: "remote failure" } })
+    throw new Error(`unexpected Azure operation: ${operation}`)
+  }
+  assert.throws(
+    () => runManagedAzureCommand({ stage: "deploy", commitSha, script: "exit 23", timeoutSeconds: 60, worker }, { exec: failingExec }),
+    /state=Failed, exit=23.*remote failure/s,
+  )
+  assert.equal(failureDeletes, 2)
 })
 
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {
@@ -139,7 +195,10 @@ test("worker health contract exposes realtime capability", () => {
 
 test("all deployed-certification credentials are required before the first production mutation", () => {
   const credentialGate = productionWorkflow.indexOf("Require production credentials before any mutation")
-  const firstMutation = productionWorkflow.indexOf("configure-azure-sse-ingress.mjs")
+  const firstMutation = Math.min(
+    productionWorkflow.indexOf("release:migrate:production"),
+    productionWorkflow.indexOf("configure-azure-sse-ingress.mjs"),
+  )
   assert.ok(credentialGate > -1 && firstMutation > credentialGate)
   const block = productionWorkflow.slice(credentialGate, productionWorkflow.indexOf("- name:", credentialGate + 8))
   for (const name of [
@@ -151,6 +210,26 @@ test("all deployed-certification credentials are required before the first produ
     "PRODUCT_TRUTH_OTHER_AUTH_BEARER",
     "PRODUCT_TRUTH_CERTIFICATION_KEY",
   ]) assert.match(block, new RegExp(`\\b${name}\\b`))
+})
+
+test("production promotion waits for staged Vercel verification and worker verification", () => {
+  const preflight = productionWorkflow.indexOf("preflight-production.mjs")
+  const prepare = productionWorkflow.indexOf("deploy-production.mjs frontend --prepare-only")
+  const migration = productionWorkflow.indexOf("release:migrate:production")
+  const stagedFrontend = productionWorkflow.indexOf("deploy-production.mjs frontend --stage-only")
+  const verifiedFrontend = productionWorkflow.indexOf("Verify staged frontend artifact")
+  const stagedApi = productionWorkflow.indexOf("deploy-production.mjs api --stage-only")
+  const verifiedApi = productionWorkflow.indexOf("Verify staged API artifact")
+  const ingress = productionWorkflow.indexOf("configure-azure-sse-ingress.mjs")
+  const worker = productionWorkflow.indexOf("deploy-azure-worker.mjs")
+  const promoteFrontend = productionWorkflow.indexOf("deploy-production.mjs frontend --promote-only")
+  const promoteApi = productionWorkflow.indexOf("deploy-production.mjs api --promote-only")
+  const parity = productionWorkflow.indexOf("verify-production-parity.mjs")
+  assert.ok(preflight > -1 && prepare > preflight && migration > prepare)
+  assert.ok(stagedFrontend > migration && verifiedFrontend > stagedFrontend)
+  assert.ok(stagedApi > verifiedFrontend && verifiedApi > stagedApi)
+  assert.ok(ingress > verifiedApi && worker > ingress)
+  assert.ok(promoteFrontend > worker && promoteApi > promoteFrontend && parity > promoteApi)
 })
 
 test("operational closure requires two complete deployed Human Black-Box runs on one SHA", () => {
