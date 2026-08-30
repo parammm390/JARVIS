@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "certificationId": "finnor-existing-substrate-p0-reconciliation",
-  "baselineSha": "1e474c4c0754c809425c3c266746d3deaa3e5151",
+  "baselineSha": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
   "previousBaselineSha": "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2",
-  "currentMainSha": "1e474c4c0754c809425c3c266746d3deaa3e5151",
+  "currentMainSha": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
   "branch": "codex/p0-existing-substrate-freeze",
-  "certifiedAt": "2026-08-30T05:29:24.451Z",
+  "certifiedAt": "2026-08-30T12:04:49.300Z",
   "status": "PASS",
   "scope": {
     "environment": "local deterministic reconciliation certification against current main",
@@ -40,8 +40,8 @@
     "productionReferenceMovement": 0,
     "unexplainedProductionReferenceMovement": 0,
     "assuranceReferenceMovement": {
-      "files": 3,
-      "lines": 3
+      "files": 52,
+      "lines": 149
     },
     "internalPackages": 45,
     "internalPackageCycles": 0,
@@ -58,12 +58,12 @@
       "capabilityContracts": 14,
       "defaultTools": 16,
       "totalNamedCapabilities": 102,
-      "hash": "20208f90e7a57486c2e85e5624dc59b4dc896a5da9a985d8a5c179e2de1c5da4"
+      "hash": "8202557c3ba0ab94c48cc856e2491887b5e607b0710cf50d93e13beb016d3b04"
     },
     "replayCorpus": {
       "cases": 24,
       "uniqueFiles": 18,
-      "hash": "21b82680f7fd0d0b08250ef68cfde5cf4a84c4598a445ea0ea50542e6696c255"
+      "hash": "ce66e4b36109b0051be12d127e92683ff6eb600328e995973f5cf29015e11e55"
     },
     "referenceConcepts": 24,
     "migrationFiles": 109
@@ -109,7 +109,7 @@
       "id": "finnor_os_full_suite",
       "command": "DATABASE_URL=<fresh local> AUTH_DEV_BYPASS=1 NODE_ENV=test npm test -- --reporter=dot",
       "status": "PASS",
-      "result": "302 test files passed, 3 explicitly skipped; 1,556 tests passed, 5 explicitly skipped; duration 538.07 seconds on a fresh migrated local database"
+      "result": "302 test files passed, 3 explicitly skipped; 1,556 tests passed, 5 explicitly skipped; duration 506.54 seconds on a fresh migrated local database"
     },
     {
       "id": "frontend_unit_suite",
@@ -127,7 +127,7 @@
       "id": "p0_locked_replay",
       "command": "npm run test:p0:replay",
       "status": "PASS",
-      "result": "24 locked cases across 18 deterministic integration files passed; no selected test skipped; corpus hash 21b82680f7fd0d0b08250ef68cfde5cf4a84c4598a445ea0ea50542e6696c255"
+      "result": "24 locked cases across 18 deterministic integration files passed; no selected test skipped; corpus hash ce66e4b36109b0051be12d127e92683ff6eb600328e995973f5cf29015e11e55"
     },
     {
       "id": "planner_evals",
@@ -289,7 +289,7 @@
       "id": "production_release_provenance",
       "command": "npm run release:verify",
       "status": "INAPPLICABLE_ON_P0_BRANCH",
-      "result": "On the clean reconciled branch this guard is expected to reject the non-main codex/* SHA; it is not a P0 production certification and must not be bypassed"
+      "result": "On a clean reconciled branch the guard rejects the non-main branch SHA (origin/main is 9b9798acb764752d68bf10b97b8f0921b7f0163a); production provenance remains intentionally inapplicable to an unmerged P0 PR"
     },
     {
       "id": "outcome_pack_certification",
@@ -305,11 +305,43 @@
     }
   ],
   "observations": [
-    "The first unconfigured full-suite attempt failed only because DATABASE_URL was absent and shared fixture state was not isolated; the required rerun used a fresh migrated database and passed 302 files/1,556 tests.",
+    "Current main advanced from 1e474c4c0754c809425c3c266746d3deaa3e5151 through 5af6f95e02ea501fe6c67468f14023de43038c31 and 9b6784fe4c922b47f691d5ebc720bc81ab769e00 to 9b9798acb764752d68bf10b97b8f0921b7f0163a during this reconciliation. The three audited changes are a read-only SSE notification-recovery poll, a bounded worker database-pool capacity override, and bounded Azure worker deployment operations; none changes a P0 semantic owner or governed mutation boundary.",
+    "The clean current-main full suite used a disposable embedded PostgreSQL database and passed 302 files/1,556 tests; the expected security/provider/memory errors are assertions of rejection paths.",
+    "The first unconfigured full-suite attempt failed because DATABASE_URL was absent and shared fixture state was not isolated; it was not used as certification evidence.",
     "The first action-contract invocation correctly refused an absent certification seed guard; the guarded rerun passed all 59 rows and all 59 frontend rows.",
-    "The first repository-root build hit ENOSPC after parallel disposable builds; generated build output and old disposable dependency trees were removed, then the clean rerun passed. No source files were changed for this environment issue.",
     "Root npm ci installed the declared outer application dependency tree (6 high advisories reported by npm audit); nested npm ci installed the FINNOR OS tree (0 vulnerabilities reported). Dependency remediation is outside the P0 freeze.",
-    "Current main retains HumanOperatingCompiler, the five-route public vocabulary, the LangGraph/legacy executor compatibility path, migration head 0108, and later Work/objective/provider fixes. The reconciliation branch adds no production runtime file and changes no existing BusinessEffect, idempotency, authority, Work, context, or truth owner.",
     "Release diagnostic reports with timestamps/random evidence identifiers were restored after local runs and are not P0 architecture evidence."
-  ]
+  ],
+  "currentMainSemantics": {
+    "commits": [
+      {
+        "commit": "5af6f95e02ea501fe6c67468f14023de43038c31",
+        "changedFiles": [
+          "finnor-os/apps/worker/src/sse/gateway.ts"
+        ],
+        "change": "Adds a bounded 1-second read-only reconciliation poll that drains canonical operational deltas when Postgres notifications are missed.",
+        "replayCoverage": "tests/integration/sse-gateway.test.ts passed in the locked corpus"
+      },
+      {
+        "commit": "9b6784fe4c922b47f691d5ebc720bc81ab769e00",
+        "changedFiles": [
+          "finnor-os/packages/db/index.ts",
+          "scripts/release/azure/deploy-worker.sh",
+          "scripts/release/release-policy.test.mjs"
+        ],
+        "change": "Adds the release-owned FINNOR_DB_POOL_MAX=4 worker override, bounded in the existing pool factory; serverless callers retain the conservative default and release policy asserts the deployment contract.",
+        "releaseCoverage": "release policy and worker/runtime build gates passed"
+      },
+      {
+        "commit": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
+        "changedFiles": [
+          "scripts/release/azure/deploy-worker.sh",
+          "scripts/release/release-policy.test.mjs"
+        ],
+        "change": "Bounds Azure worker deployment operations and adds matching release-policy assertions; no instruction, authority, effect, Work, identity, context, truth, or verification owner changes.",
+        "releaseCoverage": "release policy gate passed on the current-main deployment contract"
+      }
+    ],
+    "conclusion": "None of these current-main changes alters authority, BusinessEffect, Work, identity, context, truth ownership, or the governed mutation boundary."
+  }
 }

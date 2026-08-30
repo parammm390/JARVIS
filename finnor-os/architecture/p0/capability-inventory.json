@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baselineSha": "1e474c4c0754c809425c3c266746d3deaa3e5151",
+  "baselineSha": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
   "previousBaselineSha": "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2",
   "branch": "codex/p0-existing-substrate-freeze",
   "generatedFromCurrentCode": true,
@@ -2973,5 +2973,5 @@
       "resolution": "Both converge on the same runtime bridge/governed effect execution boundary."
     }
   ],
-  "manifestHash": "20208f90e7a57486c2e85e5624dc59b4dc896a5da9a985d8a5c179e2de1c5da4"
+  "manifestHash": "8202557c3ba0ab94c48cc856e2491887b5e607b0710cf50d93e13beb016d3b04"
 }

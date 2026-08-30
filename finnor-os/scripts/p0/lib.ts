@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 /** The pre-reconciliation P0 baseline is retained for the final audit report. */
 export const PREVIOUS_BASELINE_SHA = "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2";
 /** P0 certification must compare only the reconciled branch to current main. */
-export const BASELINE_SHA = "1e474c4c0754c809425c3c266746d3deaa3e5151";
+export const BASELINE_SHA = "9b9798acb764752d68bf10b97b8f0921b7f0163a";
 export const P0_BRANCH = "codex/p0-existing-substrate-freeze";
 /** Current main already contains every runtime correction identified by the previous P0.
  * The reconciled branch therefore adds no production runtime file. */
