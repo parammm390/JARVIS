@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "baselineSha": "d87a256e87d9a2f4308135dd8383848a6b137b85",
+  "branch": "codex/three-phase-production-closure",
+  "architectureIntroduced": false,
+  "identityDomainsChanged": false,
+  "executionModelsChanged": false,
+  "corrections": [],
+  "fixtureAlignments": [],
+  "note": "The reconciled current production base already contains the previously certified invariant corrections. P0 adds no production runtime change on this branch."
+}

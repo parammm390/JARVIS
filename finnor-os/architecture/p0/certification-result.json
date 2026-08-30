@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "status": "P0_RECONCILED_PASS",
+  "baselineSha": "d87a256e87d9a2f4308135dd8383848a6b137b85",
+  "branch": "codex/three-phase-production-closure",
+  "capturedAt": "2026-08-30T12:58:11.487Z",
+  "scope": {
+    "productionRuntimeChanges": 0,
+    "newExecutionArchitecture": 0,
+    "newProductIntelligence": 0
+  },
+  "certifier": {
+    "status": "PASS",
+    "executionModels": 5,
+    "semanticOwners": 24,
+    "lifecycles": 11,
+    "invariants": 15,
+    "hardGates": 17,
+    "referenceConcepts": 24,
+    "productionReferenceMovement": 0,
+    "unexplainedProductionReferenceMovement": 0,
+    "internalPackages": 45,
+    "internalPackageCycles": 0,
+    "capabilities": {
+      "domainActions": 59,
+      "domainPlugins": 26,
+      "operationalQueries": 13,
+      "capabilityContracts": 14,
+      "defaultTools": 16,
+      "totalNamedCapabilities": 102
+    }
+  },
+  "tests": [
+    {
+      "command": "npm run test:p0:contract",
+      "status": "PASS",
+      "filesPassed": 2,
+      "testsPassed": 2
+    },
+    {
+      "command": "npm run test:p0:replay",
+      "status": "PASS",
+      "categoryCases": 24,
+      "deterministicFiles": 18,
+      "corpusHash": "68383cc0070064ffa64935ada38bcb62f6435ff2633061c9c4bd3e1ada9faf4f",
+      "liveLlm": false,
+      "liveProviders": false,
+      "network": false
+    }
+  ],
+  "combinedReleaseCertificationPending": true,
+  "note": "Only commands completed on the reconciled current base are recorded as PASS. Combined P1 and release evidence is added by the final integration certification."
+}
