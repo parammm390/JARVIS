@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "certificationId": "finnor-existing-substrate-p0-reconciliation",
+  "baselineSha": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
+  "previousBaselineSha": "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2",
+  "currentMainSha": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
+  "branch": "codex/p0-existing-substrate-freeze",
+  "certifiedAt": "2026-08-30T12:04:49.300Z",
+  "status": "PASS",
+  "scope": {
+    "environment": "local deterministic reconciliation certification against current main",
+    "database": "fresh local PostgreSQL with migrations 0000 through 0108 and finnor_langgraph schema",
+    "liveProviderCalls": false,
+    "productionOrStagingMutation": false,
+    "productionRuntimeFilesChanged": false
+  },
+  "architecture": {
+    "executionModels": 5,
+    "executionModelNames": [
+      "QUERY",
+      "CONVERSATION",
+      "ATOMIC_ACTION",
+      "OBJECTIVE",
+      "CLARIFY"
+    ],
+    "semanticOwners": 24,
+    "lifecycles": 11,
+    "invariants": 15,
+    "hardGates": 17,
+    "compatibilityAndLegacySeams": 15,
+    "seamClassificationCounts": {
+      "COMPATIBILITY": 7,
+      "DUPLICATE": 4,
+      "LEGACY": 2,
+      "PROJECTION_ONLY": 2
+    },
+    "canonicalBusinessConcepts": 40,
+    "runtimeConformanceCorrections": 4,
+    "fixtureAlignments": 9,
+    "productionReferenceMovement": 0,
+    "unexplainedProductionReferenceMovement": 0,
+    "assuranceReferenceMovement": {
+      "files": 52,
+      "lines": 149
+    },
+    "internalPackages": 45,
+    "internalPackageCycles": 0,
+    "newArchitectureIntroduced": false,
+    "executionModelsChanged": false,
+    "identityDomainsChanged": false,
+    "currentMainSemanticsAudited": true
+  },
+  "lockedArtifacts": {
+    "capabilityManifest": {
+      "domainActions": 59,
+      "domainPlugins": 26,
+      "operationalQueries": 13,
+      "capabilityContracts": 14,
+      "defaultTools": 16,
+      "totalNamedCapabilities": 102,
+      "hash": "8202557c3ba0ab94c48cc856e2491887b5e607b0710cf50d93e13beb016d3b04"
+    },
+    "replayCorpus": {
+      "cases": 24,
+      "uniqueFiles": 18,
+      "hash": "ce66e4b36109b0051be12d127e92683ff6eb600328e995973f5cf29015e11e55"
+    },
+    "referenceConcepts": 24,
+    "migrationFiles": 109
+  },
+  "gates": [
+    {
+      "id": "fresh_migration_chain",
+      "command": "DATABASE_URL=<fresh local> npm run db:migrate; DATABASE_URL=<fresh local> npm run setup:langgraph",
+      "status": "PASS",
+      "result": "109 migrations (0000-0108) applied on a fresh local PostgreSQL database; rerun reported Already up to date; finnor_langgraph schema ready"
+    },
+    {
+      "id": "migration_bundle",
+      "command": "npm run db:bundle; git diff --exit-code -- packages/db/migrations-bundle.ts",
+      "status": "PASS",
+      "result": "109 migrations bundled with no generated diff"
+    },
+    {
+      "id": "typecheck",
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "result": "TypeScript compiler exit 0"
+    },
+    {
+      "id": "frontend_build",
+      "command": "npm run build (repository root)",
+      "status": "PASS",
+      "result": "Next.js 14.2.35 production build completed; 53 routes generated; edge-runtime static-generation warning retained"
+    },
+    {
+      "id": "api_build",
+      "command": "npm run build --workspace @finnor/api",
+      "status": "PASS",
+      "result": "Next.js 15.5.21 production build completed; 50 static pages generated"
+    },
+    {
+      "id": "console_build",
+      "command": "npm run build --workspace @finnor/console",
+      "status": "PASS",
+      "result": "Next.js 15.5.21 production build completed; 10 static pages generated; pre-existing Tailwind content warning retained"
+    },
+    {
+      "id": "finnor_os_full_suite",
+      "command": "DATABASE_URL=<fresh local> AUTH_DEV_BYPASS=1 NODE_ENV=test npm test -- --reporter=dot",
+      "status": "PASS",
+      "result": "302 test files passed, 3 explicitly skipped; 1,556 tests passed, 5 explicitly skipped; duration 506.54 seconds on a fresh migrated local database"
+    },
+    {
+      "id": "frontend_unit_suite",
+      "command": "npm run test:unit -- --reporter=dot (repository root)",
+      "status": "PASS",
+      "result": "68 test files and 594 tests passed"
+    },
+    {
+      "id": "p0_contract_tests",
+      "command": "npm run test:p0:contract",
+      "status": "PASS",
+      "result": "2 test files and 2 tests passed"
+    },
+    {
+      "id": "p0_locked_replay",
+      "command": "npm run test:p0:replay",
+      "status": "PASS",
+      "result": "24 locked cases across 18 deterministic integration files passed; no selected test skipped; corpus hash ce66e4b36109b0051be12d127e92683ff6eb600328e995973f5cf29015e11e55"
+    },
+    {
+      "id": "planner_evals",
+      "command": "npm run test:planner-evals -- --reporter=dot",
+      "status": "PASS",
+      "result": "1 test file and 3 tests passed"
+    },
+    {
+      "id": "policy_coverage",
+      "command": "npm run policy:lint",
+      "status": "PASS",
+      "result": "59 of 59 registered action types covered"
+    },
+    {
+      "id": "authz_matrix",
+      "command": "npm run authz:matrix:check",
+      "status": "PASS",
+      "result": "Generated authorization matrix matched the checked-in matrix; exit 0"
+    },
+    {
+      "id": "release_action_manifest",
+      "command": "npm run release:manifest",
+      "status": "PASS",
+      "result": "Fixed action specification and discovered registry match 59 of 59"
+    },
+    {
+      "id": "release_action_contract",
+      "command": "CERTIFICATION_SEED_ALLOWED=1 npm run release:contract",
+      "status": "PASS",
+      "result": "Guarded local seed passed; 59 of 59 action rows and 59 of 59 frontend rows passed; fallback mounts 0"
+    },
+    {
+      "id": "release_chaos",
+      "command": "FINNOR_CHAOS_TEST_CONTEXT=1 npm run release:chaos",
+      "status": "PASS",
+      "result": "4 groups, 44 test files, 235 tests, and 14 fault scenarios passed"
+    },
+    {
+      "id": "operational_query_latency",
+      "command": "npm run release:query-latency -- --seed",
+      "status": "PASS",
+      "result": "160 queries; p50 20.66 ms, p95 124.98 ms; thresholds 750/2000 ms; planner invocations 0"
+    },
+    {
+      "id": "upgrade10_whole_system",
+      "command": "npm run release:upgrade10",
+      "status": "PASS",
+      "result": "4 files and 34 tests passed on a disposable migrated database; all required metrics present; duplicate side effects 0"
+    },
+    {
+      "id": "deployment_truth",
+      "command": "npm run release:truth (repository root)",
+      "status": "PASS",
+      "result": "Canonical production topology and migration contract validated read-only"
+    },
+    {
+      "id": "release_policy",
+      "command": "npm run test:release (repository root)",
+      "status": "PASS",
+      "result": "24 production release policy/golden/human-operability tests passed"
+    },
+    {
+      "id": "frontend_realtime_preflight",
+      "command": "npm run jarvis:realtime:verify (repository root)",
+      "status": "PASS",
+      "result": "Read-only Jarvis realtime release preflight passed"
+    },
+    {
+      "id": "p0_certifier",
+      "command": "npm run p0:certify",
+      "status": "PASS",
+      "result": "15 invariants and 17 hard gates passed; zero production reference movement; zero internal package cycles"
+    },
+    {
+      "id": "patch_integrity",
+      "command": "git diff --check",
+      "status": "PASS",
+      "result": "No whitespace errors"
+    }
+  ],
+  "hardGateResults": {
+    "unexplained_execution_model_changes": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_semantic_sources_of_truth": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_authority_systems": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_business_effect_identity_domains": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_work_lifecycle_systems": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_context_memory_architectures": {
+      "status": "PASS",
+      "value": 0
+    },
+    "consequential_business_effect_bypasses": {
+      "status": "PASS",
+      "value": 0
+    },
+    "cross_tenant_forged_refs_accepted": {
+      "status": "PASS",
+      "value": 0
+    },
+    "unknown_outcome_blind_retries": {
+      "status": "PASS",
+      "value": 0
+    },
+    "duplicate_consequential_effects": {
+      "status": "PASS",
+      "value": 0
+    },
+    "verified_completion_without_required_evidence": {
+      "status": "PASS",
+      "value": 0
+    },
+    "provider_ack_promoted_to_unsupported_verified_truth": {
+      "status": "PASS",
+      "value": 0
+    },
+    "computer_governance_bypasses": {
+      "status": "PASS",
+      "value": 0
+    },
+    "terminal_work_resurrection": {
+      "status": "PASS",
+      "value": 0
+    },
+    "frontend_state_overriding_backend_truth": {
+      "status": "PASS",
+      "value": 0
+    },
+    "new_internal_package_cycles": {
+      "status": "PASS",
+      "value": 0
+    },
+    "unexplained_locked_replay_regressions": {
+      "status": "PASS",
+      "value": 0
+    }
+  },
+  "externalOrProductionGates": [
+    {
+      "id": "release_load",
+      "command": "npm run release:load",
+      "status": "BLOCKED_CONFIG",
+      "result": "Guard stopped before egress with zero of six staging targets configured; missing staging URLs, identity confirmation, JWT/reconciliation evidence, expected SHA, and load instruction"
+    },
+    {
+      "id": "production_release_provenance",
+      "command": "npm run release:verify",
+      "status": "INAPPLICABLE_ON_P0_BRANCH",
+      "result": "On a clean reconciled branch the guard rejects the non-main branch SHA (origin/main is 9b9798acb764752d68bf10b97b8f0921b7f0163a); production provenance remains intentionally inapplicable to an unmerged P0 PR"
+    },
+    {
+      "id": "outcome_pack_certification",
+      "command": "npm run release:certify:outcome -- --tenant-id=<value> ...",
+      "status": "NOT_RUN_MISSING_EXTERNAL_EVIDENCE",
+      "result": "Requires an explicit tenant, outcome pack, level, and acceptance/provider evidence; P0 does not fabricate them"
+    },
+    {
+      "id": "live_provider_and_model_smokes",
+      "command": "release:bedrock-smoke, release:planner-smoke, release:live-smoke, release:e2e:known",
+      "status": "NOT_RUN_EXTERNAL_INFORMATIONAL",
+      "result": "Locked P0 certification excludes live model/provider randomness and external credentials"
+    }
+  ],
+  "observations": [
+    "Current main advanced from 1e474c4c0754c809425c3c266746d3deaa3e5151 through 5af6f95e02ea501fe6c67468f14023de43038c31 and 9b6784fe4c922b47f691d5ebc720bc81ab769e00 to 9b9798acb764752d68bf10b97b8f0921b7f0163a during this reconciliation. The three audited changes are a read-only SSE notification-recovery poll, a bounded worker database-pool capacity override, and bounded Azure worker deployment operations; none changes a P0 semantic owner or governed mutation boundary.",
+    "The clean current-main full suite used a disposable embedded PostgreSQL database and passed 302 files/1,556 tests; the expected security/provider/memory errors are assertions of rejection paths.",
+    "The first unconfigured full-suite attempt failed because DATABASE_URL was absent and shared fixture state was not isolated; it was not used as certification evidence.",
+    "The first action-contract invocation correctly refused an absent certification seed guard; the guarded rerun passed all 59 rows and all 59 frontend rows.",
+    "Root npm ci installed the declared outer application dependency tree (6 high advisories reported by npm audit); nested npm ci installed the FINNOR OS tree (0 vulnerabilities reported). Dependency remediation is outside the P0 freeze.",
+    "Release diagnostic reports with timestamps/random evidence identifiers were restored after local runs and are not P0 architecture evidence."
+  ],
+  "currentMainSemantics": {
+    "commits": [
+      {
+        "commit": "5af6f95e02ea501fe6c67468f14023de43038c31",
+        "changedFiles": [
+          "finnor-os/apps/worker/src/sse/gateway.ts"
+        ],
+        "change": "Adds a bounded 1-second read-only reconciliation poll that drains canonical operational deltas when Postgres notifications are missed.",
+        "replayCoverage": "tests/integration/sse-gateway.test.ts passed in the locked corpus"
+      },
+      {
+        "commit": "9b6784fe4c922b47f691d5ebc720bc81ab769e00",
+        "changedFiles": [
+          "finnor-os/packages/db/index.ts",
+          "scripts/release/azure/deploy-worker.sh",
+          "scripts/release/release-policy.test.mjs"
+        ],
+        "change": "Adds the release-owned FINNOR_DB_POOL_MAX=4 worker override, bounded in the existing pool factory; serverless callers retain the conservative default and release policy asserts the deployment contract.",
+        "releaseCoverage": "release policy and worker/runtime build gates passed"
+      },
+      {
+        "commit": "9b9798acb764752d68bf10b97b8f0921b7f0163a",
+        "changedFiles": [
+          "scripts/release/azure/deploy-worker.sh",
+          "scripts/release/release-policy.test.mjs"
+        ],
+        "change": "Bounds Azure worker deployment operations and adds matching release-policy assertions; no instruction, authority, effect, Work, identity, context, truth, or verification owner changes.",
+        "releaseCoverage": "release policy gate passed on the current-main deployment contract"
+      }
+    ],
+    "conclusion": "None of these current-main changes alters authority, BusinessEffect, Work, identity, context, truth ownership, or the governed mutation boundary."
+  }
+}
