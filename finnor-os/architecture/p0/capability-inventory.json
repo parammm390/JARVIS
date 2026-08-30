@@ -104,7 +104,7 @@
         "inputContract": {
           "type": "crm.payloadSchemas[assign_lead_to_technician]",
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 51
+          "line": 58
         },
         "outputContract": "ExecutionResult from packages/shared-types/src/index.ts",
         "readWriteClass": "OPERATIONAL_CHANGE",
@@ -122,7 +122,7 @@
         ],
         "source": {
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 50
+          "line": 57
         }
       },
       {
@@ -468,7 +468,7 @@
         "inputContract": {
           "type": "crm.payloadSchemas[create_lead]",
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 51
+          "line": 58
         },
         "outputContract": "ExecutionResult from packages/shared-types/src/index.ts",
         "readWriteClass": "INTERNAL_WRITE",
@@ -486,7 +486,7 @@
         ],
         "source": {
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 50
+          "line": 57
         }
       },
       {
@@ -804,7 +804,7 @@
         "inputContract": {
           "type": "crm.payloadSchemas[log_interaction]",
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 51
+          "line": 58
         },
         "outputContract": "ExecutionResult from packages/shared-types/src/index.ts",
         "readWriteClass": "INTERNAL_WRITE",
@@ -822,7 +822,7 @@
         ],
         "source": {
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 50
+          "line": 57
         }
       },
       {
@@ -1616,7 +1616,7 @@
         "inputContract": {
           "type": "crm.payloadSchemas[update_lead_status]",
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 51
+          "line": 58
         },
         "outputContract": "ExecutionResult from packages/shared-types/src/index.ts",
         "readWriteClass": "INTERNAL_WRITE",
@@ -1634,7 +1634,7 @@
         ],
         "source": {
           "path": "packages/domain-plugins/crm/index.ts",
-          "line": 50
+          "line": 57
         }
       },
       {
@@ -2027,7 +2027,7 @@
         ],
         "source": {
           "path": "packages/tools/src/capabilities/scheduling.ts",
-          "line": 126
+          "line": 123
         }
       },
       {
@@ -2270,7 +2270,7 @@
         ],
         "source": {
           "path": "packages/tools/src/capabilities/inventory.ts",
-          "line": 127
+          "line": 102
         }
       },
       {
@@ -2367,7 +2367,7 @@
         ],
         "source": {
           "path": "packages/tools/src/capabilities/inventory.ts",
-          "line": 64
+          "line": 50
         }
       },
       {
@@ -2972,5 +2972,5 @@
       "resolution": "Both converge on the same runtime bridge/governed effect execution boundary."
     }
   ],
-  "manifestHash": "6c0efa01b125ae43c27939739b4ecd960bd763076d91426c82d3bef1e180ab97"
+  "manifestHash": "ff00d11e8e4a9ecaadc7a7fc6b19c4509f009f943f33b49829f592ac27389939"
 }

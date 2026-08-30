@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run --root ../.. packages/operational-ir/src",
-    "test:locked": "tsx scripts/run-locked-corpus.ts"
+    "test:locked": "tsx scripts/run-locked-corpus.ts",
+    "test:p2:locked": "tsx scripts/run-p2-locked-corpus.ts"
   },
   "dependencies": {
     "@finnor/shared-types": "*",

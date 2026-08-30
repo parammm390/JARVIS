@@ -25,7 +25,6 @@ import {
   workObjectiveSteps,
   workflowRuns,
   workflowSteps,
-  CURRENT_MIGRATION_HEAD,
 } from "@finnor/db";
 import { recordCustomerMessage } from "@finnor/data-platform";
 import { ToolRegistry } from "@finnor/tools";

@@ -13,8 +13,10 @@ import { randomUUID } from "node:crypto";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { PostgresSaver } from "@langchain/langgraph-checkpoint-postgres";
 import { redactText } from "@finnor/security";
 import { initObservability, logWithTrace, Sentry } from "@finnor/tools";
+import { migrate } from "../../packages/db/migrate";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const FINNOR_OS_ROOT = resolve(SCRIPT_DIR, "../..");
@@ -211,6 +213,74 @@ async function createTemporaryDatabase(baseUrl: string): Promise<{ name: string;
   return { name, url: child.toString() };
 }
 
+/**
+ * The local app role migration is deliberately scoped to the canonical `finnor`
+ * database so a hosted/shared database can never receive a test password. Chaos
+ * groups use unique database names, so provision the same non-superuser role as
+ * an explicitly runner-owned prerequisite. Default privileges make tables created
+ * by the child migration process immediately queryable through the RLS role.
+ */
+async function prepareTemporarySecurityRole(databaseUrl: string): Promise<void> {
+  const target = new URL(databaseUrl);
+  const client = new pg.Client({ connectionString: target.toString(), connectionTimeoutMillis: 5_000 });
+  await client.connect();
+  try {
+    await client.query("CREATE SCHEMA IF NOT EXISTS finnor_os");
+    await client.query(`
+      DO $role$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'finnor_app') THEN
+          CREATE ROLE finnor_app LOGIN PASSWORD 'finnor_app' NOSUPERUSER NOBYPASSRLS;
+        END IF;
+      END $role$;
+    `);
+    const role = await client.query<{ rolsuper: boolean; rolbypassrls: boolean }>(
+      "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = 'finnor_app'",
+    );
+    if (role.rows.length !== 1 || role.rows[0]!.rolsuper || role.rows[0]!.rolbypassrls) {
+      throw new Error("chaos runner refuses a superuser or BYPASSRLS finnor_app role");
+    }
+    await client.query("ALTER ROLE finnor_app PASSWORD 'finnor_app' NOSUPERUSER NOBYPASSRLS");
+    await client.query(`GRANT CONNECT ON DATABASE ${quoteIdentifier(target.pathname.slice(1))} TO finnor_app`);
+    await client.query("GRANT USAGE ON SCHEMA finnor_os TO finnor_app");
+    await client.query("ALTER ROLE finnor_app SET search_path = finnor_os, public");
+    await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA finnor_os GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO finnor_app");
+    await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA finnor_os GRANT USAGE, SELECT, UPDATE ON SEQUENCES TO finnor_app");
+    await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA finnor_os GRANT EXECUTE ON FUNCTIONS TO finnor_app");
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Release groups may include graph-backed integration tests. The LangGraph
+ * checkpointer is an explicit admin-run setup step (not a versioned FINNOR
+ * migration), so prepare it in the disposable database before the child process
+ * starts. Grants are applied after setup and remain limited to the guarded local
+ * test role; no hosted migration or production schema is changed.
+ */
+async function prepareTemporaryDatabase(databaseUrl: string): Promise<void> {
+  await prepareTemporarySecurityRole(databaseUrl);
+  await migrate(databaseUrl);
+  const pool = new pg.Pool({ connectionString: databaseUrl, max: 1, connectionTimeoutMillis: 5_000 });
+  try {
+    await new PostgresSaver(pool, undefined, { schema: "finnor_langgraph" }).setup();
+  } finally {
+    await pool.end();
+  }
+  const client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 5_000 });
+  await client.connect();
+  try {
+    await client.query("GRANT USAGE ON SCHEMA finnor_langgraph TO finnor_app");
+    await client.query("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA finnor_langgraph TO finnor_app");
+    await client.query("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA finnor_langgraph TO finnor_app");
+    await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA finnor_langgraph GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO finnor_app");
+    await client.query("ALTER DEFAULT PRIVILEGES IN SCHEMA finnor_langgraph GRANT USAGE, SELECT ON SEQUENCES TO finnor_app");
+  } finally {
+    await client.end();
+  }
+}
+
 async function dropTemporaryDatabase(baseUrl: string, name: string): Promise<void> {
   const base = new URL(baseUrl);
   const admin = new URL(base.toString());
@@ -252,7 +322,10 @@ async function runGroup(group: TestGroup, baseUrl: string): Promise<GroupResult>
   for (const file of group.files) await access(resolve(FINNOR_OS_ROOT, file));
   let temporary: { name: string; url: string } | undefined;
   try {
-    if (group.kind === "integration") temporary = await createTemporaryDatabase(baseUrl);
+    if (group.kind === "integration") {
+      temporary = await createTemporaryDatabase(baseUrl);
+      await prepareTemporaryDatabase(temporary.url);
+    }
     const result = await runProcess(group.files, sanitizedChildEnvironment(temporary?.url, group.id));
     const safeOutput = redactText(result.output).value;
     const evidencePath = resolve(EVIDENCE_DIR, `p2-${group.id}.txt`);

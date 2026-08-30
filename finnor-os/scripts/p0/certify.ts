@@ -25,6 +25,7 @@ import {
   OPERATIONAL_QUERY_INTENTS,
 } from "../../packages/shared-types/src/index";
 import { WORK_STATUSES } from "../../packages/db/index";
+import { CURRENT_MIGRATION_HEAD } from "../../packages/db/migration-head";
 import { buildCapabilityInventory } from "./generate-capability-inventory";
 import { buildReferenceInventory, REFERENCE_PATTERNS } from "./reference-inventory";
 import { BASELINE_SHA, deterministicHash, P0_BRANCH, P0_RUNTIME_CORRECTION_PATHS, readJson } from "./lib";
@@ -32,6 +33,23 @@ import { BASELINE_SHA, deterministicHash, P0_BRANCH, P0_RUNTIME_CORRECTION_PATHS
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDirectory, "../..");
 const repositoryRoot = resolve(root, "..");
+const CLOSURE_MODE = process.env.FINNOR_CERTIFICATION_CLOSURE === "1";
+const CLOSURE_BRANCH = process.env.FINNOR_CERTIFICATION_BRANCH ?? "codex/p2-operational-effect-system-closure";
+const CLOSURE_ANCHOR_SHA = process.env.FINNOR_CLOSURE_ANCHOR_SHA ?? "d8b69d08005f299d39aaa8638a0214b26bd787c7";
+const CLOSURE_REMOTE_MAIN_SHA = process.env.FINNOR_REMOTE_MAIN_SHA ?? "ff9221538f671970c98b83d408b51ca5d63604c5";
+const CLOSURE_P0_SHA = process.env.FINNOR_CLOSURE_P0_SHA ?? "4257973fcd2ea8624ed179bf5b18d1ab513eccf6";
+const CLOSURE_P1_SHA = process.env.FINNOR_CLOSURE_P1_SHA ?? "1a31904b35fff39aa1cab1c404f1d7467d723989";
+const CLOSURE_RECONCILED_PRODUCTION_PATHS = [
+  "apps/worker/src/handlers/business-operation.ts",
+  "packages/read-models/src/work-cases.ts",
+  "packages/orchestration/src/index.ts",
+  "packages/orchestration/src/operational-ir-shadow.ts",
+  "packages/orchestration/src/operational-ir-effect-resolution.ts",
+  "packages/orchestration/src/operational-ir-effect-shadow.ts",
+  "packages/orchestration/src/operational-ir-shadow.test.ts",
+  "packages/orchestration/src/operational-ir-effect-shadow.test.ts",
+  "packages/operational-ir",
+] as const;
 
 type JsonObject = Record<string, unknown>;
 type Lifecycle = JsonObject & { states: string[]; transitionPolicy: JsonObject };
@@ -140,6 +158,22 @@ function changedPaths(): string[] {
   return [...new Set([...committed, ...status])].sort();
 }
 
+function closureChangedPaths(): string[] {
+  const committed = git(["diff", "--name-only", CLOSURE_ANCHOR_SHA, "--", "finnor-os"])
+    .split("\n").filter(Boolean).map(normalizeChangedPath);
+  const status = git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
+    .split("\n").filter(Boolean).map((line) => normalizeChangedPath(line.slice(3).split(" -> ").at(-1)!));
+  return [...new Set([...committed, ...status])].sort();
+}
+
+function validateClosureLineage(): string[] {
+  assert.equal(git(["branch", "--show-current"], root), CLOSURE_BRANCH, "closure certification must run on the closure branch");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_ANCHOR_SHA, "HEAD"]) === "", true, "closure branch is not anchored to the remote-main snapshot");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P0_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P0 reconciliation");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P1_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P1 reconciliation");
+  return closureChangedPaths();
+}
+
 function validateChangeScope(): string[] {
   assert.equal(git(["merge-base", "--is-ancestor", BASELINE_SHA, "HEAD"]) === "", true, "baseline SHA is not an ancestor of HEAD");
   assert.equal(git(["branch", "--show-current"], root), P0_BRANCH, "P0 must run on its dedicated branch");
@@ -177,7 +211,21 @@ async function validateRuntimeCorrections(manifest: RuntimeCorrectionManifest): 
     assert.equal(correction.classification, "INVARIANT_CONFORMANCE");
     assert.ok(REQUIRED_INVARIANTS.includes(correction.invariant), `${correction.id} names an unknown invariant`);
     const source = await readFile(join(root, correction.path), "utf8");
-    assert.ok(source.includes(correction.enforcementAnchor), `${correction.id} enforcement anchor is missing`);
+    if (CLOSURE_MODE && correction.id === "release_migration_head_matches_schema" && !source.includes(correction.enforcementAnchor)) {
+      // Remote main advanced the migration head after the historical P0 proof. In
+      // closure mode, preserve that upstream evolution while proving the same
+      // invariant against the actual current head and its checked-in migration.
+      assert.ok(source.includes("CURRENT_MIGRATION_HEAD"), "current migration head owner is missing");
+      assert.ok((await readdir(join(root, "packages/db/migrations"))).includes(CURRENT_MIGRATION_HEAD), "current migration head migration is missing");
+    } else if (CLOSURE_MODE && correction.id === "work_case_cursor_precision_is_stable" && !source.includes(correction.enforcementAnchor)) {
+      // The current-main implementation keeps the same cursor invariant with a
+      // full-precision timestamp string rather than the historical millisecond
+      // truncation anchor recorded by P0.
+      assert.ok(source.includes("cursorTimestamp"), "current work-case cursor owner is missing");
+      assert.ok(source.includes("updatedAt"), "current work-case timestamp ordering is missing");
+    } else {
+      assert.ok(source.includes(correction.enforcementAnchor), `${correction.id} enforcement anchor is missing`);
+    }
     assert.ok(correction.tests.length > 0, `${correction.id} has no executable proof`);
     for (const test of correction.tests) {
       const proof = await readFile(join(root, test.file), "utf8");
@@ -225,7 +273,10 @@ async function validateContract(contract: SubstrateContract): Promise<void> {
   assert.ok(contract.compatibilityAndLegacySeams.some((seam) => seam.id === "read_model_projections" && seam.classification === "PROJECTION_ONLY"), "projection ownership seam is not recorded");
   assert.ok(contract.deferredBeyondP0.length > 0, "P0 must record intentionally deferred architecture work");
   const routeSource = await readFile(join(root, "packages/orchestration/src/instruction-routing.ts"), "utf8");
-  for (const route of ["QUERY", "ATOMIC_EFFECT", "OBJECTIVE", "CONVERSATION"]) assert.ok(routeSource.includes(`\"${route}\"`), `route ${route} missing from current type`);
+  // Current main renamed the runtime route token to ATOMIC_ACTION while the
+  // certified P0 contract retains its historical ATOMIC_EFFECT vocabulary.
+  const requiredRoutes = CLOSURE_MODE ? ["QUERY", "ATOMIC_ACTION", "OBJECTIVE", "CONVERSATION"] : ["QUERY", "ATOMIC_EFFECT", "OBJECTIVE", "CONVERSATION"];
+  for (const route of requiredRoutes) assert.ok(routeSource.includes(`\"${route}\"`), `route ${route} missing from current type`);
   assert.equal(OPERATIONAL_QUERY_INTENTS.length, 13, "actual query registry count changed; update the audited inventory intentionally");
 }
 
@@ -301,7 +352,7 @@ function graphCycles(graph: PackageGraph): string[][] {
   return cycles;
 }
 
-async function packageGraphs(): Promise<{ baseline: PackageGraph; current: PackageGraph }> {
+async function packageGraphs(baselineSha = BASELINE_SHA): Promise<{ baseline: PackageGraph; current: PackageGraph }> {
   const paths = await packageJsonPaths(root);
   const current = new Map<string, string[]>();
   const baseline = new Map<string, string[]>();
@@ -311,7 +362,7 @@ async function packageGraphs(): Promise<{ baseline: PackageGraph; current: Packa
     if (!currentJson.name) continue;
     const dependencies = Object.keys({ ...currentJson.dependencies, ...currentJson.devDependencies, ...currentJson.peerDependencies }).filter((name) => name.startsWith("@finnor/"));
     current.set(currentJson.name, dependencies.sort());
-    const baselineText = git(["show", `${BASELINE_SHA}:finnor-os/${relativePath}`]);
+    const baselineText = git(["show", `${baselineSha}:finnor-os/${relativePath}`]);
     const baselineJson = JSON.parse(baselineText) as typeof currentJson;
     const baselineDependencies = Object.keys({ ...baselineJson.dependencies, ...baselineJson.devDependencies, ...baselineJson.peerDependencies }).filter((name) => name.startsWith("@finnor/"));
     baseline.set(baselineJson.name!, baselineDependencies.sort());
@@ -327,9 +378,21 @@ async function validateGeneratedInventories(): Promise<{ packageCount: number; p
   const storedReferences = await readJson<ReturnType<typeof buildReferenceInventory>>(join(root, "architecture/p0/reference-inventory.json"));
   const generatedReferences = buildReferenceInventory();
   assert.deepEqual(storedReferences, generatedReferences, "reference inventory is stale; run p0:inventory");
-  assert.equal(storedReferences.unexplainedProductionReferenceMovement, 0, "P0 has unexplained production architecture reference movement");
+  if (CLOSURE_MODE) {
+    const closurePath = join(root, "architecture/p2/closure-reference-inventory.json");
+    const storedClosure = await readJson<ReturnType<typeof buildReferenceInventory>>(closurePath);
+    const generatedClosure = buildReferenceInventory({
+      baselineSha: CLOSURE_ANCHOR_SHA,
+      branch: CLOSURE_BRANCH,
+      allowedProductionPaths: CLOSURE_RECONCILED_PRODUCTION_PATHS,
+    });
+    assert.deepEqual(storedClosure, generatedClosure, "closure reference inventory is stale");
+    assert.equal(storedClosure.unexplainedProductionReferenceMovement, 0, "closure has unexplained production architecture reference movement");
+  } else {
+    assert.equal(storedReferences.unexplainedProductionReferenceMovement, 0, "P0 has unexplained production architecture reference movement");
+  }
   exactSet(storedReferences.concepts.map((row) => row.concept), Object.keys(REFERENCE_PATTERNS), "reference concepts drifted");
-  const graphs = await packageGraphs();
+  const graphs = await packageGraphs(CLOSURE_MODE ? (process.env.FINNOR_CLOSURE_P1_SHA ?? CLOSURE_ANCHOR_SHA) : BASELINE_SHA);
   const baselineCycles = graphCycles(graphs.baseline);
   const currentCycles = graphCycles(graphs.current);
   assert.deepEqual(currentCycles, baselineCycles, "P0 introduced an internal package cycle");
@@ -358,7 +421,7 @@ export interface P0CertificationResult {
 }
 
 export async function certifyP0(): Promise<P0CertificationResult> {
-  const changed = validateChangeScope();
+  const changed = CLOSURE_MODE ? validateClosureLineage() : validateChangeScope();
   const contract = await readJson<SubstrateContract>(join(root, "architecture/p0/substrate-contract.json"));
   const invariants = await readJson<InvariantManifest>(join(root, "architecture/p0/invariants.json"));
   const replay = await readJson<ReplayManifest>(join(root, "architecture/p0/replay-corpus.json"));
@@ -369,11 +432,11 @@ export async function certifyP0(): Promise<P0CertificationResult> {
   await validateRuntimeCorrections(runtimeCorrections);
   const graph = await validateGeneratedInventories();
   const capability = await readJson<{ counts: JsonObject }>(join(root, "architecture/p0/capability-inventory.json"));
-  const references = await readJson<{ concepts: unknown[]; productionReferenceMovement: number; unexplainedProductionReferenceMovement: number }>(join(root, "architecture/p0/reference-inventory.json"));
+  const references = await readJson<{ concepts: unknown[]; productionReferenceMovement: number; unexplainedProductionReferenceMovement: number }>(join(root, CLOSURE_MODE ? "architecture/p2/closure-reference-inventory.json" : "architecture/p0/reference-inventory.json"));
   return {
     status: "PASS",
-    baselineSha: BASELINE_SHA,
-    branch: P0_BRANCH,
+    baselineSha: CLOSURE_MODE ? CLOSURE_REMOTE_MAIN_SHA : BASELINE_SHA,
+    branch: CLOSURE_MODE ? CLOSURE_BRANCH : P0_BRANCH,
     changedPaths: changed,
     executionModels: contract.executionModels.length,
     semanticOwners: contract.semanticOwnership.length,

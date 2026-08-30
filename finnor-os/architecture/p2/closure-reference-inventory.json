@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "baselineSha": "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2",
-  "branch": "codex/p0-existing-substrate-freeze",
+  "baselineSha": "d8b69d08005f299d39aaa8638a0214b26bd787c7",
+  "branch": "codex/p2-operational-effect-system-closure",
   "scopes": {
     "production": [
       "apps",
@@ -23,12 +23,12 @@
       "pattern": "InstructionExecutionModel|InstructionRouteDecision|classifyInstructionRoute|executionModel",
       "production": {
         "pre": {
-          "fileCount": 11,
-          "lineCount": 26,
+          "fileCount": 15,
+          "lineCount": 67,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/route.ts",
-              "lineCount": 2
+              "lineCount": 11
             },
             {
               "path": "packages/db/index.ts",
@@ -39,8 +39,12 @@
               "lineCount": 1
             },
             {
+              "path": "packages/orchestration/src/human-operating-compiler.ts",
+              "lineCount": 6
+            },
+            {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 7
+              "lineCount": 15
             },
             {
               "path": "packages/orchestration/src/instruction-routing.ts",
@@ -49,6 +53,14 @@
             {
               "path": "packages/orchestration/src/objective-loop.ts",
               "lineCount": 1
+            },
+            {
+              "path": "packages/orchestration/src/user-capability-registry.ts",
+              "lineCount": 3
+            },
+            {
+              "path": "packages/policy-schema/src/index.ts",
+              "lineCount": 7
             },
             {
               "path": "packages/read-models/src/causal-replay.ts",
@@ -60,7 +72,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 2
+              "lineCount": 3
             },
             {
               "path": "packages/shared-types/src/causal-replay.ts",
@@ -69,6 +81,10 @@
             {
               "path": "packages/shared-types/src/execution-projection.ts",
               "lineCount": 1
+            },
+            {
+              "path": "packages/shared-types/src/instruction-submission.ts",
+              "lineCount": 7
             }
           ]
         },
@@ -211,10 +227,9 @@
           ]
         },
         "delta": {
-          "files": 22,
-          "lines": 120,
+          "files": 18,
+          "lines": 79,
           "changedFiles": [
-            "apps/api/app/api/actions/route.ts",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/fixtures/locked-cases.json",
             "packages/operational-ir/fixtures/p2-programs.ts",
@@ -229,52 +244,26 @@
             "packages/operational-ir/src/semantic-shadow.test.ts",
             "packages/operational-ir/src/validation.test.ts",
             "packages/operational-ir/src/validation.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/index.ts",
             "packages/orchestration/src/operational-ir-effect-shadow.test.ts",
             "packages/orchestration/src/operational-ir-effect-shadow.ts",
             "packages/orchestration/src/operational-ir-shadow.test.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts",
-            "packages/orchestration/src/user-capability-registry.ts",
-            "packages/policy-schema/src/index.ts",
-            "packages/read-models/src/work-cases.ts",
-            "packages/shared-types/src/instruction-submission.ts"
+            "packages/orchestration/src/operational-ir-shadow.ts"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/actions/route.ts",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/fixtures/p2-programs.ts",
-            "packages/operational-ir/fixtures/programs.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/admissibility.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/operational-ir/src/semantic-diff.ts",
-            "packages/operational-ir/src/semantic-shadow.test.ts",
-            "packages/operational-ir/src/validation.test.ts",
-            "packages/operational-ir/src/validation.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/operational-ir-effect-shadow.test.ts",
-            "packages/orchestration/src/operational-ir-effect-shadow.ts",
-            "packages/orchestration/src/operational-ir-shadow.test.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts",
-            "packages/orchestration/src/user-capability-registry.ts",
-            "packages/policy-schema/src/index.ts",
-            "packages/shared-types/src/instruction-submission.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 5,
-          "lineCount": 15,
+          "fileCount": 9,
+          "lineCount": 28,
           "byFile": [
             {
               "path": "tests/integration/agentic-objective-loop.test.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "tests/integration/phase6-conversation-context-kernel.test.ts",
               "lineCount": 1
             },
             {
@@ -283,15 +272,27 @@
             },
             {
               "path": "tests/unit/action-route-operational-controls.test.ts",
+              "lineCount": 3
+            },
+            {
+              "path": "tests/unit/fast-read-lane.test.ts",
               "lineCount": 1
             },
             {
               "path": "tests/unit/instruction-routing-policy.test.ts",
-              "lineCount": 7
+              "lineCount": 9
+            },
+            {
+              "path": "tests/unit/instruction-submission-contract.test.ts",
+              "lineCount": 9
+            },
+            {
+              "path": "tests/unit/orchestrator-routing-regressions.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/unit/production-correctness-intake.test.ts",
-              "lineCount": 4
+              "lineCount": 1
             }
           ]
         },
@@ -354,8 +355,8 @@
           ]
         },
         "delta": {
-          "files": 8,
-          "lines": 21
+          "files": 4,
+          "lines": 8
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -366,7 +367,7 @@
       "production": {
         "pre": {
           "fileCount": 45,
-          "lineCount": 268,
+          "lineCount": 270,
           "byFile": [
             {
               "path": "apps/worker/src/handlers/observe-external-effect.ts",
@@ -470,7 +471,7 @@
             },
             {
               "path": "packages/orchestration/src/interaction-context.ts",
-              "lineCount": 6
+              "lineCount": 8
             },
             {
               "path": "packages/orchestration/src/operating-context.ts",
@@ -746,19 +747,14 @@
         },
         "delta": {
           "files": 2,
-          "lines": 6,
+          "lines": 4,
           "changedFiles": [
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/orchestration/src/interaction-context.ts",
             "packages/orchestration/src/operational-ir-effect-resolution.ts"
           ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/orchestration/src/interaction-context.ts",
-            "packages/orchestration/src/operational-ir-effect-resolution.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -865,8 +861,8 @@
       "pattern": "groundedPayload|grounded_payload|groundAction|CompiledCommandGraph|compiledGraph",
       "production": {
         "pre": {
-          "fileCount": 10,
-          "lineCount": 34,
+          "fileCount": 11,
+          "lineCount": 39,
           "byFile": [
             {
               "path": "apps/console/app/confirm/page.tsx",
@@ -889,12 +885,16 @@
               "lineCount": 4
             },
             {
+              "path": "packages/orchestration/src/human-operating-compiler.ts",
+              "lineCount": 1
+            },
+            {
               "path": "packages/orchestration/src/instruction-routing.ts",
               "lineCount": 1
             },
             {
               "path": "packages/orchestration/src/planner.ts",
-              "lineCount": 12
+              "lineCount": 16
             },
             {
               "path": "packages/orchestration/src/tiering.ts",
@@ -997,8 +997,8 @@
           ]
         },
         "delta": {
-          "files": 10,
-          "lines": 36,
+          "files": 9,
+          "lines": 31,
           "changedFiles": [
             "packages/operational-ir/fixtures/locked-cases.json",
             "packages/operational-ir/fixtures/p2-programs.ts",
@@ -1008,30 +1008,16 @@
             "packages/operational-ir/src/contracts.ts",
             "packages/operational-ir/src/effect-inference.ts",
             "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/planner.ts"
+            "packages/operational-ir/src/schema.ts"
           ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/fixtures/p2-programs.ts",
-            "packages/operational-ir/fixtures/programs.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/effect-inference.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/planner.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 6,
-          "lineCount": 20,
+          "fileCount": 7,
+          "lineCount": 23,
           "byFile": [
             {
               "path": "tests/integration/chaos-matrix.test.ts",
@@ -1052,6 +1038,10 @@
             {
               "path": "tests/integration/reasoning-tier.test.ts",
               "lineCount": 1
+            },
+            {
+              "path": "tests/unit/human-operating-compiler.test.ts",
+              "lineCount": 3
             },
             {
               "path": "tests/unit/instruction-routing-policy.test.ts",
@@ -1098,8 +1088,8 @@
           ]
         },
         "delta": {
-          "files": 2,
-          "lines": 4
+          "files": 1,
+          "lines": 1
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -1109,8 +1099,8 @@
       "pattern": "CapabilityContract|capability|actionType|action_type",
       "production": {
         "pre": {
-          "fileCount": 173,
-          "lineCount": 1241,
+          "fileCount": 180,
+          "lineCount": 1386,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/[id]/revert/route.ts",
@@ -1118,7 +1108,7 @@
             },
             {
               "path": "apps/api/app/api/actions/route.ts",
-              "lineCount": 1
+              "lineCount": 3
             },
             {
               "path": "apps/api/app/api/activity/route.ts",
@@ -1127,6 +1117,10 @@
             {
               "path": "apps/api/app/api/audit/route.ts",
               "lineCount": 3
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 2
             },
             {
               "path": "apps/api/app/api/dispatch/map/route.ts",
@@ -1305,6 +1299,10 @@
               "lineCount": 1
             },
             {
+              "path": "apps/worker/src/sse/gateway.ts",
+              "lineCount": 1
+            },
+            {
               "path": "packages/authority/src/index.ts",
               "lineCount": 36
             },
@@ -1323,6 +1321,10 @@
             {
               "path": "packages/computer/src/runner.ts",
               "lineCount": 1
+            },
+            {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 49
             },
             {
               "path": "packages/db/index.ts",
@@ -1541,6 +1543,10 @@
               "lineCount": 2
             },
             {
+              "path": "packages/orchestration/src/dealer-zero-preconditions.ts",
+              "lineCount": 17
+            },
+            {
               "path": "packages/orchestration/src/durable-execution.ts",
               "lineCount": 8
             },
@@ -1569,12 +1575,20 @@
               "lineCount": 1
             },
             {
+              "path": "packages/orchestration/src/human-operability-matrix.ts",
+              "lineCount": 31
+            },
+            {
+              "path": "packages/orchestration/src/human-operating-compiler.ts",
+              "lineCount": 13
+            },
+            {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 46
+              "lineCount": 49
             },
             {
               "path": "packages/orchestration/src/instruction-routing.ts",
-              "lineCount": 2
+              "lineCount": 3
             },
             {
               "path": "packages/orchestration/src/instruction-trace.ts",
@@ -1606,7 +1620,7 @@
             },
             {
               "path": "packages/orchestration/src/planner.ts",
-              "lineCount": 88
+              "lineCount": 98
             },
             {
               "path": "packages/orchestration/src/planning-health.ts",
@@ -1614,7 +1628,7 @@
             },
             {
               "path": "packages/orchestration/src/plugin-registry.ts",
-              "lineCount": 20
+              "lineCount": 23
             },
             {
               "path": "packages/orchestration/src/policy-simulation.ts",
@@ -1639,6 +1653,10 @@
             {
               "path": "packages/orchestration/src/tiering.ts",
               "lineCount": 5
+            },
+            {
+              "path": "packages/orchestration/src/user-capability-registry.ts",
+              "lineCount": 13
             },
             {
               "path": "packages/orchestration/src/voice.ts",
@@ -2621,13 +2639,9 @@
           ]
         },
         "delta": {
-          "files": 29,
-          "lines": 281,
+          "files": 22,
+          "lines": 136,
           "changedFiles": [
-            "apps/api/app/api/actions/route.ts",
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/sse/gateway.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/fixtures/locked-cases.json",
@@ -2649,58 +2663,16 @@
             "packages/operational-ir/src/runtime-mapping.ts",
             "packages/operational-ir/src/schema.ts",
             "packages/operational-ir/src/semantic-shadow.test.ts",
-            "packages/orchestration/src/dealer-zero-preconditions.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/index.ts",
-            "packages/orchestration/src/instruction-routing.ts",
-            "packages/orchestration/src/operational-ir-effect-resolution.ts",
-            "packages/orchestration/src/planner.ts",
-            "packages/orchestration/src/plugin-registry.ts",
-            "packages/orchestration/src/user-capability-registry.ts"
+            "packages/orchestration/src/operational-ir-effect-resolution.ts"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/actions/route.ts",
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/sse/gateway.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/fixtures/p2-locked-cases.json",
-            "packages/operational-ir/fixtures/p2-programs.ts",
-            "packages/operational-ir/fixtures/programs.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/admissibility.ts",
-            "packages/operational-ir/src/canonical.test.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/effect-inference.ts",
-            "packages/operational-ir/src/effects.ts",
-            "packages/operational-ir/src/information-flow.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/p2-locked-corpus.test.ts",
-            "packages/operational-ir/src/resolution.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/operational-ir/src/semantic-shadow.test.ts",
-            "packages/orchestration/src/dealer-zero-preconditions.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/instruction-routing.ts",
-            "packages/orchestration/src/operational-ir-effect-resolution.ts",
-            "packages/orchestration/src/planner.ts",
-            "packages/orchestration/src/plugin-registry.ts",
-            "packages/orchestration/src/user-capability-registry.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 168,
-          "lineCount": 1107,
+          "fileCount": 176,
+          "lineCount": 1146,
           "byFile": [
             {
               "path": "scripts/certify-jarvis-business-journeys.ts",
@@ -2713,6 +2685,14 @@
             {
               "path": "scripts/client-manifest.ts",
               "lineCount": 13
+            },
+            {
+              "path": "scripts/dealer-zero/capability-fixtures.ts",
+              "lineCount": 3
+            },
+            {
+              "path": "scripts/dealer-zero/static-reconciler.ts",
+              "lineCount": 1
             },
             {
               "path": "scripts/eval-planner.ts",
@@ -2809,6 +2789,10 @@
             {
               "path": "scripts/release/write-p3-t5-known-action-interrupted-report.ts",
               "lineCount": 6
+            },
+            {
+              "path": "scripts/seed-dealer-zero.ts",
+              "lineCount": 1
             },
             {
               "path": "scripts/seed-demo-tenant.ts",
@@ -3092,7 +3076,7 @@
             },
             {
               "path": "tests/integration/planner-repair.test.ts",
-              "lineCount": 18
+              "lineCount": 21
             },
             {
               "path": "tests/integration/planner-simulation.test.ts",
@@ -3259,6 +3243,10 @@
               "lineCount": 1
             },
             {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 10
+            },
+            {
               "path": "tests/unit/client-lifecycle-model.test.ts",
               "lineCount": 1
             },
@@ -3295,8 +3283,20 @@
               "lineCount": 1
             },
             {
+              "path": "tests/unit/human-operability-matrix.test.ts",
+              "lineCount": 6
+            },
+            {
+              "path": "tests/unit/human-operating-compiler.test.ts",
+              "lineCount": 12
+            },
+            {
               "path": "tests/unit/instruction-routing-policy.test.ts",
-              "lineCount": 2
+              "lineCount": 3
+            },
+            {
+              "path": "tests/unit/instruction-submission-contract.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/unit/jarvis-hardening-adversarial.test.ts",
@@ -3336,6 +3336,10 @@
             },
             {
               "path": "tests/unit/production-correctness-capability-retry.test.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "tests/unit/production-correctness-intake.test.ts",
               "lineCount": 1
             },
             {
@@ -4111,8 +4115,8 @@
           ]
         },
         "delta": {
-          "files": 14,
-          "lines": 81
+          "files": 6,
+          "lines": 42
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -4122,8 +4126,8 @@
       "pattern": "DomainAction|domainActions|domain_actions|DraftAction",
       "production": {
         "pre": {
-          "fileCount": 128,
-          "lineCount": 824,
+          "fileCount": 133,
+          "lineCount": 853,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/[id]/confirm/route.ts",
@@ -4151,6 +4155,10 @@
             },
             {
               "path": "apps/api/app/api/audit/route.ts",
+              "lineCount": 5
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
               "lineCount": 5
             },
             {
@@ -4211,7 +4219,7 @@
             },
             {
               "path": "apps/worker/src/handlers/scan-approval-expiry.ts",
-              "lineCount": 13
+              "lineCount": 16
             },
             {
               "path": "apps/worker/src/handlers/scan-ewma-reorder.ts",
@@ -4227,7 +4235,7 @@
             },
             {
               "path": "apps/worker/src/handlers/scan-watchdog.ts",
-              "lineCount": 10
+              "lineCount": 13
             },
             {
               "path": "apps/worker/src/handlers/scheduled-reminder.ts",
@@ -4250,12 +4258,20 @@
               "lineCount": 1
             },
             {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/data-platform/src/tasks.ts",
+              "lineCount": 4
+            },
+            {
               "path": "packages/db/index.ts",
               "lineCount": 13
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 33
+              "lineCount": 34
             },
             {
               "path": "packages/db/migrations/0000_init.sql",
@@ -4390,6 +4406,10 @@
               "lineCount": 3
             },
             {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 3
+            },
+            {
               "path": "packages/db/schema.ts",
               "lineCount": 42
             },
@@ -4491,7 +4511,7 @@
             },
             {
               "path": "packages/domain-plugins/universal-actions/runtime.ts",
-              "lineCount": 6
+              "lineCount": 5
             },
             {
               "path": "packages/domain-plugins/water-domain-knowledge/index.ts",
@@ -4550,8 +4570,12 @@
               "lineCount": 3
             },
             {
+              "path": "packages/orchestration/src/human-operating-compiler.ts",
+              "lineCount": 4
+            },
+            {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 65
+              "lineCount": 68
             },
             {
               "path": "packages/orchestration/src/instruction-routing.ts",
@@ -4575,7 +4599,7 @@
             },
             {
               "path": "packages/orchestration/src/planner.ts",
-              "lineCount": 8
+              "lineCount": 11
             },
             {
               "path": "packages/orchestration/src/reflection.ts",
@@ -5218,17 +5242,9 @@
           ]
         },
         "delta": {
-          "files": 15,
-          "lines": 98,
+          "files": 10,
+          "lines": 69,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/handlers/scan-approval-expiry.ts",
-            "apps/worker/src/handlers/scan-watchdog.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/data-platform/src/tasks.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/domain-plugins/universal-actions/runtime.ts",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/fixtures/locked-cases.json",
@@ -5238,40 +5254,16 @@
             "packages/operational-ir/src/effect-shadow.ts",
             "packages/operational-ir/src/lowerer.ts",
             "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/index.ts",
-            "packages/orchestration/src/planner.ts"
+            "packages/operational-ir/src/runtime-mapping.ts"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/handlers/scan-approval-expiry.ts",
-            "apps/worker/src/handlers/scan-watchdog.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/data-platform/src/tasks.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/domain-plugins/universal-actions/runtime.ts",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/effect-shadow.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/planner.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 99,
-          "lineCount": 449,
+          "fileCount": 100,
+          "lineCount": 451,
           "byFile": [
             {
               "path": "scripts/backup-restore-drill.ts",
@@ -5640,6 +5632,10 @@
             {
               "path": "tests/unit/demo-tenant-seeder.test.ts",
               "lineCount": 3
+            },
+            {
+              "path": "tests/unit/human-operating-compiler.test.ts",
+              "lineCount": 2
             },
             {
               "path": "tests/unit/instruction-cancel-route.test.ts",
@@ -6094,8 +6090,8 @@
           ]
         },
         "delta": {
-          "files": 5,
-          "lines": 16
+          "files": 4,
+          "lines": 14
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -6105,11 +6101,15 @@
       "pattern": "BusinessEffect|businessEffects|business_effects",
       "production": {
         "pre": {
-          "fileCount": 31,
-          "lineCount": 339,
+          "fileCount": 34,
+          "lineCount": 351,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/pending/route.ts",
+              "lineCount": 2
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
               "lineCount": 2
             },
             {
@@ -6134,7 +6134,7 @@
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 3
+              "lineCount": 4
             },
             {
               "path": "packages/db/migrations/0096_universal_business_effect_kernel.sql",
@@ -6147,6 +6147,10 @@
             {
               "path": "packages/db/migrations/0100_certified_outcome_packs_progressive_autonomy.sql",
               "lineCount": 3
+            },
+            {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 5
             },
             {
               "path": "packages/db/schema.ts",
@@ -6199,6 +6203,10 @@
             {
               "path": "packages/read-models/src/execution-projection.ts",
               "lineCount": 8
+            },
+            {
+              "path": "packages/read-models/src/work-cases.ts",
+              "lineCount": 4
             },
             {
               "path": "packages/shared-types/src/business-effects.ts",
@@ -6437,33 +6445,9 @@
           ]
         },
         "delta": {
-          "files": 18,
-          "lines": 81,
+          "files": 15,
+          "lines": 69,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/fixtures/p2-locked-cases.json",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/canonical.test.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/effect-shadow.ts",
-            "packages/operational-ir/src/effects.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/operational-ir/src/semantic-diff.ts",
-            "packages/operational-ir/src/static-lowerer.ts",
-            "packages/read-models/src/work-cases.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/fixtures/locked-cases.json",
@@ -6479,9 +6463,10 @@
             "packages/operational-ir/src/runtime-mapping.ts",
             "packages/operational-ir/src/semantic-diff.ts",
             "packages/operational-ir/src/static-lowerer.ts"
-          ]
+          ],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -6620,9 +6605,13 @@
       "pattern": "semanticHash|semantic_hash|scopeHash|scope_hash|businessEffectHash",
       "production": {
         "pre": {
-          "fileCount": 30,
-          "lineCount": 112,
+          "fileCount": 31,
+          "lineCount": 118,
           "byFile": [
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 4
+            },
             {
               "path": "apps/worker/src/handlers/run-workflow-step.ts",
               "lineCount": 1
@@ -6717,7 +6706,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 2
+              "lineCount": 4
             },
             {
               "path": "packages/shared-types/src/business-effects.ts",
@@ -6896,32 +6885,23 @@
           ]
         },
         "delta": {
-          "files": 6,
-          "lines": 17,
+          "files": 5,
+          "lines": 11,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/locked-corpus.test.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/read-models/src/work-cases.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
             "packages/operational-ir/fixtures/locked-cases.json",
             "packages/operational-ir/src/adapters-lowerer.test.ts",
             "packages/operational-ir/src/adapters.ts",
             "packages/operational-ir/src/locked-corpus.test.ts",
             "packages/operational-ir/src/p2-effects.test.ts"
-          ]
+          ],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
           "fileCount": 8,
-          "lineCount": 30,
+          "lineCount": 32,
           "byFile": [
             {
               "path": "scripts/generate-openapi.ts",
@@ -6945,7 +6925,7 @@
             },
             {
               "path": "tests/integration/external-effect-observation.test.ts",
-              "lineCount": 4
+              "lineCount": 6
             },
             {
               "path": "tests/integration/phase3-objective-first-runtime.test.ts",
@@ -7001,7 +6981,7 @@
         },
         "delta": {
           "files": 1,
-          "lines": 3
+          "lines": 1
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -7259,23 +7239,14 @@
             "packages/orchestration/src/operational-ir-effect-shadow.ts",
             "packages/orchestration/src/operational-ir-shadow.ts"
           ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/p2-locked-cases.json",
-            "packages/operational-ir/src/effect-shadow.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/operational-ir/src/shadow.ts",
-            "packages/orchestration/src/operational-ir-effect-shadow.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 5,
-          "lineCount": 26,
+          "fileCount": 6,
+          "lineCount": 28,
           "byFile": [
             {
               "path": "scripts/seed-demo-tenant.ts",
@@ -7296,6 +7267,10 @@
             {
               "path": "tests/integration/employee-authority-runtime.test.ts",
               "lineCount": 13
+            },
+            {
+              "path": "tests/unit/orchestrator-routing-regressions.test.ts",
+              "lineCount": 2
             }
           ]
         },
@@ -7342,8 +7317,8 @@
           ]
         },
         "delta": {
-          "files": 4,
-          "lines": 5
+          "files": 3,
+          "lines": 3
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -7353,8 +7328,8 @@
       "pattern": "ApprovalRequest|approvalRequests|approval_requests|approvalSteps|approval_steps",
       "production": {
         "pre": {
-          "fileCount": 11,
-          "lineCount": 99,
+          "fileCount": 12,
+          "lineCount": 106,
           "byFile": [
             {
               "path": "packages/authority/src/index.ts",
@@ -7362,7 +7337,7 @@
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 5
+              "lineCount": 6
             },
             {
               "path": "packages/db/migrations/0069_employee_authority_runtime.sql",
@@ -7383,6 +7358,10 @@
             {
               "path": "packages/db/migrations/0096_universal_business_effect_kernel.sql",
               "lineCount": 5
+            },
+            {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 6
             },
             {
               "path": "packages/db/schema.ts",
@@ -7473,26 +7452,17 @@
           ]
         },
         "delta": {
-          "files": 5,
-          "lines": 12,
+          "files": 4,
+          "lines": 5,
           "changedFiles": [
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
             "packages/operational-ir/src/effect-shadow.ts",
             "packages/operational-ir/src/shadow.ts",
             "packages/orchestration/src/operational-ir-effect-shadow.ts",
             "packages/orchestration/src/operational-ir-shadow.ts"
           ],
-          "unexpectedChangedFiles": [
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/operational-ir/src/effect-shadow.ts",
-            "packages/operational-ir/src/shadow.ts",
-            "packages/orchestration/src/operational-ir-effect-shadow.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -7587,9 +7557,13 @@
       "pattern": "WorkStatus|WORK_STATUSES|workInputs|work_inputs|works",
       "production": {
         "pre": {
-          "fileCount": 61,
-          "lineCount": 488,
+          "fileCount": 69,
+          "lineCount": 555,
           "byFile": [
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 7
+            },
             {
               "path": "apps/api/app/api/instructions/[id]/cancel/route.ts",
               "lineCount": 4
@@ -7635,16 +7609,20 @@
               "lineCount": 2
             },
             {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 4
+            },
+            {
               "path": "packages/db/event-fabric.ts",
               "lineCount": 4
             },
             {
               "path": "packages/db/index.ts",
-              "lineCount": 84
+              "lineCount": 109
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 21
+              "lineCount": 25
             },
             {
               "path": "packages/db/migrations/0065_durable_work_kernel.sql",
@@ -7731,8 +7709,24 @@
               "lineCount": 2
             },
             {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 2
+            },
+            {
+              "path": "packages/db/migrations/0105_human_operating_compiler.sql",
+              "lineCount": 4
+            },
+            {
+              "path": "packages/db/migrations/0106_interactive_runtime_closure.sql",
+              "lineCount": 4
+            },
+            {
+              "path": "packages/db/migrations/0108_operating_product_closure.sql",
+              "lineCount": 10
+            },
+            {
               "path": "packages/db/schema.ts",
-              "lineCount": 50
+              "lineCount": 51
             },
             {
               "path": "packages/domain-plugins/scheduling/index.ts",
@@ -7760,11 +7754,19 @@
             },
             {
               "path": "packages/orchestration/src/fast-read-lane.ts",
-              "lineCount": 3
+              "lineCount": 4
+            },
+            {
+              "path": "packages/orchestration/src/human-operability-matrix.ts",
+              "lineCount": 1
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 12
+              "lineCount": 14
+            },
+            {
+              "path": "packages/orchestration/src/interaction-context.ts",
+              "lineCount": 1
             },
             {
               "path": "packages/orchestration/src/objective-loop.ts",
@@ -7808,7 +7810,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 21
+              "lineCount": 22
             },
             {
               "path": "packages/shared-types/src/dealer-zero-fixtures.ts",
@@ -8123,47 +8125,19 @@
           ]
         },
         "delta": {
-          "files": 9,
-          "lines": 69,
+          "files": 1,
+          "lines": 2,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/db/index.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/db/migrations/0105_human_operating_compiler.sql",
-            "packages/db/migrations/0106_interactive_runtime_closure.sql",
-            "packages/db/migrations/0108_operating_product_closure.sql",
-            "packages/db/schema.ts",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/orchestration/src/fast-read-lane.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
-            "packages/orchestration/src/index.ts",
-            "packages/orchestration/src/interaction-context.ts",
-            "packages/read-models/src/work-cases.ts"
+            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/db/index.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/db/migrations/0105_human_operating_compiler.sql",
-            "packages/db/migrations/0106_interactive_runtime_closure.sql",
-            "packages/db/migrations/0108_operating_product_closure.sql",
-            "packages/db/schema.ts",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/orchestration/src/fast-read-lane.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
-            "packages/orchestration/src/interaction-context.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 48,
-          "lineCount": 192,
+          "fileCount": 54,
+          "lineCount": 205,
           "byFile": [
             {
               "path": "scripts/client-factory.ts",
@@ -8180,6 +8154,10 @@
             {
               "path": "scripts/client-provisioning.ts",
               "lineCount": 1
+            },
+            {
+              "path": "scripts/dealer-zero/static-reconciler.ts",
+              "lineCount": 5
             },
             {
               "path": "scripts/generate-openapi.ts",
@@ -8254,6 +8232,10 @@
               "lineCount": 3
             },
             {
+              "path": "tests/integration/dealer-zero-seed.test.ts",
+              "lineCount": 1
+            },
+            {
               "path": "tests/integration/dlq-routes.test.ts",
               "lineCount": 1
             },
@@ -8270,6 +8252,10 @@
               "lineCount": 2
             },
             {
+              "path": "tests/integration/intake-idempotency.test.ts",
+              "lineCount": 1
+            },
+            {
               "path": "tests/integration/operational-query-api.test.ts",
               "lineCount": 2
             },
@@ -8280,6 +8266,10 @@
             {
               "path": "tests/integration/phase0-company-world.test.ts",
               "lineCount": 3
+            },
+            {
+              "path": "tests/integration/scan-watchdog.test.ts",
+              "lineCount": 4
             },
             {
               "path": "tests/integration/tenant-isolation.test.ts",
@@ -8314,8 +8304,16 @@
               "lineCount": 7
             },
             {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 1
+            },
+            {
               "path": "tests/unit/client-lifecycle-model.test.ts",
               "lineCount": 4
+            },
+            {
+              "path": "tests/unit/human-operating-compiler.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/unit/instruction-cancel-route.test.ts",
@@ -8598,8 +8596,8 @@
           ]
         },
         "delta": {
-          "files": 10,
-          "lines": 19
+          "files": 4,
+          "lines": 6
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -8609,9 +8607,13 @@
       "pattern": "ObjectiveLoop|workObjectiveLoops|work_objective_loops|ObjectiveState",
       "production": {
         "pre": {
-          "fileCount": 25,
-          "lineCount": 146,
+          "fileCount": 27,
+          "lineCount": 159,
           "byFile": [
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 8
+            },
             {
               "path": "apps/api/app/api/instructions/[id]/cancel/route.ts",
               "lineCount": 4
@@ -8626,7 +8628,7 @@
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 11
+              "lineCount": 12
             },
             {
               "path": "packages/db/migrations/0070_agentic_objective_loop.sql",
@@ -8671,6 +8673,10 @@
             {
               "path": "packages/db/migrations/0101_multi_employee_conversation_context_kernel.sql",
               "lineCount": 2
+            },
+            {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 4
             },
             {
               "path": "packages/db/schema.ts",
@@ -8829,25 +8835,17 @@
           ]
         },
         "delta": {
-          "files": 2,
-          "lines": 13,
-          "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql"
-          ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql"
-          ]
+          "files": 0,
+          "lines": 0,
+          "changedFiles": [],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
-          "fileCount": 4,
-          "lineCount": 5,
+          "fileCount": 6,
+          "lineCount": 7,
           "byFile": [
             {
               "path": "tests/integration/agentic-objective-loop.test.ts",
@@ -8862,7 +8860,15 @@
               "lineCount": 1
             },
             {
+              "path": "tests/unit/human-operating-compiler.test.ts",
+              "lineCount": 1
+            },
+            {
               "path": "tests/unit/instruction-cancel-route.test.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "tests/unit/orchestrator-routing-regressions.test.ts",
               "lineCount": 1
             }
           ]
@@ -8906,8 +8912,8 @@
           ]
         },
         "delta": {
-          "files": 4,
-          "lines": 5
+          "files": 2,
+          "lines": 3
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -8917,8 +8923,8 @@
       "pattern": "executionState|claimedAt|claimedBy|claimStep|claim.*Execution",
       "production": {
         "pre": {
-          "fileCount": 13,
-          "lineCount": 62,
+          "fileCount": 14,
+          "lineCount": 65,
           "byFile": [
             {
               "path": "apps/worker/src/handlers/run-workflow-step.ts",
@@ -8959,6 +8965,10 @@
             {
               "path": "packages/read-models/src/operational-queries.ts",
               "lineCount": 2
+            },
+            {
+              "path": "packages/read-models/src/work-cases.ts",
+              "lineCount": 3
             },
             {
               "path": "packages/shared-types/src/execution-projection.ts",
@@ -9037,19 +9047,17 @@
           ]
         },
         "delta": {
-          "files": 1,
-          "lines": 3,
-          "changedFiles": [
-            "packages/read-models/src/work-cases.ts"
-          ],
+          "files": 0,
+          "lines": 0,
+          "changedFiles": [],
           "unexpectedChangedFiles": []
         },
-        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
-          "fileCount": 16,
-          "lineCount": 87,
+          "fileCount": 17,
+          "lineCount": 89,
           "byFile": [
             {
               "path": "tests/integration/agentic-objective-loop.test.ts",
@@ -9077,6 +9085,10 @@
             },
             {
               "path": "tests/integration/helpers/durable-action.ts",
+              "lineCount": 2
+            },
+            {
+              "path": "tests/integration/inbox-dedup.test.ts",
               "lineCount": 2
             },
             {
@@ -9200,8 +9212,8 @@
           ]
         },
         "delta": {
-          "files": 3,
-          "lines": 5
+          "files": 2,
+          "lines": 3
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -9211,8 +9223,8 @@
       "pattern": "externalOperations|external_operations|integrationOperations|integration_operations",
       "production": {
         "pre": {
-          "fileCount": 25,
-          "lineCount": 261,
+          "fileCount": 26,
+          "lineCount": 262,
           "byFile": [
             {
               "path": "apps/api/app/api/webhooks/vapi/route.ts",
@@ -9233,6 +9245,10 @@
             {
               "path": "apps/worker/src/handlers/run-workflow-step.ts",
               "lineCount": 24
+            },
+            {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 1
             },
             {
               "path": "packages/db/migrations-bundle.ts",
@@ -9427,21 +9443,17 @@
           ]
         },
         "delta": {
-          "files": 1,
-          "lines": 1,
-          "changedFiles": [
-            "packages/data-platform/src/business-truth-registry.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "packages/data-platform/src/business-truth-registry.ts"
-          ]
+          "files": 0,
+          "lines": 0,
+          "changedFiles": [],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
-          "fileCount": 17,
-          "lineCount": 67,
+          "fileCount": 18,
+          "lineCount": 68,
           "byFile": [
             {
               "path": "scripts/chaos-test.ts",
@@ -9510,6 +9522,10 @@
             {
               "path": "tests/integration/workflow-runtime.test.ts",
               "lineCount": 7
+            },
+            {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 1
             }
           ]
         },
@@ -9604,8 +9620,8 @@
           ]
         },
         "delta": {
-          "files": 4,
-          "lines": 12
+          "files": 3,
+          "lines": 11
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -9615,11 +9631,15 @@
       "pattern": "idempotencyKey|idempotency_key|operationKey|operation_key",
       "production": {
         "pre": {
-          "fileCount": 74,
-          "lineCount": 397,
+          "fileCount": 75,
+          "lineCount": 409,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/route.ts",
+              "lineCount": 3
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
               "lineCount": 3
             },
             {
@@ -9704,7 +9724,7 @@
             },
             {
               "path": "packages/db/index.ts",
-              "lineCount": 25
+              "lineCount": 32
             },
             {
               "path": "packages/db/migrations-bundle.ts",
@@ -9892,7 +9912,7 @@
             },
             {
               "path": "packages/tools/src/registry.ts",
-              "lineCount": 14
+              "lineCount": 16
             },
             {
               "path": "packages/tools/src/stripe.ts",
@@ -10227,27 +10247,19 @@
           ]
         },
         "delta": {
-          "files": 2,
-          "lines": 13,
+          "files": 1,
+          "lines": 1,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/index.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/tools/src/registry.ts"
+            "packages/operational-ir/src/adapters-lowerer.test.ts"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/db/index.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/tools/src/registry.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
           "fileCount": 68,
-          "lineCount": 314,
+          "lineCount": 317,
           "byFile": [
             {
               "path": "scripts/chaos-test.ts",
@@ -10363,7 +10375,7 @@
             },
             {
               "path": "tests/integration/intake-idempotency.test.ts",
-              "lineCount": 11
+              "lineCount": 13
             },
             {
               "path": "tests/integration/jarvis-hardening-contract.test.ts",
@@ -10423,7 +10435,7 @@
             },
             {
               "path": "tests/integration/scan-watchdog.test.ts",
-              "lineCount": 11
+              "lineCount": 12
             },
             {
               "path": "tests/integration/single-action-runtime-bridge.test.ts",
@@ -10811,7 +10823,7 @@
         },
         "delta": {
           "files": 2,
-          "lines": 5
+          "lines": 2
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -11079,12 +11091,9 @@
             "packages/operational-ir/src/adapters-lowerer.test.ts",
             "packages/operational-ir/src/p2-effects.test.ts"
           ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/p2-effects.test.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -11223,11 +11232,15 @@
       "pattern": "reconciliationCases|reconciliation_cases|reconcil",
       "production": {
         "pre": {
-          "fileCount": 76,
-          "lineCount": 417,
+          "fileCount": 85,
+          "lineCount": 445,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/[id]/revert/route.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
               "lineCount": 1
             },
             {
@@ -11271,6 +11284,10 @@
               "lineCount": 1
             },
             {
+              "path": "apps/worker/src/handlers/reconcile-interactive-work.ts",
+              "lineCount": 2
+            },
+            {
               "path": "apps/worker/src/handlers/reconciliation.ts",
               "lineCount": 5
             },
@@ -11300,6 +11317,10 @@
             },
             {
               "path": "apps/worker/src/index.ts",
+              "lineCount": 4
+            },
+            {
+              "path": "apps/worker/src/sse/gateway.ts",
               "lineCount": 2
             },
             {
@@ -11315,16 +11336,32 @@
               "lineCount": 15
             },
             {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 7
+            },
+            {
+              "path": "packages/data-platform/src/contacts.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/data-platform/src/equipment.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/data-platform/src/inventory.ts",
+              "lineCount": 2
+            },
+            {
               "path": "packages/data-platform/src/source-truth.ts",
               "lineCount": 16
             },
             {
               "path": "packages/db/index.ts",
-              "lineCount": 4
+              "lineCount": 7
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 11
+              "lineCount": 13
             },
             {
               "path": "packages/db/migrations/0007_execution_recovery.sql",
@@ -11369,6 +11406,14 @@
             {
               "path": "packages/db/migrations/0100_certified_outcome_packs_progressive_autonomy.sql",
               "lineCount": 5
+            },
+            {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/db/migrations/0106_interactive_runtime_closure.sql",
+              "lineCount": 2
             },
             {
               "path": "packages/db/schema.ts",
@@ -11428,7 +11473,7 @@
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 12
+              "lineCount": 14
             },
             {
               "path": "packages/orchestration/src/outcome-packs.ts",
@@ -11899,54 +11944,23 @@
           ]
         },
         "delta": {
-          "files": 14,
-          "lines": 34,
+          "files": 5,
+          "lines": 6,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/handlers/reconcile-interactive-work.ts",
-            "apps/worker/src/index.ts",
-            "apps/worker/src/sse/gateway.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/data-platform/src/contacts.ts",
-            "packages/data-platform/src/equipment.ts",
-            "packages/data-platform/src/inventory.ts",
-            "packages/db/index.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/db/migrations/0106_interactive_runtime_closure.sql",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/orchestration/src/index.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "apps/worker/src/handlers/reconcile-interactive-work.ts",
-            "apps/worker/src/index.ts",
-            "apps/worker/src/sse/gateway.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/data-platform/src/contacts.ts",
-            "packages/data-platform/src/equipment.ts",
-            "packages/data-platform/src/inventory.ts",
-            "packages/db/index.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/db/migrations/0106_interactive_runtime_closure.sql",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/src/adapters-lowerer.test.ts",
             "packages/operational-ir/src/p2-effects.test.ts",
             "packages/operational-ir/src/runtime-mapping.ts"
-          ]
+          ],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 38,
-          "lineCount": 144,
+          "fileCount": 44,
+          "lineCount": 171,
           "byFile": [
             {
               "path": "scripts/chaos-runner.ts",
@@ -11958,6 +11972,14 @@
             },
             {
               "path": "scripts/client-lifecycle.ts",
+              "lineCount": 5
+            },
+            {
+              "path": "scripts/dealer-zero/capability-fixtures.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "scripts/dealer-zero/static-reconciler.ts",
               "lineCount": 5
             },
             {
@@ -11985,6 +12007,10 @@
               "lineCount": 3
             },
             {
+              "path": "scripts/seed-dealer-zero.ts",
+              "lineCount": 5
+            },
+            {
               "path": "scripts/seed-demo-tenant.ts",
               "lineCount": 1
             },
@@ -11998,7 +12024,7 @@
             },
             {
               "path": "tests/integration/chaos-matrix.test.ts",
-              "lineCount": 3
+              "lineCount": 5
             },
             {
               "path": "tests/integration/compensation.test.ts",
@@ -12011,6 +12037,10 @@
             {
               "path": "tests/integration/dealer-zero-e2e.test.ts",
               "lineCount": 2
+            },
+            {
+              "path": "tests/integration/dealer-zero-seed.test.ts",
+              "lineCount": 7
             },
             {
               "path": "tests/integration/execution-projection.test.ts",
@@ -12031,6 +12061,10 @@
             {
               "path": "tests/integration/inbox-dedup.test.ts",
               "lineCount": 4
+            },
+            {
+              "path": "tests/integration/intake-idempotency.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/integration/outcome-pack-autonomy.test.ts",
@@ -12083,6 +12117,10 @@
             {
               "path": "tests/integration/workflow-runtime.test.ts",
               "lineCount": 11
+            },
+            {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 6
             },
             {
               "path": "tests/unit/instruction-cancel-route.test.ts",
@@ -12317,8 +12355,8 @@
           ]
         },
         "delta": {
-          "files": 14,
-          "lines": 58
+          "files": 8,
+          "lines": 31
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -12328,12 +12366,16 @@
       "pattern": "verification|successVerifiedAt|verified",
       "production": {
         "pre": {
-          "fileCount": 80,
-          "lineCount": 415,
+          "fileCount": 84,
+          "lineCount": 448,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/route.ts",
               "lineCount": 1
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 25
             },
             {
               "path": "apps/api/app/api/objectives/route.ts",
@@ -12436,6 +12478,10 @@
               "lineCount": 1
             },
             {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
+              "lineCount": 1
+            },
+            {
               "path": "packages/data-platform/src/source-truth.ts",
               "lineCount": 1
             },
@@ -12445,7 +12491,7 @@
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 12
+              "lineCount": 13
             },
             {
               "path": "packages/db/migrations/0032_least_privilege_app_role.sql",
@@ -12496,6 +12542,10 @@
               "lineCount": 3
             },
             {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
+              "lineCount": 3
+            },
+            {
               "path": "packages/db/schema.ts",
               "lineCount": 14
             },
@@ -12533,6 +12583,10 @@
             },
             {
               "path": "packages/orchestration/src/graph/nodes.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/orchestration/src/human-operability-matrix.ts",
               "lineCount": 1
             },
             {
@@ -12581,7 +12635,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 4
+              "lineCount": 6
             },
             {
               "path": "packages/security/src/auth.ts",
@@ -13076,13 +13130,9 @@
           ]
         },
         "delta": {
-          "files": 24,
-          "lines": 81,
+          "files": 20,
+          "lines": 48,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
             "packages/operational-ir/fixtures/locked-cases.json",
@@ -13102,39 +13152,11 @@
             "packages/operational-ir/src/semantic-diff.ts",
             "packages/operational-ir/src/semantic-shadow.test.ts",
             "packages/operational-ir/src/validation.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts",
-            "packages/read-models/src/work-cases.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json",
-            "packages/operational-ir/fixtures/locked-cases.json",
-            "packages/operational-ir/fixtures/p2-locked-cases.json",
-            "packages/operational-ir/fixtures/p2-programs.ts",
-            "packages/operational-ir/fixtures/programs.ts",
-            "packages/operational-ir/src/adapters-lowerer.test.ts",
-            "packages/operational-ir/src/adapters.ts",
-            "packages/operational-ir/src/contracts.ts",
-            "packages/operational-ir/src/effects.ts",
-            "packages/operational-ir/src/information-flow.ts",
-            "packages/operational-ir/src/locked-corpus.test.ts",
-            "packages/operational-ir/src/lowerer.ts",
-            "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/operational-ir/src/semantic-diff.ts",
-            "packages/operational-ir/src/semantic-shadow.test.ts",
-            "packages/operational-ir/src/validation.ts",
-            "packages/orchestration/src/human-operability-matrix.ts",
             "packages/orchestration/src/operational-ir-shadow.ts"
-          ]
+          ],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -13541,12 +13563,16 @@
       "pattern": "DecisionReceipt|decisionReceipts|decision_receipts",
       "production": {
         "pre": {
-          "fileCount": 51,
-          "lineCount": 239,
+          "fileCount": 53,
+          "lineCount": 242,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/pending/route.ts",
               "lineCount": 12
+            },
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 2
             },
             {
               "path": "apps/api/app/api/corrections/route.ts",
@@ -13586,6 +13612,10 @@
             },
             {
               "path": "packages/computer/src/repository.ts",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/data-platform/src/business-truth-registry.ts",
               "lineCount": 1
             },
             {
@@ -13973,25 +14003,19 @@
           ]
         },
         "delta": {
-          "files": 3,
-          "lines": 6,
+          "files": 1,
+          "lines": 3,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
             "packages/operational-ir/audit/pre-change-reference-inventory.json"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/data-platform/src/business-truth-registry.ts",
-            "packages/operational-ir/audit/pre-change-reference-inventory.json"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 46,
-          "lineCount": 158,
+          "fileCount": 48,
+          "lineCount": 161,
           "byFile": [
             {
               "path": "scripts/backfill-embeddings.ts",
@@ -14090,6 +14114,10 @@
               "lineCount": 1
             },
             {
+              "path": "tests/integration/inbox-dedup.test.ts",
+              "lineCount": 2
+            },
+            {
               "path": "tests/integration/jarvis-hardening-contract.test.ts",
               "lineCount": 2
             },
@@ -14160,6 +14188,10 @@
             {
               "path": "tests/integration/workflow-runtime.test.ts",
               "lineCount": 3
+            },
+            {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/unit/llm-routing-observability.test.ts",
@@ -14386,8 +14418,8 @@
           ]
         },
         "delta": {
-          "files": 4,
-          "lines": 5
+          "files": 2,
+          "lines": 2
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -14397,8 +14429,8 @@
       "pattern": "OperatingContext|InteractionContext|operating_context|interaction_context",
       "production": {
         "pre": {
-          "fileCount": 17,
-          "lineCount": 89,
+          "fileCount": 18,
+          "lineCount": 92,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/route.ts",
@@ -14419,6 +14451,10 @@
             {
               "path": "packages/orchestration/src/conversation-kernel.ts",
               "lineCount": 1
+            },
+            {
+              "path": "packages/orchestration/src/human-operating-compiler.ts",
+              "lineCount": 2
             },
             {
               "path": "packages/orchestration/src/index.ts",
@@ -14446,7 +14482,7 @@
             },
             {
               "path": "packages/orchestration/src/planner.ts",
-              "lineCount": 4
+              "lineCount": 5
             },
             {
               "path": "packages/orchestration/src/research-context.ts",
@@ -14549,23 +14585,17 @@
           ]
         },
         "delta": {
-          "files": 1,
-          "lines": 3,
-          "changedFiles": [
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/planner.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "packages/orchestration/src/human-operating-compiler.ts",
-            "packages/orchestration/src/planner.ts"
-          ]
+          "files": 0,
+          "lines": 0,
+          "changedFiles": [],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
-          "fileCount": 10,
-          "lineCount": 37,
+          "fileCount": 12,
+          "lineCount": 45,
           "byFile": [
             {
               "path": "tests/integration/identity-access-fabric.test.ts",
@@ -14582,6 +14612,10 @@
             {
               "path": "tests/integration/phase0-company-world.test.ts",
               "lineCount": 2
+            },
+            {
+              "path": "tests/integration/planner-repair.test.ts",
+              "lineCount": 3
             },
             {
               "path": "tests/integration/universal-action-fabric.test.ts",
@@ -14601,6 +14635,10 @@
             },
             {
               "path": "tests/unit/operating-interaction.test.ts",
+              "lineCount": 5
+            },
+            {
+              "path": "tests/unit/orchestrator-routing-regressions.test.ts",
               "lineCount": 5
             },
             {
@@ -14668,8 +14706,8 @@
           ]
         },
         "delta": {
-          "files": 3,
-          "lines": 9
+          "files": 1,
+          "lines": 1
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -14680,7 +14718,7 @@
       "production": {
         "pre": {
           "fileCount": 18,
-          "lineCount": 75,
+          "lineCount": 76,
           "byFile": [
             {
               "path": "apps/api/app/api/corrections/route.ts",
@@ -14744,7 +14782,7 @@
             },
             {
               "path": "packages/orchestration/src/planner.ts",
-              "lineCount": 3
+              "lineCount": 4
             },
             {
               "path": "packages/orchestration/src/read-routing.ts",
@@ -14836,20 +14874,16 @@
         },
         "delta": {
           "files": 0,
-          "lines": 1,
-          "changedFiles": [
-            "packages/orchestration/src/planner.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "packages/orchestration/src/planner.ts"
-          ]
+          "lines": 0,
+          "changedFiles": [],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
-          "fileCount": 23,
-          "lineCount": 86,
+          "fileCount": 24,
+          "lineCount": 87,
           "byFile": [
             {
               "path": "scripts/eval-planner.ts",
@@ -14938,6 +14972,10 @@
             {
               "path": "tests/unit/jarvis-hardening-adversarial.test.ts",
               "lineCount": 2
+            },
+            {
+              "path": "tests/unit/orchestrator-routing-regressions.test.ts",
+              "lineCount": 1
             },
             {
               "path": "tests/unit/planner-memory.test.ts",
@@ -15052,8 +15090,8 @@
           ]
         },
         "delta": {
-          "files": 2,
-          "lines": 2
+          "files": 1,
+          "lines": 1
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -15063,9 +15101,13 @@
       "pattern": "SourceOwnership|source_ownership|CANONICAL_ENTITY_TYPES|canonical business|fieldOwnership",
       "production": {
         "pre": {
-          "fileCount": 18,
-          "lineCount": 30,
+          "fileCount": 20,
+          "lineCount": 32,
           "byFile": [
+            {
+              "path": "apps/api/app/api/certification/product-truth/route.ts",
+              "lineCount": 1
+            },
             {
               "path": "apps/api/app/api/webhooks/vapi/route.ts",
               "lineCount": 2
@@ -15101,6 +15143,10 @@
             {
               "path": "packages/domain-plugins/universal-actions/schemas.ts",
               "lineCount": 2
+            },
+            {
+              "path": "packages/orchestration/src/dealer-zero-preconditions.ts",
+              "lineCount": 1
             },
             {
               "path": "packages/orchestration/src/fast-read-lane.ts",
@@ -15235,27 +15281,20 @@
           ]
         },
         "delta": {
-          "files": 4,
-          "lines": 5,
+          "files": 2,
+          "lines": 3,
           "changedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/src/resolution.ts",
-            "packages/orchestration/src/dealer-zero-preconditions.ts"
+            "packages/operational-ir/src/resolution.ts"
           ],
-          "unexpectedChangedFiles": [
-            "apps/api/app/api/certification/product-truth/route.ts",
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
-            "packages/operational-ir/src/resolution.ts",
-            "packages/orchestration/src/dealer-zero-preconditions.ts"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
-          "fileCount": 2,
-          "lineCount": 3,
+          "fileCount": 3,
+          "lineCount": 4,
           "byFile": [
             {
               "path": "tests/integration/agentic-objective-loop.test.ts",
@@ -15264,6 +15303,10 @@
             {
               "path": "tests/integration/phase3-objective-first-runtime.test.ts",
               "lineCount": 2
+            },
+            {
+              "path": "tests/unit/business-truth-registry.test.ts",
+              "lineCount": 1
             }
           ]
         },
@@ -15294,8 +15337,8 @@
           ]
         },
         "delta": {
-          "files": 3,
-          "lines": 4
+          "files": 2,
+          "lines": 3
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -15305,8 +15348,8 @@
       "pattern": "ComputerTask|computerRuns|computer_runs|computer_run",
       "production": {
         "pre": {
-          "fileCount": 26,
-          "lineCount": 195,
+          "fileCount": 27,
+          "lineCount": 201,
           "byFile": [
             {
               "path": "apps/worker/src/handlers/run-computer-task.ts",
@@ -15398,6 +15441,10 @@
             },
             {
               "path": "packages/read-models/src/index.ts",
+              "lineCount": 6
+            },
+            {
+              "path": "packages/read-models/src/work-cases.ts",
               "lineCount": 6
             },
             {
@@ -15549,25 +15596,18 @@
           ]
         },
         "delta": {
-          "files": 6,
-          "lines": 13,
+          "files": 5,
+          "lines": 7,
           "changedFiles": [
             "packages/operational-ir/src/effect-shadow.ts",
             "packages/operational-ir/src/schema.ts",
             "packages/operational-ir/src/shadow.ts",
             "packages/orchestration/src/operational-ir-effect-shadow.ts",
-            "packages/orchestration/src/operational-ir-shadow.ts",
-            "packages/read-models/src/work-cases.ts"
-          ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/src/effect-shadow.ts",
-            "packages/operational-ir/src/schema.ts",
-            "packages/operational-ir/src/shadow.ts",
-            "packages/orchestration/src/operational-ir-effect-shadow.ts",
             "packages/orchestration/src/operational-ir-shadow.ts"
-          ]
+          ],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -15662,8 +15702,8 @@
       "pattern": "executionProjection|ExecutionProjection|workCases|WorkCases|operationalDeltas|operational_deltas|readModelProjections|read_model_projections",
       "production": {
         "pre": {
-          "fileCount": 15,
-          "lineCount": 80,
+          "fileCount": 16,
+          "lineCount": 82,
           "byFile": [
             {
               "path": "apps/api/app/api/read-models/[view]/route.ts",
@@ -15683,7 +15723,7 @@
             },
             {
               "path": "packages/db/migrations-bundle.ts",
-              "lineCount": 3
+              "lineCount": 4
             },
             {
               "path": "packages/db/migrations/0038_read_model_projections.sql",
@@ -15695,6 +15735,10 @@
             },
             {
               "path": "packages/db/migrations/0093_phase3_execution_projection.sql",
+              "lineCount": 1
+            },
+            {
+              "path": "packages/db/migrations/0104_product_truth_objective_realtime.sql",
               "lineCount": 1
             },
             {
@@ -15798,23 +15842,17 @@
           ]
         },
         "delta": {
-          "files": 1,
-          "lines": 2,
-          "changedFiles": [
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql"
-          ],
-          "unexpectedChangedFiles": [
-            "packages/db/migrations-bundle.ts",
-            "packages/db/migrations/0104_product_truth_objective_realtime.sql"
-          ]
+          "files": 0,
+          "lines": 0,
+          "changedFiles": [],
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "P0 changed no runtime reference locations."
       },
       "assurance": {
         "pre": {
           "fileCount": 10,
-          "lineCount": 33,
+          "lineCount": 36,
           "byFile": [
             {
               "path": "tests/integration/canonical-company-graph.test.ts",
@@ -15838,7 +15876,7 @@
             },
             {
               "path": "tests/integration/work-cases.test.ts",
-              "lineCount": 6
+              "lineCount": 9
             },
             {
               "path": "tests/integration/workspace-config-route.test.ts",
@@ -15914,7 +15952,7 @@
         },
         "delta": {
           "files": 2,
-          "lines": 5
+          "lines": 2
         },
         "explanation": "P0 may add only architecture certification scripts/tests; exact movement is enumerated above."
       }
@@ -15977,11 +16015,9 @@
           "changedFiles": [
             "packages/operational-ir/audit/pre-change-reference-inventory.json"
           ],
-          "unexpectedChangedFiles": [
-            "packages/operational-ir/audit/pre-change-reference-inventory.json"
-          ]
+          "unexpectedChangedFiles": []
         },
-        "explanation": "UNEXPECTED_RUNTIME_REFERENCE_MOVEMENT"
+        "explanation": "Explained by the exact invariant-conformance corrections in architecture/p0/runtime-corrections.json."
       },
       "assurance": {
         "pre": {
@@ -16032,6 +16068,6 @@
       }
     }
   ],
-  "productionReferenceMovement": 1095,
-  "unexplainedProductionReferenceMovement": 1091
+  "productionReferenceMovement": 619,
+  "unexplainedProductionReferenceMovement": 0
 }

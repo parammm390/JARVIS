@@ -1,4 +1,5 @@
 import type { ObjectiveSuccessCondition, OperationalQueryRequest } from "@finnor/shared-types";
+import type { EffectDeclaration } from "./effects";
 
 /**
  * Operational IR is planning intent only. None of these identifiers is a
@@ -165,6 +166,9 @@ export interface Query {
   purpose: string;
   entityRefs: string[];
   dependsOn: string[];
+  /** Optional on certified P1 compatibility IR; mandatory for P2 declaration-only
+   * semantics when no audited query catalog entry can infer the exact reads. */
+  effectDeclaration?: EffectDeclaration;
 }
 
 export interface EffectTargetBinding {
@@ -200,6 +204,9 @@ export interface Effect {
   expectedObservationRefs: string[];
   dependsOn: string[];
   domainActionCompatibility?: EffectDomainActionCompatibility;
+  /** Typed static semantics. Legacy P1 nodes may omit it and enter audited inference;
+   * unsupported or unsafe inference never defaults to admissible. */
+  effectDeclaration?: EffectDeclaration;
 }
 
 export type ObservationEvidence =

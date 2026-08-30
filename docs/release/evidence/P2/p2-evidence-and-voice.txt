@@ -1,36 +1,37 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
 
- RUN  v4.1.10 /Users/paramdave/Desktop/FINNOR/finnor-os
+ RUN  v4.1.11 /private/tmp/finnor-p2-closure/finnor-os
 
- ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > only consented households are ever targeted 64ms
- ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > the draft speaks the count and a sample line, and is always gated 72ms
- ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > approval atomically authorizes durable worker execution without synchronous sends 74ms
- ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > drafts a roster from real install visits, executes after voice approval, logs proposals 268ms
- ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > a spoken rejection halts the batch permanently 44ms
- ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > an unclear answer decides nothing (fail closed) 3ms
- ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 1. requiresConfirmation:false takes the low path — no repair episode, tier:low, candidateBGenerated:false 95ms
- ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 2. $50 invoice (below default $500 threshold, requiresConfirmation:true) is medium — repair runs, no candidate B 95ms
- ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 3. $5,000 invoice (above threshold) is high — candidate B generated, both scored, winner logged 28ms
- ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 4. a workflow-tagged action type is high regardless of amount — the compiledGraph.kind trigger 28ms
- ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 5. a tenant policy override (riskThresholds.amountUsd:100) makes a $150 invoice high tier even though the default would make it medium 20ms
- ✓ tests/integration/voice-os.test.ts > voice OS > resolves the tenant's registered owner line to role 'owner' 13ms
- ✓ tests/integration/voice-os.test.ts > voice OS > resolves a known household's phone to role 'customer' 54ms
- ✓ tests/integration/voice-os.test.ts > voice OS > an unrecognized number resolves to role 'unknown' — never silently owner 8ms
- ✓ tests/integration/voice-os.test.ts > voice OS > openVoiceSession is idempotent by callExternalId 7ms
- ✓ tests/integration/voice-os.test.ts > voice OS > a session only ever resolves ITS OWN open confirmations — the cross-session bug fix 42ms
- ✓ tests/integration/voice-os.test.ts > voice OS > createHandoff records an escalation for an unresolved caller 7ms
- ✓ tests/integration/vapi-status-update-notify.test.ts > POST /api/webhooks/vapi — status-update notifies jarvis_events > in-progress status fires a call_status NOTIFY 54ms
- ✓ tests/integration/vapi-status-update-notify.test.ts > POST /api/webhooks/vapi — status-update notifies jarvis_events > distinct statuses for the same call are not deduped away 46ms
-(node:2970) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
-(Use `node --trace-deprecation ...` to show where the warning was created)
- ✓ tests/integration/vapi-webhook-identity.test.ts > POST /api/webhooks/vapi — caller identity resolves post-fix > a caller matching tenants.ownerPhone is resolved as owner — no handoff message 44ms
- ✓ tests/integration/vapi-webhook-identity.test.ts > POST /api/webhooks/vapi — caller identity resolves post-fix > an unrecognized number still gets the handoff (identity resolution is real, not bypassed) 51ms
- ✓ tests/integration/policy-engine-v2.test.ts > B6 policy engine v2 > preserves effective-dated revisions, simulates history without a write, and records approval drift 91ms
- ✓ tests/integration/evidence-corpus.test.ts > evidence corpus > appends an immutable version, is retry-idempotent, and records citable research hits 53ms
- ✓ tests/integration/evidence-corpus.test.ts > evidence corpus > does not return tenant A's evidence in tenant B's scoped search 5ms
+ ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > only consented households are ever targeted 65ms
+ ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > the draft speaks the count and a sample line, and is always gated 103ms
+ ✓ tests/integration/voice-and-batch.test.ts > consent filter on bulk_notify (TCPA) > approval atomically authorizes durable worker execution without synchronous sends 96ms
+ ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > drafts a roster from real install visits, executes after voice approval, logs proposals 312ms
+ ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > a spoken rejection halts the batch permanently 63ms
+ ✓ tests/integration/voice-and-batch.test.ts > send_proposal_to_recent_installs — full gated batch flow > an unclear answer decides nothing (fail closed) 2ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 1. requiresConfirmation:false takes the low path — no repair episode, tier:low, candidateBGenerated:false 96ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 2. $50 invoice (below default $500 threshold, requiresConfirmation:true) is medium — repair runs, no candidate B 101ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 3. $5,000 invoice (above threshold) is high — candidate B generated, both scored, winner logged 32ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 4. a workflow-tagged action type is high regardless of amount — the compiledGraph.kind trigger 37ms
+ ✓ tests/integration/reasoning-tier.test.ts > LLMPlanner reasoning tier > 5. a tenant policy override (riskThresholds.amountUsd:100) makes a $150 invoice high tier even though the default would make it medium 26ms
+ ✓ tests/integration/vapi-webhook-identity.test.ts > POST /api/webhooks/vapi — caller identity resolves post-fix > a caller matching tenants.ownerPhone is resolved as owner — no handoff message 117ms
+ ✓ tests/integration/vapi-webhook-identity.test.ts > POST /api/webhooks/vapi — caller identity resolves post-fix > an unrecognized number still gets the handoff (identity resolution is real, not bypassed) 50ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > resolves the tenant's registered owner line to role 'owner' 14ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > resolves a known household's phone to role 'customer' 63ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > an unrecognized number resolves to role 'unknown' — never silently owner 10ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > openVoiceSession is idempotent by callExternalId 6ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > a session only ever resolves ITS OWN open confirmations — the cross-session bug fix 74ms
+ ✓ tests/integration/voice-os.test.ts > voice OS > createHandoff records an escalation for an unresolved caller 8ms
+ ✓ tests/integration/vapi-status-update-notify.test.ts > POST /api/webhooks/vapi — status-update notifies jarvis_events > in-progress status fires a call_status NOTIFY 49ms
+ ✓ tests/integration/vapi-status-update-notify.test.ts > POST /api/webhooks/vapi — status-update notifies jarvis_events > distinct statuses for the same call are not deduped away 49ms
+ ✓ tests/integration/policy-engine-v2.test.ts > B6 policy engine v2 > preserves effective-dated revisions, simulates history without a write, and records approval drift 111ms
+ ✓ tests/integration/evidence-corpus.test.ts > evidence corpus > appends an immutable version, is retry-idempotent, and records citable research hits 61ms
+ ✓ tests/integration/evidence-corpus.test.ts > evidence corpus > does not return tenant A's evidence in tenant B's scoped search 6ms
  ✓ tests/integration/evidence-corpus.test.ts > evidence corpus > does not expose public-cache writes through the tenant service 1ms
 
  Test Files  7 passed (7)
       Tests  25 passed (25)
-   Start at  07:38:12
-   Duration  14.83s (transform 1.42s, setup 0ms, import 11.25s, tests 2.79s, environment 1ms)
+   Start at  23:00:34
+   Duration  16.28s (transform 2.07s, setup 0ms, import 12.79s, tests 2.50s, environment 1ms)
 

@@ -228,17 +228,20 @@ describe.skipIf(!available)("P2.T1 Work correlation + derived projection", () =>
     expect(canonicalBody.data.map((item) => item.root.id)).toEqual([work!.id]);
     expect(canonicalBody.page).toMatchObject({ rootScope: "canonical_work", hasMore: true });
 
-      const legacy = await GET(request(`?limit=1&cursor=${encodeURIComponent(canonicalBody.page.nextCursor!)}`), { params: Promise.resolve({ view: "work-cases" }) });
+    try {
+      const legacy = await GET(request(`?limit=1&cursor=${encodeURIComponent(canonicalBody.page.nextCursor!)}`, canonicalTenantId), { params: Promise.resolve({ view: "work-cases" }) });
       const legacyBody = await legacy.json() as { data: WorkCaseProjection[]; page: { rootScope: string } };
       expect(legacyBody.page.rootScope).toBe("legacy_instruction");
       expect(legacyBody.data[0]?.root.kind).toBe("instruction");
     } finally {
-      await withTenant(TENANT_ID, async (db) => {
+      await withTenant(canonicalTenantId, async (db) => {
         // operational_deltas is append-only and the Works FK uses SET NULL. Purge
         // this isolated fixture's delta through the authorized retention function
         // before deleting the Work, so Postgres never attempts an audit UPDATE.
-        await db.execute(sql`SELECT finnor_os.purge_operational_deltas(${TENANT_ID}::uuid, now() + interval '1 second')`);
+        await db.execute(sql`SELECT finnor_os.purge_operational_deltas(${canonicalTenantId}::uuid, now() + interval '1 second')`);
         await db.delete(works).where(eq(works.id, work!.id));
+        await db.delete(instructionSessions).where(eq(instructionSessions.id, legacyInstructionId));
+        await db.delete(tenants).where(eq(tenants.id, canonicalTenantId));
       });
     }
   });

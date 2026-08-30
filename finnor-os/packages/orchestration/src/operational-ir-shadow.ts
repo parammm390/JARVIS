@@ -134,7 +134,9 @@ export function queryEntityRefs(request: OperationalQueryRequest): EntityRef[] {
   return [...unique.values()].sort((left, right) => left.semanticId.localeCompare(right.semanticId));
 }
 
-function queryProgram(input: OperationalQueryShadowInput): OperationalProgram {
+/** Same-candidate query IR used by both the certified P1 semantic shadow and the
+ * additive P2 effect shadow. It contains no trusted tenant identity. */
+export function operationalQueryShadowProgram(input: OperationalQueryShadowInput): OperationalProgram {
   const request = input.readDecision.request;
   const entities = queryEntityRefs(request);
   const queryRef = "query.authoritative-request";
@@ -250,7 +252,7 @@ function candidateFingerprint(input: OperationalQueryShadowInput): string {
 }
 
 function compile(input: OperationalQueryShadowInput): { summary: OperationalIrShadowSummary; record: PureShadowCandidateCompilationRecord } {
-  const baselineProgram = queryProgram(input);
+  const baselineProgram = operationalQueryShadowProgram(input);
   const fingerprint = candidateFingerprint(input);
   const record = runPureShadowCandidateCompilation({
     sourceCandidateFingerprint: fingerprint,

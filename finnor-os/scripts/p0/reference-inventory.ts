@@ -53,10 +53,10 @@ function commandLines(command: string, args: string[]): string[] {
   }
 }
 
-function summarize(lines: string[], baseline: boolean): ScopeSummary {
+function summarize(lines: string[], baselineSha?: string): ScopeSummary {
   const counts = new Map<string, number>();
   for (const line of lines) {
-    const normalized = baseline ? line.replace(new RegExp(`^${BASELINE_SHA}:`), "") : line;
+    const normalized = baselineSha ? line.replace(new RegExp(`^${baselineSha}:`), "") : line;
     const match = normalized.match(/^(.+?):\d+:/);
     if (!match) throw new Error(`Cannot parse reference line: ${line}`);
     counts.set(match[1]!, (counts.get(match[1]!) ?? 0) + 1);
@@ -65,12 +65,12 @@ function summarize(lines: string[], baseline: boolean): ScopeSummary {
   return { fileCount: byFile.length, lineCount: lines.length, byFile };
 }
 
-function baselineMatches(pattern: string, paths: string[]): ScopeSummary {
-  return summarize(commandLines("git", ["grep", "-n", "-E", pattern, BASELINE_SHA, "--", ...paths]), true);
+function baselineMatches(pattern: string, paths: string[], baselineSha: string): ScopeSummary {
+  return summarize(commandLines("git", ["grep", "-n", "-E", pattern, baselineSha, "--", ...paths]), baselineSha);
 }
 
 function currentMatches(pattern: string, paths: string[]): ScopeSummary {
-  return summarize(commandLines("rg", ["-n", "--no-heading", "--color", "never", "-g", "*.ts", "-g", "*.tsx", "-g", "*.js", "-g", "*.mjs", "-g", "*.sql", "-g", "*.json", pattern, ...paths]), false);
+  return summarize(commandLines("rg", ["-n", "--no-heading", "--color", "never", "-g", "*.ts", "-g", "*.tsx", "-g", "*.js", "-g", "*.mjs", "-g", "*.sql", "-g", "*.json", pattern, ...paths]), undefined);
 }
 
 function movedFiles(pre: ScopeSummary, post: ScopeSummary): string[] {
@@ -81,14 +81,21 @@ function movedFiles(pre: ScopeSummary, post: ScopeSummary): string[] {
     .sort();
 }
 
-export function buildReferenceInventory() {
+export function buildReferenceInventory(options: {
+  baselineSha?: string;
+  branch?: string;
+  allowedProductionPaths?: readonly string[];
+} = {}) {
+  const baselineSha = options.baselineSha ?? BASELINE_SHA;
+  const branch = options.branch ?? P0_BRANCH;
+  const allowedProductionPaths = options.allowedProductionPaths ?? P0_RUNTIME_CORRECTION_PATHS;
   const concepts = Object.entries(REFERENCE_PATTERNS).map(([concept, pattern]) => {
-    const productionPre = baselineMatches(pattern, ["apps", "packages"]);
+    const productionPre = baselineMatches(pattern, ["apps", "packages"], baselineSha);
     const productionPost = currentMatches(pattern, ["apps", "packages"]);
-    const assurancePre = baselineMatches(pattern, ["scripts", "tests"]);
+    const assurancePre = baselineMatches(pattern, ["scripts", "tests"], baselineSha);
     const assurancePost = currentMatches(pattern, ["scripts", "tests"]);
     const productionChangedFiles = movedFiles(productionPre, productionPost);
-    const unexpectedProductionChangedFiles = productionChangedFiles.filter((path) => !P0_RUNTIME_CORRECTION_PATHS.includes(path as typeof P0_RUNTIME_CORRECTION_PATHS[number]));
+    const unexpectedProductionChangedFiles = productionChangedFiles.filter((path) => !allowedProductionPaths.some((allowed) => path === allowed || path.startsWith(`${allowed}/`)));
     return {
       concept,
       pattern,
@@ -117,8 +124,8 @@ export function buildReferenceInventory() {
   });
   return {
     schemaVersion: 1,
-    baselineSha: BASELINE_SHA,
-    branch: P0_BRANCH,
+    baselineSha,
+    branch,
     scopes: {
       production: ["apps", "packages"],
       assurance: ["scripts", "tests"],

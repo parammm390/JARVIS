@@ -59,6 +59,19 @@ const UNORDERED_ARRAY_FIELDS = new Set([
   "candidates",
   "accepted",
   "refs",
+  "reads",
+  "writes",
+  "modifies",
+  "throws",
+  "observes",
+  "communications",
+  "financial",
+  "externalMutations",
+  "computerMutations",
+  "informationFlows",
+  "authorityRequirements",
+  "fields",
+  "removedFields",
 ]);
 
 function arrayIsUnordered(key: string | undefined, parent: Record<string, unknown> | undefined): boolean {

@@ -34,6 +34,12 @@ const P1_BASELINE_SHA = "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2";
 const P0_CERTIFIED_SHA = "f21cd6c45c03e177a46019cb768fa0fe26e25a9f";
 const P1_FOUNDATION_SHA = "202296a35ca82fed2e1ee8c77809a8f2e9bb6fd9";
 const P1_BRANCH = "codex/p1-operational-ir";
+const CLOSURE_MODE = process.env.FINNOR_CERTIFICATION_CLOSURE === "1";
+const CLOSURE_BRANCH = process.env.FINNOR_CERTIFICATION_BRANCH ?? "codex/p2-operational-effect-system-closure";
+const CLOSURE_ANCHOR_SHA = process.env.FINNOR_CLOSURE_ANCHOR_SHA ?? "d8b69d08005f299d39aaa8638a0214b26bd787c7";
+const CLOSURE_P0_SHA = process.env.FINNOR_CLOSURE_P0_SHA ?? "4257973fcd2ea8624ed179bf5b18d1ab513eccf6";
+const CLOSURE_P1_SHA = process.env.FINNOR_CLOSURE_P1_SHA ?? "1a31904b35fff39aa1cab1c404f1d7467d723989";
+const CLOSURE_REMOTE_MAIN_SHA = process.env.FINNOR_REMOTE_MAIN_SHA ?? "ff9221538f671970c98b83d408b51ca5d63604c5";
 
 type JsonObject = Record<string, unknown>;
 type Selector = { file: string; title: string };
@@ -80,6 +86,22 @@ function currentChangedPaths(): string[] {
     .split("\n").filter(Boolean)
     .map((line) => line.slice(3).split(" -> ").at(-1)!.replace(/^finnor-os\//, ""));
   return [...new Set([...committed, ...untracked])].sort();
+}
+
+function closureChangedPaths(): string[] {
+  const committed = git(["diff", "--name-only", CLOSURE_ANCHOR_SHA, "--", "finnor-os"])
+    .split("\n").filter(Boolean).map((path) => path.replace(/^finnor-os\//, ""));
+  const status = git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
+    .split("\n").filter(Boolean).map((line) => line.slice(3).split(" -> ").at(-1)!.replace(/^finnor-os\//, ""));
+  return [...new Set([...committed, ...status])].sort();
+}
+
+function validateClosureLineage(): string[] {
+  assert.equal(git(["branch", "--show-current"]), CLOSURE_BRANCH, "closure certification must run on the closure branch");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_ANCHOR_SHA, "HEAD"]) === "", true, "closure branch is not anchored to the remote-main snapshot");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P0_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P0 reconciliation");
+  assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P1_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P1 reconciliation");
+  return closureChangedPaths();
 }
 
 function validateReconciliationAndScope(): string[] {
@@ -322,17 +344,17 @@ export interface P1CertificationResult {
 }
 
 export async function certifyP1(): Promise<P1CertificationResult> {
-  const changedPaths = validateReconciliationAndScope();
+  const changedPaths = CLOSURE_MODE ? validateClosureLineage() : validateReconciliationAndScope();
   const graph = await validatePackageGraph();
   const gates = await validateContractAndGates();
   const corpora = await validateCorpora();
   const runtime = validateDeterministicRuntimeProofs();
   return {
     status: "PASS",
-    p1BaselineSha: P1_BASELINE_SHA,
+    p1BaselineSha: CLOSURE_MODE ? CLOSURE_REMOTE_MAIN_SHA : P1_BASELINE_SHA,
     p0ReconciliationStatus: "P0_RECONCILED_PASS",
-    p0CertifiedSha: P0_CERTIFIED_SHA,
-    branch: P1_BRANCH,
+    p0CertifiedSha: CLOSURE_MODE ? CLOSURE_P0_SHA : P0_CERTIFIED_SHA,
+    branch: CLOSURE_MODE ? CLOSURE_BRANCH : P1_BRANCH,
     irSchemaVersion: IR_SCHEMA_VERSION,
     changedPaths,
     internalPackages: graph.packages,

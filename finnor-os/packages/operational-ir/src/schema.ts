@@ -20,6 +20,13 @@ import {
   type Query,
   type SuccessCondition,
 } from "./contracts";
+import type {
+  AuthorityRequirement,
+  EffectDeclaration,
+  EffectResource,
+  InformationFlow,
+  ResourceAccess,
+} from "./effects";
 
 const DateTimeSchema = z.string().datetime({ offset: true });
 const SemanticIdSchema = z.string().min(1).max(128).regex(/^[a-z][a-z0-9._:-]*$/i);
@@ -81,6 +88,143 @@ export const PredicateSchema: z.ZodType<Predicate> = z.lazy(() => z.union([
   z.object({ kind: z.literal("not"), predicate: PredicateSchema }).strict(),
 ]));
 
+const EffectResourceSchema: z.ZodType<EffectResource> = z.object({
+  kind: z.enum(["entity", "party", "resource"]),
+  type: NonEmptyString.max(120),
+  selector: z.enum(["EXISTING", "NEW", "COHORT", "EXTERNAL"]),
+  entityRef: SemanticIdSchema.optional(),
+  id: NonEmptyString.max(500).optional(),
+}).strict().superRefine((value, context) => {
+  if (value.selector === "EXISTING" && !value.entityRef && !value.id) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: "EXISTING resources require entityRef or id" });
+  }
+  if (value.selector === "NEW" && value.entityRef) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["entityRef"], message: "NEW resources cannot reference an existing entity" });
+  }
+});
+
+const InformationClassificationSchema = z.enum([
+  "PUBLIC", "TENANT_INTERNAL", "CUSTOMER_DATA", "PII", "FINANCIAL", "CREDENTIAL_BOUND", "SECRET", "UNCLASSIFIED",
+]);
+
+const InformationDescriptorSchema = z.object({
+  classification: InformationClassificationSchema,
+  fields: z.array(NonEmptyString.max(300)).min(1).max(200),
+  basis: z.enum(["IR_DECLARED", "AUDITED_CATALOG", "RUNTIME_ONLY"]),
+  evidenceRef: NonEmptyString.max(500).optional(),
+}).strict();
+
+const ResourceAccessSchema: z.ZodType<ResourceAccess> = z.object({
+  resource: EffectResourceSchema,
+  information: InformationDescriptorSchema,
+  fields: z.array(NonEmptyString.max(300)).min(1).max(200),
+}).strict();
+
+const DestinationBoundarySchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("INTERNAL_CANONICAL") }).strict(),
+  z.object({ kind: z.literal("GOVERNED_CAPABILITY"), capability: NonEmptyString.max(300) }).strict(),
+  z.object({ kind: z.literal("COMMUNICATION_RECIPIENT"), recipient: EffectResourceSchema, capability: NonEmptyString.max(300) }).strict(),
+  z.object({ kind: z.literal("EXTERNAL_PROVIDER"), system: NonEmptyString.max(200), capability: NonEmptyString.max(300) }).strict(),
+  z.object({ kind: z.literal("EXTERNAL_RESEARCH"), toolClass: NonEmptyString.max(200) }).strict(),
+  z.object({ kind: z.literal("COMPUTER_APPLICATION"), application: NonEmptyString.max(200), capability: NonEmptyString.max(300) }).strict(),
+  z.object({ kind: z.literal("LOG_OR_TELEMETRY") }).strict(),
+]);
+
+const VerifiedTransformationProofSchema = z.object({
+  kind: z.enum(["EXACT_FIELD_PROJECTION", "DETERMINISTIC_TRANSFORM"]),
+  proofRef: NonEmptyString.max(500),
+  verifiedOutputClassification: InformationClassificationSchema,
+}).strict();
+
+const TransformationProofSchema = z.union([
+  VerifiedTransformationProofSchema,
+  z.object({ kind: z.literal("NONE") }).strict(),
+]);
+
+const InformationTransformationSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("IDENTITY") }).strict(),
+  z.object({
+    kind: z.enum(["REDACTION", "AGGREGATION", "TOKENIZATION"]),
+    outputClassification: InformationClassificationSchema,
+    removedFields: z.array(NonEmptyString.max(300)).max(200),
+    proof: TransformationProofSchema,
+  }).strict(),
+  z.object({
+    kind: z.literal("DECLASSIFICATION"),
+    outputClassification: InformationClassificationSchema,
+    authorityRequirementId: SemanticIdSchema,
+    proof: VerifiedTransformationProofSchema,
+  }).strict(),
+]);
+
+const InformationFlowSchema: z.ZodType<InformationFlow> = z.object({
+  flowId: SemanticIdSchema,
+  source: EffectResourceSchema,
+  information: InformationDescriptorSchema,
+  destination: DestinationBoundarySchema,
+  transformation: InformationTransformationSchema,
+  declassificationRequirementId: SemanticIdSchema.optional(),
+}).strict();
+
+const AuthorityRequirementSchema: z.ZodType<AuthorityRequirement> = z.discriminatedUnion("kind", [
+  z.object({ requirementId: SemanticIdSchema, kind: z.literal("REQUIRES_CAPABILITY"), capability: NonEmptyString.max(300) }).strict(),
+  z.object({ requirementId: SemanticIdSchema, kind: z.literal("REQUIRES_APPROVAL"), typed: z.boolean() }).strict(),
+  z.object({ requirementId: SemanticIdSchema, kind: z.literal("REQUIRES_RISK_LEVEL"), risk: z.enum(["low", "medium", "high"]) }).strict(),
+  z.object({
+    requirementId: SemanticIdSchema,
+    kind: z.literal("REQUIRES_SPEND_AUTHORITY"),
+    amount: z.number().finite().nonnegative(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+  }).strict(),
+  z.object({ requirementId: SemanticIdSchema, kind: z.literal("REQUIRES_RESOURCE_SCOPE"), resource: EffectResourceSchema }).strict(),
+  z.object({
+    requirementId: SemanticIdSchema,
+    kind: z.literal("REQUIRES_DECLASSIFICATION_AUTHORITY"),
+    sourceClassification: InformationClassificationSchema,
+    outputClassification: InformationClassificationSchema,
+    destinationKind: z.enum(["INTERNAL_CANONICAL", "GOVERNED_CAPABILITY", "COMMUNICATION_RECIPIENT", "EXTERNAL_PROVIDER", "EXTERNAL_RESEARCH", "COMPUTER_APPLICATION", "LOG_OR_TELEMETRY"]),
+  }).strict(),
+]);
+
+export const EffectDeclarationSchema: z.ZodType<EffectDeclaration> = z.object({
+  version: z.literal(1),
+  source: z.enum(["IR_DECLARED", "AUDITED_CATALOG"]),
+  contract: z.object({
+    requires: z.array(PredicateSchema).max(100),
+    ensures: z.array(PredicateSchema).max(100),
+    reads: z.array(ResourceAccessSchema).max(200),
+    writes: z.array(ResourceAccessSchema).max(200),
+    modifies: z.array(ResourceAccessSchema).max(200),
+    throws: z.array(NonEmptyString.max(200)).max(100),
+    compensates: SemanticIdSchema.optional(),
+    observes: z.array(SemanticIdSchema).max(100),
+  }).strict(),
+  communications: z.array(z.object({
+    recipient: EffectResourceSchema,
+    channel: z.enum(["internal", "email", "sms", "voice", "chat", "calendar", "unknown"]),
+    information: InformationDescriptorSchema,
+  }).strict()).max(100),
+  financial: z.array(z.object({
+    operation: z.enum(["WRITE", "SPEND"]),
+    resource: EffectResourceSchema,
+    amount: z.number().finite().nonnegative(),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+  }).strict()).max(100),
+  externalMutations: z.array(z.object({ system: NonEmptyString.max(200), resource: EffectResourceSchema }).strict()).max(100),
+  computerMutations: z.array(z.object({
+    application: NonEmptyString.max(200),
+    operation: NonEmptyString.max(200),
+    resource: EffectResourceSchema,
+    changes: z.record(JsonValueSchema),
+  }).strict()).max(100),
+  informationFlows: z.array(InformationFlowSchema).max(200),
+  authorityRequirements: z.array(AuthorityRequirementSchema).max(200),
+  reversibility: z.object({
+    classification: z.enum(["READ_ONLY", "REVERSIBLE", "COMPENSATABLE", "IRREVERSIBLE", "UNKNOWN"]),
+    compensationEffectId: SemanticIdSchema.optional(),
+  }).strict(),
+}).strict();
+
 export const GoalSchema: z.ZodType<Goal> = z.object({
   kind: z.literal("goal"),
   semanticId: SemanticIdSchema,
@@ -135,6 +279,7 @@ export const QuerySchema: z.ZodType<Query> = z.object({
   purpose: NonEmptyString.max(4_000),
   entityRefs: z.array(SemanticIdSchema).max(100),
   dependsOn: z.array(SemanticIdSchema).max(100),
+  effectDeclaration: EffectDeclarationSchema.optional(),
 }).strict();
 
 const ExistingCommandGraphSchema = z.object({
@@ -165,6 +310,7 @@ export const EffectSchema: z.ZodType<Effect> = z.object({
       status: z.enum(["verified", "not_found", "unverifiable"]),
     }).strict()).nullable().optional(),
   }).strict().optional(),
+  effectDeclaration: EffectDeclarationSchema.optional(),
 }).strict();
 
 const AssertionPathSchema = z.array(z.union([z.string().min(1).max(120), z.number().int().nonnegative()])).max(24);

@@ -62,10 +62,13 @@ import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRou
 import { assertCompiledHumanOperation, compileHumanInstructionRoute, compileTypedHumanOperation } from "./human-operating-compiler";
 import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
 import { observeOperationalQueryIrShadow } from "./operational-ir-shadow";
+import { observeOperationalQueryP2EffectShadow } from "./operational-ir-effect-shadow";
 
 export * from "./llm";
 export * from "./planner";
 export * from "./compiler";
+export * from "./operational-ir-effect-resolution";
+export * from "./operational-ir-effect-shadow";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
@@ -660,6 +663,16 @@ export class FinnorOrchestrator implements Orchestrator {
           workInputId,
           compiledAt: new Date().toISOString(),
         });
+        // Fire-and-contain: P2 observes the same deterministic candidate with
+        // tenant-scoped read-only resolution; the existing query remains authoritative.
+        void observeOperationalQueryP2EffectShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: new Date().toISOString(),
+        }, ctx.tenantId).catch(() => undefined);
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
           instruction,
