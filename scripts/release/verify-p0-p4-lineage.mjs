@@ -157,7 +157,7 @@ export function verifyP0P4ReleaseLineage() {
     releaseReconciliationPaths: RELEASE_RECONCILIATION_PATHS,
     baselineSha: LINEAGE.remoteMain,
     branch: git(["branch", "--show-current"]) || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "DETACHED",
-    changedPaths: lines(git(["diff", "--name-only", LINEAGE.remoteMain, head, "--", "finnor-os"])).map((path) => path.replace(/^finnor-os\//, "")),
+    changedPaths: releaseChanges.filter((path) => path.startsWith("finnor-os/")).map((path) => path.replace(/^finnor-os\//, "")),
     executionModels: contract.executionModels.length,
     semanticOwners: contract.semanticOwnership.length,
     lifecycleCount: Object.keys(contract.lifecycles).length,
