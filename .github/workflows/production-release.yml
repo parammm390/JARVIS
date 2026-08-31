@@ -259,6 +259,7 @@ jobs:
           npm run lint
           npx tsc --noEmit -p tsconfig.json
           npm run test:unit
+          npm run openapi --prefix finnor-os
           npm run jarvis:realtime:verify
           npm run typecheck --prefix finnor-os
 
