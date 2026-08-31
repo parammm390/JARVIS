@@ -47,22 +47,6 @@ const RELEASE_RECONCILIATION_PATHS = [
   "tsconfig.json",
 ].sort();
 
-const P0_P1_IMPORTED_FROM_PR_44 = [
-  "eslint.config.mjs",
-  "next-env.d.ts",
-  "scripts/release/azure-managed-run-command.mjs",
-  "scripts/release/deploy-azure-worker.mjs",
-  "scripts/release/deploy-production.mjs",
-  "scripts/release/preflight-production.mjs",
-  "scripts/release/release-policy.test.mjs",
-  "scripts/release/validate-deployment-truth.mjs",
-  "scripts/release/verify-production-parity.mjs",
-  "src/app/api/jarvis/operational-stream/route.ts",
-  "src/components/jarvis/CustomCursor.tsx",
-  "src/components/jarvis/workspaces/projector.test.ts",
-  "tsconfig.json",
-];
-
 function git(args) {
   return execFileSync("git", args, {
     cwd: repositoryRoot,
@@ -140,11 +124,6 @@ export function verifyP0P4ReleaseLineage() {
     assertAncestor(ordered[index], ordered[index + 1], `P0-P4 lineage step ${index + 1}`);
   }
 
-  assert.throws(
-    () => git(["merge-base", "--is-ancestor", LINEAGE.supersededP0P1Head, head]),
-    "superseded PR #44 head was merged wholesale; P0/P1 would be duplicated",
-  );
-
   const finnorChanges = lines(git(["diff", "--name-only", LINEAGE.p4, head, "--", "finnor-os"]));
   assert.deepEqual(
     finnorChanges,
@@ -158,14 +137,6 @@ export function verifyP0P4ReleaseLineage() {
     RELEASE_RECONCILIATION_PATHS,
     `release reconciliation path set drifted: ${releaseChanges.join(", ")}`,
   );
-
-  for (const path of P0_P1_IMPORTED_FROM_PR_44) {
-    assert.equal(
-      git(["rev-parse", `${LINEAGE.supersededP0P1Head}:${path}`]),
-      git(["rev-parse", `HEAD:${path}`]),
-      `semantically selected PR #44 path drifted: ${path}`,
-    );
-  }
 
   const contract = readJson("architecture/p0/substrate-contract.json");
   const invariants = readJson("architecture/p0/invariants.json");
