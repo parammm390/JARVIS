@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { StaticAdmissibilityResultLike } from "./contracts";
+import type { StaticAdmissibilityResult } from "@finnor/operational-ir";
 import { requirementsFromP2Unresolved } from "./uncertainty";
 import { resolveP2WithInformation } from "./p2-handoff";
 import { isRedactedEpistemicTrace, redactP2HandoffTrace } from "./trace";
@@ -13,7 +13,7 @@ const BUDGET = {
   deadline: "2026-09-01T00:00:00.000Z",
 } as const;
 
-const REJECTED: StaticAdmissibilityResultLike = {
+const REJECTED: StaticAdmissibilityResult = {
   status: "REJECTED",
   reasonCodes: ["FORBIDDEN_INFORMATION_FLOW"],
   issues: [{
@@ -23,9 +23,10 @@ const REJECTED: StaticAdmissibilityResultLike = {
     path: "effects.0",
     message: "Forbidden flow",
   }],
+  informationFlows: [],
 };
 
-const UNRESOLVED: StaticAdmissibilityResultLike = {
+const UNRESOLVED: StaticAdmissibilityResult = {
   status: "UNRESOLVED",
   reasonCodes: ["ENTITY_RESOLUTION_UNRESOLVED"],
   issues: [{
@@ -36,6 +37,7 @@ const UNRESOLVED: StaticAdmissibilityResultLike = {
     message: "Invoice identity unresolved",
     detail: { resolutionReasonCode: "ENTITY_REFERENCE_UNRESOLVED" },
   }],
+  informationFlows: [],
 };
 
 describe("P2 to P3 handoff", () => {
@@ -72,7 +74,7 @@ describe("P2 to P3 handoff", () => {
   });
 
   it("preserves the exact upstream uncertainty category and traces a zero-action budget stop", async () => {
-    const ambiguous: StaticAdmissibilityResultLike = {
+    const ambiguous: StaticAdmissibilityResult = {
       status: "UNRESOLVED",
       reasonCodes: ["ENTITY_RESOLUTION_UNRESOLVED"],
       issues: [{
@@ -83,6 +85,7 @@ describe("P2 to P3 handoff", () => {
         message: "Customer identity is ambiguous",
         detail: { resolutionReasonCode: "ENTITY_REFERENCE_AMBIGUOUS" },
       }],
+      informationFlows: [],
     };
     const execute = vi.fn();
     const handoff = await resolveP2WithInformation({
@@ -105,7 +108,7 @@ describe("P2 to P3 handoff", () => {
   it("does not acquire or rerun P2 when P2 is already admissible", async () => {
     const execute = vi.fn();
     const rerunP2 = vi.fn();
-    const admissible: StaticAdmissibilityResultLike = { status: "ADMISSIBLE", reasonCodes: [], issues: [] };
+    const admissible: StaticAdmissibilityResult = { status: "ADMISSIBLE", reasonCodes: [], issues: [], informationFlows: [] };
     const handoff = await resolveP2WithInformation({
       initialP2: admissible,
       state: testState([]),

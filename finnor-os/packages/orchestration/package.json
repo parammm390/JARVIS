@@ -9,6 +9,7 @@
     "@finnor/authority": "*",
     "@finnor/data-platform": "*",
     "@finnor/db": "*",
+    "@finnor/epistemic-runtime": "*",
     "@finnor/memory": "*",
     "@finnor/operational-ir": "*",
     "@finnor/policy-schema": "*",

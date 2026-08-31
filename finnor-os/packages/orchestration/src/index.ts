@@ -64,12 +64,14 @@ import { assertCompiledHumanOperation, compileHumanInstructionRoute, compileType
 import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
 import { observeOperationalQueryIrShadow } from "./operational-ir-shadow";
 import { observeOperationalQueryP2EffectShadow } from "./operational-ir-effect-shadow";
+import { observeOperationalQueryP3EpistemicShadow } from "./epistemic-runtime-shadow";
 
 export * from "./llm";
 export * from "./planner";
 export * from "./compiler";
 export * from "./operational-ir-effect-resolution";
 export * from "./operational-ir-effect-shadow";
+export * from "./epistemic-runtime-shadow";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
@@ -685,6 +687,18 @@ export class FinnorOrchestrator implements Orchestrator {
           includeCanonicalBusinessState: false,
         })).context;
         const result = await this.executeFastOperationalQuery(routeReadDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
+        // Fire-and-contain: P3 observes only the already assembled context and
+        // completed canonical query. The exact result below remains authoritative.
+        void observeOperationalQueryP3EpistemicShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: result.execution.metadata.completedAt,
+          execution: result.execution,
+          context: operatingContext,
+        }, ctx.tenantId).catch(() => undefined);
         fastQuery = result.execution;
         fastAnswer = result.answer ?? null;
       } else if (!opts.skipFastReadClassification && fastDecision === undefined) {

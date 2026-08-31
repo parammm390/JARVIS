@@ -9,7 +9,8 @@ import type {
   InformationAction,
   InformationObservation,
   PropositionDefinition,
-  StaticAdmissibilityResultLike,
+  StaticAdmissibilityReasonCode,
+  StaticAdmissibilityResult,
   Uncertainty,
 } from "../src/contracts";
 import { EPISTEMIC_HEURISTIC_VERSION } from "../src/contracts";
@@ -155,7 +156,7 @@ function selection(state: EpistemicState, req: DecisionRequirement, actions: Inf
   return selectInformationAction(actions, { state, uncertainties, requirements: [req], budget: budget(), usage: { actions: 0, userInterruptions: 0, latencyMs: 0, costUnits: 0, selectedActionFingerprints: [] }, now: NOW });
 }
 
-const unresolvedP2 = (reasonCode = "ENTITY_RESOLUTION_UNRESOLVED"): StaticAdmissibilityResultLike => ({
+const unresolvedP2 = (reasonCode: StaticAdmissibilityReasonCode = "ENTITY_RESOLUTION_UNRESOLVED"): StaticAdmissibilityResult => ({
   status: "UNRESOLVED",
   reasonCodes: [reasonCode],
   issues: [{
@@ -166,6 +167,7 @@ const unresolvedP2 = (reasonCode = "ENTITY_RESOLUTION_UNRESOLVED"): StaticAdmiss
     message: "Canonical invoice resolution is incomplete.",
     detail: { resolutionReasonCode: "ENTITY_REFERENCE_UNRESOLVED" },
   }],
+  informationFlows: [],
 });
 
 class FixtureExecutor implements InformationActionExecutor {
@@ -333,13 +335,13 @@ export async function runLockedCorpusCase(entry: LockedCorpusCase): Promise<Lock
         executor: new FixtureExecutor(resolved ? "CANONICAL" : "NO_RESULT"),
         now: () => NOW,
         rerunP2: async (next) => resolved && next.propositions.some((proposition) => proposition.status === "KNOWN")
-          ? { status: "ADMISSIBLE", reasonCodes: [], issues: [] }
+          ? { status: "ADMISSIBLE", reasonCodes: [], issues: [], informationFlows: [] }
           : unresolvedP2(),
       });
       return result(entry, handoff.status, ["P2 rerun required after belief update", "bounded loop"]);
     }
     case "p2_rejected_remains_rejected": {
-      const rejected: StaticAdmissibilityResultLike = { status: "REJECTED", reasonCodes: ["FORBIDDEN_INFORMATION_FLOW"], issues: [{ status: "REJECTED", reasonCode: "FORBIDDEN_INFORMATION_FLOW", nodeId: "effect", path: "effect", message: "forbidden" }] };
+      const rejected: StaticAdmissibilityResult = { status: "REJECTED", reasonCodes: ["FORBIDDEN_INFORMATION_FLOW"], issues: [{ status: "REJECTED", reasonCode: "FORBIDDEN_INFORMATION_FLOW", nodeId: "effect", path: "effect", message: "forbidden" }], informationFlows: [] };
       const handoff = await resolveP2WithInformation({
         initialP2: rejected,
         state: createEpistemicState({ scope: scope("decision:p2-rejected"), asOf: NOW, propositions: [] }),

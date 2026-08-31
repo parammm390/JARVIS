@@ -27,6 +27,10 @@
     "test:p2:replay": "tsx scripts/p2/run-locked-replay.ts",
     "p2:closure:inventory": "tsx scripts/p2/generate-closure-reference-inventory.ts",
     "test:p2:db": "tsx scripts/p1/run-ephemeral-db-tests.ts tests/integration/p2-effect-resolution.test.ts",
+    "test:p3:unit": "vitest run packages/epistemic-runtime/src packages/orchestration/src/epistemic-runtime-shadow.test.ts",
+    "test:p3:locked": "npm run test:p3:locked --workspace @finnor/epistemic-runtime",
+    "test:p3:contract": "vitest run tests/unit/p3-architecture-contract.test.ts tests/unit/p3-locked-replay.test.ts",
+    "test:p3:replay": "tsx scripts/p3/run-locked-replay.ts",
     "test:p1:db": "tsx scripts/p1/run-ephemeral-db-tests.ts tests/integration/client-lifecycle.test.ts",
     "test:p1:release-contract": "tsx scripts/p1/run-ephemeral-db-tests.ts --npm-script=release:contract",
     "test:live:steel": "vitest run tests/live/steel-provider.live.test.ts",
@@ -75,6 +79,7 @@
     "p0:certify": "tsx scripts/p0/certify.ts --run",
     "p1:certify": "tsx scripts/p1/certify.ts --run",
     "p2:certify": "tsx scripts/p2/certify.ts --run",
+    "p3:certify": "tsx scripts/p3/certify.ts --run",
     "release:certify": "tsx scripts/release/run-release-certification.ts",
     "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts"
   },

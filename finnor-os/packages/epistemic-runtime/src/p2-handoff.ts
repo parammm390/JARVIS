@@ -6,7 +6,7 @@ import type {
   InformationAction,
   InformationActionScore,
   InformationObservation,
-  StaticAdmissibilityResultLike,
+  StaticAdmissibilityResult,
   StopDecision,
   Uncertainty,
 } from "./contracts";
@@ -35,34 +35,36 @@ export type P2P3HandoffStatus =
 
 export interface P2P3HandoffRound {
   index: number;
-  p2Before: StaticAdmissibilityResultLike;
+  p2Before: StaticAdmissibilityResult;
   uncertainties: Uncertainty[];
   candidates: InformationAction[];
   scores: InformationActionScore[];
   selectedAction?: InformationAction;
   observation?: InformationObservation;
-  p2After?: StaticAdmissibilityResultLike;
+  p2After?: StaticAdmissibilityResult;
   stopDecision: StopDecision;
 }
 
 export interface P2P3HandoffResult {
   status: P2P3HandoffStatus;
-  initialP2: StaticAdmissibilityResultLike;
-  finalP2: StaticAdmissibilityResultLike;
+  initialP2: StaticAdmissibilityResult;
+  finalP2: StaticAdmissibilityResult;
   state: EpistemicState;
   requirements: DecisionRequirement[];
   rounds: P2P3HandoffRound[];
   usage: AcquisitionUsage;
-  p2History: StaticAdmissibilityResultLike["status"][];
+  p2History: StaticAdmissibilityResult["status"][];
   rejectedOverrideAttempts: 0;
 }
 
 export interface ResolveP2WithInformationInput {
-  initialP2: StaticAdmissibilityResultLike;
+  initialP2: StaticAdmissibilityResult;
   state: EpistemicState;
   budget: AcquisitionBudget;
   executor: InformationActionExecutor;
-  rerunP2(state: EpistemicState, previous: StaticAdmissibilityResultLike): Promise<StaticAdmissibilityResultLike>;
+  /** Must invoke P2's actual static admissibility checker with newly resolved
+   * bindings. P3 cannot synthesize or upgrade the returned status. */
+  rerunP2(state: EpistemicState, previous: StaticAdmissibilityResult): Promise<StaticAdmissibilityResult>;
   now?: () => string;
   acquisitionPolicy?: AcquisitionPolicySnapshot;
   actionOverrides?: (uncertainty: Uncertainty, adapterId: InformationAction["adapterId"]) => InformationActionOverrides;
@@ -115,7 +117,7 @@ export async function resolveP2WithInformation(input: ResolveP2WithInformationIn
   let usage = initialAcquisitionUsage();
   let requirements: DecisionRequirement[] = [];
   const rounds: P2P3HandoffRound[] = [];
-  const p2History: StaticAdmissibilityResultLike["status"][] = [currentP2.status];
+  const p2History: StaticAdmissibilityResult["status"][] = [currentP2.status];
 
   // Evaluate one terminal round after the last permitted acquisition. This makes
   // maxActions=0 and exhausted budgets replay-visible instead of silently falling
