@@ -4665,7 +4665,7 @@
         },
         "post": {
           "fileCount": 143,
-          "lineCount": 922,
+          "lineCount": 926,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/[id]/confirm/route.ts",
@@ -5153,7 +5153,7 @@
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 68
+              "lineCount": 72
             },
             {
               "path": "packages/orchestration/src/instruction-routing.ts",
@@ -5243,7 +5243,7 @@
         },
         "delta": {
           "files": 10,
-          "lines": 69,
+          "lines": 73,
           "changedFiles": [
             "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
             "packages/operational-ir/audit/pre-change-reference-inventory.json",
@@ -5254,7 +5254,8 @@
             "packages/operational-ir/src/effect-shadow.ts",
             "packages/operational-ir/src/lowerer.ts",
             "packages/operational-ir/src/p2-effects.test.ts",
-            "packages/operational-ir/src/runtime-mapping.ts"
+            "packages/operational-ir/src/runtime-mapping.ts",
+            "packages/orchestration/src/index.ts"
           ],
           "unexpectedChangedFiles": []
         },
@@ -7840,7 +7841,7 @@
         },
         "post": {
           "fileCount": 70,
-          "lineCount": 557,
+          "lineCount": 561,
           "byFile": [
             {
               "path": "apps/api/app/api/certification/product-truth/route.ts",
@@ -8048,7 +8049,7 @@
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 14
+              "lineCount": 17
             },
             {
               "path": "packages/orchestration/src/interaction-context.ts",
@@ -8096,7 +8097,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 22
+              "lineCount": 23
             },
             {
               "path": "packages/shared-types/src/dealer-zero-fixtures.ts",
@@ -8126,9 +8127,11 @@
         },
         "delta": {
           "files": 1,
-          "lines": 2,
+          "lines": 6,
           "changedFiles": [
-            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json"
+            "packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
+            "packages/orchestration/src/index.ts",
+            "packages/read-models/src/work-cases.ts"
           ],
           "unexpectedChangedFiles": []
         },
@@ -16068,6 +16071,6 @@
       }
     }
   ],
-  "productionReferenceMovement": 619,
+  "productionReferenceMovement": 627,
   "unexplainedProductionReferenceMovement": 0
 }

@@ -141,6 +141,7 @@ function validateClosureLineageAndScope(): string[] {
     || /^tests\/integration\/p2-[^/]+\.test\.ts$/.test(path)
     || path === "tests/integration/chaos-matrix.test.ts"
     || path === "tests/integration/agentic-objective-loop.test.ts"
+    || path === "tests/integration/backup-restore.test.ts"
     || path === "tests/integration/work-cases.test.ts"
     || path === "tests/unit/p0-architecture-contract.test.ts"
     || /^tests\/unit\/p2-[^/]+\.test\.ts$/.test(path));

@@ -1526,9 +1526,8 @@ export class FinnorOrchestrator implements Orchestrator {
     // as a fresh approval and incorrectly fail closed. Pending/needs-review rows
     // still take the full authority + conditional-transition path below.
     const [existingAction] = await withTenant(tenantId, (db) => db
-      .select({ status: domainActions.status, workId: domainActions.workId, workStatus: works.status })
+      .select({ status: domainActions.status })
       .from(domainActions)
-      .leftJoin(works, and(eq(works.tenantId, tenantId), eq(works.id, domainActions.workId)))
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
       .limit(1));
     if (!existingAction) return { status: "failure", output: {}, error: "Action not found" };
@@ -1536,7 +1535,15 @@ export class FinnorOrchestrator implements Orchestrator {
     // against an objective-owned action must fail closed rather than be reported as
     // a harmless transport replay; otherwise an old approval can be presented as a
     // fresh decision after the objective's canonical outcome is already complete.
-    if (decision === "approve" && existingAction.status === "completed" && existingAction.workId && existingAction.workStatus === "completed") {
+    const [actionWork] = decision === "approve" && existingAction.status === "completed"
+      ? await withTenant(tenantId, (db) => db
+        .select({ workId: domainActions.workId, workStatus: works.status })
+        .from(domainActions)
+        .leftJoin(works, and(eq(works.tenantId, tenantId), eq(works.id, domainActions.workId)))
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
+        .limit(1))
+      : [];
+    if (actionWork?.workId && actionWork.workStatus === "completed") {
       return { status: "failure", output: { completed: true }, error: "Approval refused: the Work item is already completed." };
     }
     const idempotentStatus = decision === "approve"

@@ -4641,7 +4641,7 @@
         },
         "post": {
           "fileCount": 143,
-          "lineCount": 922,
+          "lineCount": 926,
           "byFile": [
             {
               "path": "apps/api/app/api/actions/[id]/confirm/route.ts",
@@ -5129,7 +5129,7 @@
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 68
+              "lineCount": 72
             },
             {
               "path": "packages/orchestration/src/instruction-routing.ts",
@@ -5219,7 +5219,7 @@
         },
         "delta": {
           "files": 15,
-          "lines": 98,
+          "lines": 102,
           "changedFiles": [
             "apps/api/app/api/certification/product-truth/route.ts",
             "apps/worker/src/handlers/scan-approval-expiry.ts",
@@ -7838,7 +7838,7 @@
         },
         "post": {
           "fileCount": 70,
-          "lineCount": 557,
+          "lineCount": 561,
           "byFile": [
             {
               "path": "apps/api/app/api/certification/product-truth/route.ts",
@@ -8046,7 +8046,7 @@
             },
             {
               "path": "packages/orchestration/src/index.ts",
-              "lineCount": 14
+              "lineCount": 17
             },
             {
               "path": "packages/orchestration/src/interaction-context.ts",
@@ -8094,7 +8094,7 @@
             },
             {
               "path": "packages/read-models/src/work-cases.ts",
-              "lineCount": 22
+              "lineCount": 23
             },
             {
               "path": "packages/shared-types/src/dealer-zero-fixtures.ts",
@@ -8124,7 +8124,7 @@
         },
         "delta": {
           "files": 9,
-          "lines": 69,
+          "lines": 73,
           "changedFiles": [
             "apps/api/app/api/certification/product-truth/route.ts",
             "packages/data-platform/src/business-truth-registry.ts",
@@ -16032,6 +16032,6 @@
       }
     }
   ],
-  "productionReferenceMovement": 1095,
-  "unexplainedProductionReferenceMovement": 1091
+  "productionReferenceMovement": 1103,
+  "unexplainedProductionReferenceMovement": 1099
 }
