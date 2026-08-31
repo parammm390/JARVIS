@@ -64,11 +64,12 @@ describe("P3 Epistemic Runtime architecture contract", () => {
 
   it("locks reconciliation to the independently certified P2 closure and the zero-mutation production shadow", () => {
     expect(contract).toMatchObject({
-      p2ClosureSha: "59b3b53d0c548dc482291b8a0871f06bb29f90cd",
+      p2ClosureSha: "5cc95730babeee99055b5cb00c88b7d66dff8ab8",
       p2ClosureStatus: "P2_CLOSURE_PASS",
       lineageReconciliation: {
         p3BaselineSha: "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2",
-        p2ClosureSha: "59b3b53d0c548dc482291b8a0871f06bb29f90cd",
+        p2ClosureSha: "5cc95730babeee99055b5cb00c88b7d66dff8ab8",
+        p2PullRequest: 45,
         p3ClosureBranch: "codex/p3-epistemic-runtime-closure",
         p2CertificationStatus: "PASS",
         reconciled: true,
@@ -102,7 +103,7 @@ describe("P3 Epistemic Runtime architecture contract", () => {
         newBusinessEffectIdentity: false,
       },
       closureReconciliation: {
-        p2ClosureSha: "59b3b53d0c548dc482291b8a0871f06bb29f90cd",
+        p2ClosureSha: "5cc95730babeee99055b5cb00c88b7d66dff8ab8",
         p2ClosureStatus: "P2_CLOSURE_PASS",
         reconciledAfterAudit: true,
       },

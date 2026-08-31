@@ -15,7 +15,7 @@ import { runLockedCorpus } from "../../packages/epistemic-runtime/fixtures/locke
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repositoryRoot = resolve(root, "..");
 const P3_BASELINE_SHA = "8fcd8a1cebcf92791047777c0d9c70e95fc7aad2";
-const P2_CLOSURE_SHA = "59b3b53d0c548dc482291b8a0871f06bb29f90cd";
+const P2_CLOSURE_SHA = "5cc95730babeee99055b5cb00c88b7d66dff8ab8";
 const P3_BRANCH = "codex/p3-epistemic-runtime-closure";
 const P3_FIXTURE_SHA = "ce3632ddf4c3a004347d365361ae307d04257c22ba31672c5fea178ec70c42fc";
 const P3_COMBINED_SHA = "62da72452f6d4c0e9a87f307c8f6e8253c966beebaed2f0615a65d427324b2d5";

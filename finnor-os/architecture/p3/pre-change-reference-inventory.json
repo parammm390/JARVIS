@@ -7,7 +7,7 @@
   "p2ClosureRefAtAudit": "1a31904b35fff39aa1cab1c404f1d7467d723989",
   "p2LocalCertifiedShaAtAudit": "856c0cc370adc35490b18f9dc1d7244bcf46266f",
   "closureReconciliation": {
-    "p2ClosureSha": "59b3b53d0c548dc482291b8a0871f06bb29f90cd",
+    "p2ClosureSha": "5cc95730babeee99055b5cb00c88b7d66dff8ab8",
     "p2ClosureStatus": "P2_CLOSURE_PASS",
     "p3ClosureBranch": "codex/p3-epistemic-runtime-closure",
     "reconciledAfterAudit": true

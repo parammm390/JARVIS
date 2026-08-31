@@ -1,6 +1,6 @@
 # FINNOR Epistemic Runtime P3
 
-P3 starts from workspace HEAD `8fcd8a1cebcf92791047777c0d9c70e95fc7aad2`. At the start of P3, P2 closure was still running; the latest locally certified P2 candidate was `856c0cc370adc35490b18f9dc1d7244bcf46266f`. P3 therefore began as a pure, read-only package with no production routing or execution authority changes. P2 subsequently closed with `P2_CLOSURE_PASS` at `59b3b53d0c548dc482291b8a0871f06bb29f90cd`; the P3 commits were reconciled onto that exact lineage on `codex/p3-epistemic-runtime-closure` before production integration.
+P3 starts from workspace HEAD `8fcd8a1cebcf92791047777c0d9c70e95fc7aad2`. At the start of P3, P2 closure was still running; the latest locally certified P2 candidate was `856c0cc370adc35490b18f9dc1d7244bcf46266f`. P3 therefore began as a pure, read-only package with no production routing or execution authority changes. P2 subsequently closed with independently verified P0/P1/P2 certification at `5cc95730babeee99055b5cb00c88b7d66dff8ab8` (PR #45); the P3 commits were reconciled onto that exact lineage on `codex/p3-epistemic-runtime-closure` before production integration.
 
 `@finnor/epistemic-runtime` transforms already assembled context and audited observations into a replayable `EpistemicState`, classifies decision-critical uncertainty, ranks typed read-only information actions, appends immutable evidence, and recomputes belief. Canonical truth remains a separate deterministic projection and the exact existing precedence remains `CANONICAL > WORK > PROFILE > SESSION > MEMORY > WEB`.
 
