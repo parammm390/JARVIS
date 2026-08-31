@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { runManagedAzureCommand } from "./azure-managed-run-command.mjs"
 import { assertCanonicalRelease, assertResolvedTarget, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
@@ -139,14 +140,15 @@ grep -Eq '^FINNOR_SECRET_IDS=.+$' '${worker.secretEnvironmentFile}' || { echo "w
 git ls-remote https://github.com/${contract.canonicalGit.repository}.git refs/heads/${contract.canonicalGit.branch} | grep -q '^${gitRelease.head}'
 test "$(df -Pk /srv/finnor | awk 'NR==2 {print $4}')" -gt 524288
 echo FINNOR_AZURE_PREFLIGHT_OK`
-const runCommand = azJson([
-  "vm", "run-command", "invoke",
-  "--resource-group", worker.resourceGroup,
-  "--name", worker.resourceName,
-  "--command-id", "RunShellScript",
-  "--scripts", remotePreflight,
-])
-const runOutput = (runCommand.value ?? []).map((entry) => entry.message ?? "").join("\n")
+const runCommand = runManagedAzureCommand({
+  stage: "preflight",
+  commitSha: expected.commitSha,
+  script: remotePreflight,
+  timeoutSeconds: 5 * 60,
+  worker,
+  az,
+})
+const runOutput = runCommand.output
 if (!runOutput.includes("FINNOR_AZURE_PREFLIGHT_OK")) throw new Error("Azure worker runtime preflight did not return its success marker")
 
 process.loadEnvFile(resolve(databaseEnvPath))
