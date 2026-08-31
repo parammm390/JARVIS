@@ -1346,7 +1346,11 @@ export async function workCasesPage(tenantId: string, options: WorkCasesPageOpti
           durableWork: {
             id: durableWork.id,
             status: durableWork.status,
-            executionModel: durableWork.executionModel === "atomic_effect" ? "atomic_action" : durableWork.executionModel,
+            // The root Next build resolves the shared schema through its workspace
+            // package alias while this projection is compiled from source, which
+            // gives the identical enum a distinct TypeScript identity. Normalize
+            // the persisted compatibility value once at this boundary.
+            executionModel: (durableWork.executionModel === "atomic_effect" ? "atomic_action" : durableWork.executionModel) as CanonicalWorkExecutionModel,
             sessionId: durableWork.sessionId,
             channel: durableWork.initialChannel,
             activeContext: durableWork.activeContext,

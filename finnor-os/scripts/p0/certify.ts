@@ -144,6 +144,14 @@ function git(args: string[], cwd = repositoryRoot): string {
   return execFileSync("git", args, { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trimEnd();
 }
 
+function certificationBranch(): string {
+  // GitHub checks out pull requests at a detached merge ref. Keep the local
+  // branch assertion strict while using the authoritative PR head ref in CI so
+  // closure certification proves the pushed branch rather than rejecting the
+  // runner's checkout shape.
+  return git(["branch", "--show-current"]) || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "";
+}
+
 function normalizeChangedPath(path: string): string {
   const cleaned = path.replace(/^"|"$/g, "").replace(/^finnor-os\//, "");
   return cleaned;
@@ -167,7 +175,7 @@ function closureChangedPaths(): string[] {
 }
 
 function validateClosureLineage(): string[] {
-  assert.equal(git(["branch", "--show-current"], root), CLOSURE_BRANCH, "closure certification must run on the closure branch");
+  assert.equal(certificationBranch(), CLOSURE_BRANCH, "closure certification must run on the closure branch");
   assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_ANCHOR_SHA, "HEAD"]) === "", true, "closure branch is not anchored to the remote-main snapshot");
   assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P0_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P0 reconciliation");
   assert.equal(git(["merge-base", "--is-ancestor", CLOSURE_P1_SHA, "HEAD"]) === "", true, "closure branch does not contain the certified P1 reconciliation");
@@ -176,7 +184,7 @@ function validateClosureLineage(): string[] {
 
 function validateChangeScope(): string[] {
   assert.equal(git(["merge-base", "--is-ancestor", BASELINE_SHA, "HEAD"]) === "", true, "baseline SHA is not an ancestor of HEAD");
-  assert.equal(git(["branch", "--show-current"], root), P0_BRANCH, "P0 must run on its dedicated branch");
+  assert.equal(certificationBranch(), P0_BRANCH, "P0 must run on its dedicated branch");
   const paths = changedPaths();
   const allowed = paths.filter((path) =>
     path === "package.json"

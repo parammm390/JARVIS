@@ -7,6 +7,7 @@ import {
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
   beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
   workAggregate,
+  works,
   authorizeBusinessOperationTx, businessOperations,
   attachWorkEntity,
   authorityStates,
@@ -1525,11 +1526,19 @@ export class FinnorOrchestrator implements Orchestrator {
     // as a fresh approval and incorrectly fail closed. Pending/needs-review rows
     // still take the full authority + conditional-transition path below.
     const [existingAction] = await withTenant(tenantId, (db) => db
-      .select({ status: domainActions.status })
+      .select({ status: domainActions.status, workId: domainActions.workId, workStatus: works.status })
       .from(domainActions)
+      .leftJoin(works, and(eq(works.tenantId, tenantId), eq(works.id, domainActions.workId)))
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
       .limit(1));
     if (!existingAction) return { status: "failure", output: {}, error: "Action not found" };
+    // A completed objective is a terminal business boundary. A repeated approval
+    // against an objective-owned action must fail closed rather than be reported as
+    // a harmless transport replay; otherwise an old approval can be presented as a
+    // fresh decision after the objective's canonical outcome is already complete.
+    if (decision === "approve" && existingAction.status === "completed" && existingAction.workId && existingAction.workStatus === "completed") {
+      return { status: "failure", output: { completed: true }, error: "Approval refused: the Work item is already completed." };
+    }
     const idempotentStatus = decision === "approve"
       ? existingAction.status === "approved" || existingAction.status === "executing" || existingAction.status === "completed"
       : decision === "reject"

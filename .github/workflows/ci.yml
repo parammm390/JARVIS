@@ -59,8 +59,15 @@ jobs:
       DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
       REDIS_URL: redis://localhost:6379
       AUTH_DEV_BYPASS: "1"
+      # The closure branch is intentionally anchored to the current remote-main
+      # snapshot, not the historical P0 branch baseline. Keep the certifier
+      # fail-closed while teaching this PR runner which certified lineage it is
+      # checking; all ordinary branches retain the legacy P0 contract path.
+      FINNOR_CERTIFICATION_CLOSURE: ${{ github.head_ref == 'codex/p2-operational-effect-system-closure' && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
