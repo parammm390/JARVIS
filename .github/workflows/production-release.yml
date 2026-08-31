@@ -96,6 +96,10 @@ jobs:
       CERTIFICATION_TEST_PHONES: "+15550000001"
       P3_NO_EGRESS: "1"
       LIVE_SMOKE_ALLOWED: "0"
+      # Production main must retain every exact certified phase commit and the
+      # certified P4 FINNOR OS tree; phase-bound inventory snapshots are not
+      # regenerated against later phases.
+      FINNOR_CERTIFICATION_RELEASE_LINEAGE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -139,6 +143,9 @@ jobs:
         run: npm run release:verify
         env:
           FINNOR_ENVIRONMENT: production
+
+      - name: Verify immutable P0-P4 production lineage
+        run: npm run release:p0-p4-lineage
 
       - name: Apply migrations from an empty database
         run: |
@@ -254,14 +261,12 @@ jobs:
           tenant-id: ${{ env.AZURE_TENANT_ID }}
           subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Configure canonical Azure SSE DNS and HTTPS ingress
-        run: node scripts/release/configure-azure-sse-ingress.mjs
-
       - name: Frontend quality gate
         run: |
           npm run lint
           npx tsc --noEmit -p tsconfig.json
           npm run test:unit
+          npm run openapi --prefix finnor-os
           npm run jarvis:realtime:verify
           npm run typecheck --prefix finnor-os
 
@@ -307,36 +312,46 @@ jobs:
         run: npm run release:migrate:production -- apps/api/.vercel/.env.production.local
         working-directory: finnor-os
 
-      - name: Deploy prepared frontend
+      - name: Stage prepared frontend without promoting production
         id: frontend
         run: |
           set -o pipefail
-          node scripts/release/deploy-production.mjs frontend --deploy-only --output-file "$RUNNER_TEMP/frontend-release.json" | tee "$RUNNER_TEMP/frontend-deploy.log"
+          node scripts/release/deploy-production.mjs frontend --stage-only --output-file "$RUNNER_TEMP/frontend-release.json" | tee "$RUNNER_TEMP/frontend-deploy.log"
           url="$(sed -n 's/^FINNOR_DEPLOYMENT_URL=//p' "$RUNNER_TEMP/frontend-deploy.log" | tail -n 1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify frontend deployment
-        run: |
-          node scripts/release/verify-live-release.mjs "${{ steps.frontend.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
-          node scripts/release/verify-live-release.mjs https://finnorai.com "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+      - name: Verify staged frontend artifact
+        run: node scripts/release/verify-live-release.mjs "${{ steps.frontend.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
 
-      - name: Deploy prepared API
+      - name: Stage prepared API without promoting production
         id: api
         run: |
           set -o pipefail
-          node scripts/release/deploy-production.mjs api --deploy-only --output-file "$RUNNER_TEMP/api-release.json" | tee "$RUNNER_TEMP/api-deploy.log"
+          node scripts/release/deploy-production.mjs api --stage-only --output-file "$RUNNER_TEMP/api-release.json" | tee "$RUNNER_TEMP/api-deploy.log"
           url="$(sed -n 's/^FINNOR_DEPLOYMENT_URL=//p' "$RUNNER_TEMP/api-deploy.log" | tail -n 1)"
           test -n "$url"
           echo "url=$url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify API deployment
-        run: |
-          node scripts/release/verify-live-release.mjs "${{ steps.api.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
-          node scripts/release/verify-live-release.mjs https://api-psi-brown-95.vercel.app "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+      - name: Verify staged API artifact
+        run: node scripts/release/verify-live-release.mjs "${{ steps.api.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
 
-      - name: Deploy Azure worker and embedded orchestrator
+      - name: Configure canonical Azure SSE DNS and HTTPS ingress
+        run: node scripts/release/configure-azure-sse-ingress.mjs
+
+      - name: Deploy and verify Azure worker and embedded orchestrator
         run: node scripts/release/deploy-azure-worker.mjs --preflight-evidence "$FINNOR_PREFLIGHT_EVIDENCE"
+
+      - name: Promote verified frontend artifact
+        run: node scripts/release/deploy-production.mjs frontend --promote-only --deployment-url "${{ steps.frontend.outputs.url }}"
+
+      - name: Promote verified API artifact
+        run: node scripts/release/deploy-production.mjs api --promote-only --deployment-url "${{ steps.api.outputs.url }}"
+
+      - name: Verify promoted canonical Vercel aliases
+        run: |
+          node scripts/release/verify-live-release.mjs https://finnorai.com "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
+          node scripts/release/verify-live-release.mjs https://api-psi-brown-95.vercel.app "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
 
       - name: Verify cross-runtime release and migration parity
         run: node scripts/release/verify-production-parity.mjs --database-env finnor-os/apps/api/.vercel/.env.production.local

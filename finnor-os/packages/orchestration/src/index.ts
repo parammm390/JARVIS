@@ -6,6 +6,8 @@ import {
   withTenant, domainActions, domainPolicies, domainPolicyRevisions, actionLog,
   decisionReceipts, planRepairs, enqueueJob, receiveWork, transitionWork,
   beginWorkPlannerAttempt, finishWorkPlannerAttempt, latestWorkInput, reconcileWorkStatus,
+  workAggregate,
+  works,
   authorizeBusinessOperationTx, businessOperations,
   attachWorkEntity,
   authorityStates,
@@ -57,13 +59,21 @@ import {
   type ObjectiveDecisionPlanner,
   type StartObjectiveOptions,
 } from "./objective-loop";
-import { finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
+import { classifyInstructionRoute, finalizeInstructionRoute, type InstructionRouteDecision } from "./instruction-routing";
 import { assertCompiledHumanOperation, compileHumanInstructionRoute, compileTypedHumanOperation } from "./human-operating-compiler";
 import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
+import { observeOperationalQueryIrShadow } from "./operational-ir-shadow";
+import { observeOperationalQueryP2EffectShadow } from "./operational-ir-effect-shadow";
+import { observeOperationalQueryP3EpistemicShadow } from "./epistemic-runtime-shadow";
+import { observeOperationalQueryP4ProgramSearchShadow } from "./program-search-shadow";
 
 export * from "./llm";
 export * from "./planner";
 export * from "./compiler";
+export * from "./operational-ir-effect-resolution";
+export * from "./operational-ir-effect-shadow";
+export * from "./epistemic-runtime-shadow";
+export * from "./program-search-shadow";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
@@ -97,6 +107,7 @@ export * from "./user-capability-registry";
 export * from "./dealer-zero-preconditions";
 export * from "./human-operability-matrix";
 export * from "./human-operating-compiler";
+export * from "./operational-ir-shadow";
 export * from "./objective-success";
 export * from "./external-observation";
 export * from "./conversation-kernel";
@@ -567,6 +578,27 @@ export class FinnorOrchestrator implements Orchestrator {
           intakeDeadlineAt: opts.intakeDeadlineAt
             ?? (Number.isFinite(opts.deadlineAt) ? new Date(Number(opts.deadlineAt)) : undefined),
         });
+    // An idempotent replay of an already-created Objective is a read of canonical
+    // controller state, not a new intake transition. Re-entering routing here used
+    // to regress active Work from executing back to understanding and append a
+    // second route trace even though startWorkObjective correctly deduplicated the
+    // loop later. Return the existing loop before any Work/event mutation.
+    if ("duplicate" in received && received.duplicate) {
+      const aggregate = await workAggregate(ctx.tenantId, received.workId);
+      if (aggregate?.objectiveLoop) {
+        return {
+          actions: [],
+          workId: received.workId,
+          workInputId: received.workInputId,
+          instructionId: received.instructionId,
+          objective: {
+            objectiveLoopId: aggregate.objectiveLoop.id,
+            state: aggregate.objectiveLoop.state,
+            route: "OBJECTIVE",
+          },
+        };
+      }
+    }
     opts = {
       ...opts,
       activeContext: await resolveOperatingInteractionContext({
@@ -628,6 +660,24 @@ export class FinnorOrchestrator implements Orchestrator {
         reasonCodes: instructionRoute.reasonCodes,
       }, { executionModel: instructionRoute.route === "QUERY" ? "query" : instructionRoute.route === "CONVERSATION" ? "conversation" : instructionRoute.route === "ATOMIC_ACTION" ? "atomic_action" : instructionRoute.route === "CLARIFY" ? "clarify" : "objective", expectedWorkInputId: workInputId });
       if (instructionRoute.route === "QUERY" && routeReadDecision.route === "fast_read" && this.fastReadOnlyRouter.execute) {
+        observeOperationalQueryIrShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: new Date().toISOString(),
+        });
+        // Fire-and-contain: P2 observes the same deterministic candidate with
+        // tenant-scoped read-only resolution; the existing query remains authoritative.
+        void observeOperationalQueryP2EffectShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: new Date().toISOString(),
+        }, ctx.tenantId).catch(() => undefined);
         await emitInstructionEvent(ctx.tenantId, instructionId, "step_progress", { stage: "resolving_context", sourceKind: "PROFILE" });
         operatingContext = (await assembleOperatingContext(ctx, {
           instruction,
@@ -639,6 +689,30 @@ export class FinnorOrchestrator implements Orchestrator {
           includeCanonicalBusinessState: false,
         })).context;
         const result = await this.executeFastOperationalQuery(routeReadDecision.request, ctx, { workId, workInputId, instructionId }, { executionKey: opts.executionKey ?? opts.idempotencyKey ?? instructionId });
+        // Fire-and-contain: P3 observes only the already assembled context and
+        // completed canonical query. The exact result below remains authoritative.
+        void observeOperationalQueryP3EpistemicShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: result.execution.metadata.completedAt,
+          execution: result.execution,
+          context: operatingContext,
+        }, ctx.tenantId).catch(() => undefined);
+        // Fire-and-contain: P4 searches only typed shadow programs. It cannot
+        // authorize, dispatch, persist, create BusinessEffects, or alter this result.
+        void observeOperationalQueryP4ProgramSearchShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: result.execution.metadata.completedAt,
+          execution: result.execution,
+          context: operatingContext,
+        }, ctx.tenantId).catch(() => undefined);
         fastQuery = result.execution;
         fastAnswer = result.answer ?? null;
       } else if (!opts.skipFastReadClassification && fastDecision === undefined) {
@@ -1485,6 +1559,21 @@ export class FinnorOrchestrator implements Orchestrator {
       .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
       .limit(1));
     if (!existingAction) return { status: "failure", output: {}, error: "Action not found" };
+    // A completed objective is a terminal business boundary. A repeated approval
+    // against an objective-owned action must fail closed rather than be reported as
+    // a harmless transport replay; otherwise an old approval can be presented as a
+    // fresh decision after the objective's canonical outcome is already complete.
+    const [actionWork] = decision === "approve" && existingAction.status === "completed"
+      ? await withTenant(tenantId, (db) => db
+        .select({ workId: domainActions.workId, workStatus: works.status })
+        .from(domainActions)
+        .leftJoin(works, and(eq(works.tenantId, tenantId), eq(works.id, domainActions.workId)))
+        .where(and(eq(domainActions.tenantId, tenantId), eq(domainActions.id, actionId)))
+        .limit(1))
+      : [];
+    if (actionWork?.workId && actionWork.workStatus === "completed") {
+      return { status: "failure", output: { completed: true }, error: "Approval refused: the Work item is already completed." };
+    }
     const idempotentStatus = decision === "approve"
       ? existingAction.status === "approved" || existingAction.status === "executing" || existingAction.status === "completed"
       : decision === "reject"

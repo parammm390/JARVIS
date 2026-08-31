@@ -6,6 +6,7 @@ import {
   businessEffects,
   closePool,
   commands,
+  decisionReceipts,
   domainActions,
   integrationOperations,
   integrationEvents,

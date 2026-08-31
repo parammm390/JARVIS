@@ -24,8 +24,8 @@ function request(method: string, path: string, options: { headers?: Record<strin
   })
 }
 
-function params(path: string): { params: { path: string[] } } {
-  return { params: { path: path.split("/") } }
+function params(path: string): { params: Promise<{ path: string[] }> } {
+  return { params: Promise.resolve({ path: path.split("/") }) }
 }
 
 beforeEach(() => {

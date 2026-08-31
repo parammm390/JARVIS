@@ -1,7 +1,7 @@
-import { execFileSync } from "node:child_process"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
+import { runManagedAzureCommand } from "./azure-managed-run-command.mjs"
 import { assertCanonicalRelease, assertRuntimeParity, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
@@ -87,26 +87,14 @@ test "$(readlink -f '${worker.currentSymlink}')" = '${worker.releaseRoot}/${expe
 test "$(sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD)" = '${expected.commitSha}'
 grep -qx 'FINNOR_COMMIT_SHA=${expected.commitSha}' '${worker.releaseEnvironmentFile}'
 echo FINNOR_AZURE_PARITY_OK`
-const az = process.env.AZURE_CLI || "az"
-let azureRaw
-try {
-  azureRaw = execFileSync(az, [
-    "vm", "run-command", "invoke",
-    "--resource-group", worker.resourceGroup,
-    "--name", worker.resourceName,
-    "--command-id", "RunShellScript",
-    "--scripts", azureVerifyScript,
-    "--only-show-errors",
-    "-o", "json",
-  ], { encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 5 * 60 * 1000 })
-} catch (error) {
-  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
-  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
-  const diagnostic = [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
-  throw new Error(`Azure parity command failed:\n${diagnostic}`, { cause: error })
-}
-const azureResult = JSON.parse(azureRaw)
-const azureMessage = (azureResult.value ?? []).map((entry) => entry.message ?? "").join("\n")
+const azureResult = runManagedAzureCommand({
+  stage: "parity",
+  commitSha: expected.commitSha,
+  script: azureVerifyScript,
+  timeoutSeconds: 5 * 60,
+  worker,
+})
+const azureMessage = azureResult.output
 if (!azureMessage.includes("FINNOR_AZURE_PARITY_OK")) throw new Error(`Azure source/service parity verification failed:\n${azureMessage}`)
 
 const gatewayResponse = await fetch(`${worker.sseGatewayUrl}/healthz`, {

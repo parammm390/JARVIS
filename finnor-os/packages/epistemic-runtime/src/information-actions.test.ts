@@ -1,0 +1,219 @@
+import { describe, expect, it } from "vitest";
+import { analyzeUncertainty } from "./uncertainty";
+import {
+  assertAcquisitionBudget,
+  assertInformationObservationForAction,
+  budgetAllowsAction,
+  createInformationAction,
+  informationActionFingerprint,
+  informationActionKindsAreNonMutating,
+  informationActionPrivacyErrors,
+  initialAcquisitionUsage,
+  ReadOnlyInformationActionExecutor,
+} from "./index";
+import {
+  compareInformationActionScores,
+  scoreInformationAction,
+  selectInformationAction,
+} from "./scoring";
+import { TEST_NOW, testDefinition, testEvidence, testOption, testRequirement, testState } from "./test-support";
+
+const BUDGET = {
+  maxActions: 3,
+  maxUserInterruptions: 1,
+  maxLatencyMs: 100_000_000,
+  maxCostUnits: 20,
+  deadline: "2026-09-01T00:00:00.000Z",
+} as const;
+
+describe("information-action contracts and deterministic scoring", () => {
+  it("represents every acquisition as read-only and rejects privacy boundary violations", () => {
+    expect(informationActionKindsAreNonMutating()).toBe(true);
+    const state = testState([testDefinition("external.market", { kind: "external", type: "market" })]);
+    const requirement = testRequirement("external.market", [testOption("RESEARCH", "WEB_RESEARCH", "PUBLIC_RESEARCH")]);
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!, { sensitivity: ["PII"] });
+    expect(action.mutability).toBe("READ_ONLY");
+    expect(informationActionPrivacyErrors(action)).toContain("PRIVATE_DATA_TO_PUBLIC_RESEARCH_FORBIDDEN");
+  });
+
+  it("rejects fabricated authorization references for sensitive acquisition", () => {
+    const state = testState([testDefinition("external.customer", { kind: "external", type: "customer" })]);
+    const requirement = testRequirement("external.customer", [testOption("RESEARCH", "WEB_RESEARCH", "PUBLIC_RESEARCH")]);
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!, {
+      sensitivity: ["PII"],
+      privacy: { declassified: true, authorizationEvidenceRefs: ["fabricated:authorization"] },
+    });
+    const scored = scoreInformationAction(action, [action], {
+      state,
+      uncertainties: [uncertainty],
+      requirements: [requirement],
+      budget: BUDGET,
+      usage: initialAcquisitionUsage(),
+      now: TEST_NOW,
+    });
+    expect(scored.eligible).toBe(false);
+    expect(scored.reasonCodes).toContain("ACQUISITION_AUTHORIZATION_EVIDENCE_NOT_FOUND");
+  });
+
+  it("chooses a legal machine read before interrupting the user", () => {
+    const state = testState([testDefinition("entity.choice")]);
+    const requirement = testRequirement("entity.choice", [
+      testOption("READ", "CANONICAL_OPERATIONAL_QUERY", "CANONICAL_OWNER"),
+      testOption("ASK", "CLARIFICATION_REQUEST", "USER_INTENT_OWNER"),
+    ]);
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const actions = requirement.acquisitionOptions.map((option) => createInformationAction(state.scope, uncertainty, option));
+    const selected = selectInformationAction(actions, {
+      state,
+      uncertainties: [uncertainty],
+      requirements: [requirement],
+      budget: BUDGET,
+      usage: initialAcquisitionUsage(),
+      now: TEST_NOW,
+    });
+    expect(selected.action?.kind).toBe("READ");
+    expect(selected.scores.find((score) => actions.find((action) => action.id === score.actionId)?.kind === "ASK")?.reasonCodes)
+      .toContain("MACHINE_SOURCE_PRECEDES_CLARIFICATION");
+  });
+
+  it("allows decision-specific clarification when the proposition is user-owned", () => {
+    const state = testState([testDefinition("intent.choice", { kind: "user_intent", type: "choice" })]);
+    const requirement = testRequirement("intent.choice", [testOption("ASK", "CLARIFICATION_REQUEST", "USER_INTENT_OWNER")]);
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!);
+    const selected = selectInformationAction([action], {
+      state,
+      uncertainties: [uncertainty],
+      requirements: [requirement],
+      budget: BUDGET,
+      usage: initialAcquisitionUsage(),
+      now: TEST_NOW,
+    });
+    expect(selected.action).toEqual(action);
+    expect(action.userInterruption.promptFields).toEqual(["intent.choice"]);
+  });
+
+  it("allows minimal clarification when an authoritative machine read is riskier than interruption", () => {
+    const state = testState([testDefinition("entity.choice")]);
+    const requirement = testRequirement("entity.choice", [
+      testOption("READ", "CANONICAL_OPERATIONAL_QUERY", "CANONICAL_OWNER"),
+      testOption("ASK", "CLARIFICATION_REQUEST", "USER_INTENT_OWNER"),
+    ], {
+      unresolvedCategoryHint: "AMBIGUOUS",
+      unresolvedReasonCodes: ["ENTITY_REFERENCE_AMBIGUOUS"],
+    });
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const read = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!, {
+      cost: { toolUnits: 100 },
+      estimate: { failureRisk: 100 },
+    });
+    const ask = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[1]!);
+    const selected = selectInformationAction([read, ask], {
+      state,
+      uncertainties: [uncertainty],
+      requirements: [requirement],
+      budget: { ...BUDGET, maxCostUnits: 100 },
+      usage: initialAcquisitionUsage(),
+      now: TEST_NOW,
+    });
+    expect(selected.action?.kind).toBe("ASK");
+    expect(selected.scores.find((score) => score.actionId === ask.id)?.reasonCodes)
+      .not.toContain("MACHINE_SOURCE_PRECEDES_CLARIFICATION");
+  });
+
+  it("keeps safety and legality lexicographically above convenience and cost", () => {
+    const state = testState();
+    const requirement = testRequirement();
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const safe = createInformationAction(state.scope, uncertainty, testOption("READ", "CANONICAL_OPERATIONAL_QUERY", "CANONICAL_OWNER"), {
+      estimate: { safetyLegalityPriority: 100, decisionRelevance: 100, expectedUncertaintyReduction: 70 },
+      cost: { toolUnits: 20 },
+    });
+    const convenient = createInformationAction(state.scope, uncertainty, testOption("RETRIEVE", "HYBRID_RETRIEVAL", "SEMANTIC_MEMORY"), {
+      estimate: { safetyLegalityPriority: 50, decisionRelevance: 100, expectedUncertaintyReduction: 100 },
+      cost: { toolUnits: 0 },
+    });
+    const wideBudget = { ...BUDGET, maxCostUnits: 100 };
+    const context = { state, uncertainties: [uncertainty], requirements: [requirement], budget: wideBudget, usage: initialAcquisitionUsage(), now: TEST_NOW };
+    const safeScore = scoreInformationAction(safe, [safe, convenient], context);
+    const convenientScore = scoreInformationAction(convenient, [safe, convenient], context);
+    expect(compareInformationActionScores(safeScore, convenientScore)).toBeLessThan(0);
+  });
+
+  it("enforces hard budgets, deadline, and duplicate-loop prevention before execution", () => {
+    const state = testState();
+    const requirement = testRequirement();
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!);
+    expect(budgetAllowsAction({ ...BUDGET, maxActions: 0 }, initialAcquisitionUsage(), action, TEST_NOW).reasonCodes)
+      .toContain("MAX_ACTIONS_EXCEEDED");
+    expect(budgetAllowsAction(BUDGET, { ...initialAcquisitionUsage(), selectedActionFingerprints: [
+      // A prior identical acquisition is enough to make a retry ineligible.
+      informationActionFingerprint(action),
+    ] }, action, TEST_NOW).reasonCodes).toContain("DUPLICATE_ACQUISITION_LOOP");
+    expect(budgetAllowsAction(BUDGET, initialAcquisitionUsage(), action, "2026-09-01T00:00:00.000Z").reasonCodes)
+      .toContain("DEADLINE_REACHED");
+  });
+
+  it("rejects adapter-kind mismatches, malformed budgets, and provenance-smuggling observations", () => {
+    const state = testState();
+    const requirement = testRequirement();
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    expect(() => createInformationAction(
+      state.scope,
+      uncertainty,
+      testOption("ASK", "CANONICAL_OPERATIONAL_QUERY", "CANONICAL_OWNER"),
+    )).toThrow(/cannot execute ASK/);
+    expect(() => createInformationAction(
+      state.scope,
+      uncertainty,
+      testOption("READ", "CANONICAL_OPERATIONAL_QUERY", "SEMANTIC_MEMORY"),
+    )).toThrow(/cannot claim/);
+    expect(() => assertAcquisitionBudget({ ...BUDGET, maxActions: -1 })).toThrow(/maxActions/);
+
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!);
+    expect(() => assertInformationObservationForAction(action, {
+      actionId: action.id,
+      adapterId: action.adapterId,
+      tenantId: action.scope.tenantId,
+      observedAt: TEST_NOW,
+      evidence: [],
+      propositionIds: action.expectedInformation.propositionIds,
+      outcome: "OBSERVED",
+    })).toThrow(/requires evidence/);
+
+    expect(() => assertInformationObservationForAction(action, {
+      actionId: action.id,
+      adapterId: action.adapterId,
+      tenantId: action.scope.tenantId,
+      observedAt: TEST_NOW,
+      evidence: [{
+        ...testEvidence({ state, id: "canonical:wrong-authority", value: true, kind: "CANONICAL_DB" }),
+        source: {
+          ...testEvidence({ state, id: "canonical:wrong-authority", value: true, kind: "CANONICAL_DB" }).source,
+          authority: "CURRENT_SESSION",
+        },
+      }],
+      propositionIds: action.expectedInformation.propositionIds,
+      outcome: "OBSERVED",
+    })).toThrow(/authority/);
+  });
+
+  it("contains adapter exceptions as provenance-free failed observations", async () => {
+    const state = testState();
+    const requirement = testRequirement();
+    const uncertainty = analyzeUncertainty(state, [requirement])[0]!;
+    const action = createInformationAction(state.scope, uncertainty, requirement.acquisitionOptions[0]!);
+    const executor = new ReadOnlyInformationActionExecutor([{
+      id: "CANONICAL_OPERATIONAL_QUERY",
+      execute: async () => { throw new Error("raw adapter failure must not escape"); },
+    }], () => TEST_NOW);
+    await expect(executor.execute(action)).resolves.toMatchObject({
+      outcome: "FAILED",
+      failureCode: "ADAPTER_EXECUTION_OR_CONTRACT_FAILURE",
+      evidence: [],
+    });
+  });
+});

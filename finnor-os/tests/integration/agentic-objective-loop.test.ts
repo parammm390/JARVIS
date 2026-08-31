@@ -14,6 +14,7 @@ import {
   households,
   jobs,
   sandboxOutbox,
+  serviceReleaseHeartbeats,
   tenants,
   users,
   withTenant,
@@ -118,6 +119,18 @@ describe.skipIf(!available)("Upgrade 9 governed agentic objective loop", () => {
       });
     });
     await withTenant(otherTenantId, (db) => db.insert(tenants).values({ id: otherTenantId, name: "Objective Loop Other Dealer" }));
+    await withTenant(tenantId, (db) => db.insert(serviceReleaseHeartbeats).values({
+      service: "worker",
+      instanceId: `objective-loop-${tenantId}`,
+      releaseSha: "objective-loop-test",
+      buildId: "objective-loop-test",
+      version: "objective-loop-test",
+      releaseSource: "test",
+      coreCertificationId: "objective-loop-test",
+      migrationHead: CURRENT_MIGRATION_HEAD,
+      capabilities: ["jobs", "orchestration"],
+      environment: "test",
+    }));
   });
 
   afterAll(async () => {

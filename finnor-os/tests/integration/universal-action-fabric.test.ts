@@ -30,6 +30,7 @@ import {
 } from "@finnor/tools";
 import { assembleOperatingContext, createDefaultPluginRegistry, GatedExecutor, groundEntitiesWithDb } from "@finnor/orchestration";
 import { resolveParty } from "@finnor/read-models";
+import { setTenantSecretReaderForTesting } from "@finnor/security";
 import { migrate } from "../../packages/db/migrate";
 import universalActionsPlugin, {
   acceptDelegation,
@@ -276,11 +277,18 @@ describe.skipIf(!available)("Phase 2 Universal Action + Delegation Fabric", () =
     } finally {
       await admin.end();
     }
+    setTenantSecretReaderForTesting(async (reference): Promise<Record<string, string>> => {
+      if (reference.includes("/gmail/")) return { user: "owner@example.test", appPassword: "universal-action-test-app-password" };
+      if (reference.includes("/vapi/")) return { apiKey: "universal-action-vapi-key", phoneNumberId: "universal-action-phone", assistantId: "universal-action-assistant" };
+      if (reference.includes("/ghl/")) return { apiKey: "universal-action-ghl-key", locationId: "universal-action-location" };
+      throw new Error(`Unexpected test credential reference: ${reference}`);
+    });
     process.env.DATABASE_URL = APP_URL;
     await closePool();
   }, 30_000);
 
   afterAll(async () => {
+    setTenantSecretReaderForTesting(null);
     await closePool();
     process.env.DATABASE_URL = SUPER_URL;
     for (const [key, value] of savedCredentialEnv) {

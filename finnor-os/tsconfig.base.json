@@ -15,6 +15,9 @@
     "types": ["node", "react", "react-dom", "vitest/globals"],
     "paths": {
       "@finnor/shared-types": ["./packages/shared-types/src/index.ts"],
+      "@finnor/epistemic-runtime": ["./packages/epistemic-runtime/src/index.ts"],
+      "@finnor/operational-ir": ["./packages/operational-ir/src/index.ts"],
+      "@finnor/program-search": ["./packages/program-search/src/index.ts"],
       "@finnor/policy-schema": ["./packages/policy-schema/src/index.ts"],
       "@finnor/db": ["./packages/db/index.ts"],
       "@finnor/db/*": ["./packages/db/*"],

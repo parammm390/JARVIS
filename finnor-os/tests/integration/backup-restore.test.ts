@@ -89,5 +89,8 @@ describe.skipIf(!available)("backup/restore round-trip (A4.T4, no pg_dump depend
     } finally {
       await target.end();
     }
-  }, 60_000);
+  // The pure-JS dump walks every canonical table. A cold CI database can be
+  // checkpointing after the preceding full suite, so allow the round-trip its
+  // documented mechanics require without changing the assertions or data scope.
+  }, 180_000);
 });

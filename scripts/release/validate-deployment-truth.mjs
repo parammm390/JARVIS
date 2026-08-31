@@ -70,6 +70,9 @@ for (const entry of scanRoots) scan(join(repoRoot, entry))
 const workflow = readFileSync(join(repoRoot, ".github/workflows/production-release.yml"), "utf8")
 const vercelDeployScript = readFileSync(join(repoRoot, "scripts/release/deploy-production.mjs"), "utf8")
 const azureDeployScript = readFileSync(join(repoRoot, "scripts/release/azure/deploy-worker.sh"), "utf8")
+const managedRunCommand = readFileSync(join(repoRoot, "scripts/release/azure-managed-run-command.mjs"), "utf8")
+const workerDeployClient = readFileSync(join(repoRoot, "scripts/release/deploy-azure-worker.mjs"), "utf8")
+const preflightScript = readFileSync(join(repoRoot, "scripts/release/preflight-production.mjs"), "utf8")
 const parityScript = readFileSync(join(repoRoot, "scripts/release/verify-production-parity.mjs"), "utf8")
 for (const invariant of [
   'sudo -u finnor git -C "$staging_dir" rev-parse HEAD',
@@ -81,6 +84,21 @@ for (const invariant of [
 }
 if (!parityScript.includes("sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD")) {
   fail("Azure parity verification must inspect the runtime-owned checkout as finnor")
+}
+for (const [label, source] of [["preflight", preflightScript], ["worker deploy", workerDeployClient], ["parity", parityScript]]) {
+  if (!source.includes("runManagedAzureCommand")) fail(`Azure ${label} must use managed RunCommand`)
+  if (/"run-command",\s*"invoke"/.test(source)) fail(`Azure ${label} still uses the legacy single-active action RunCommand`)
+}
+for (const invariant of [
+  '"run-command", "create"',
+  '"--async-execution", "false"',
+  '"--timeout-in-seconds"',
+  '"run-command", "show"',
+  '"--instance-view"',
+  '"run-command", "delete"',
+  "finally",
+]) {
+  if (!managedRunCommand.includes(invariant)) fail(`managed RunCommand lost bounded cleanup invariant: ${invariant}`)
 }
 if (!parityScript.includes("heartbeatDeadline = Date.now() + 120_000") || !parityScript.includes("observedCommit === expected.commitSha")) {
   fail("runtime parity must wait for a fresh heartbeat carrying the canonical release SHA")
@@ -110,8 +128,19 @@ for (const invariant of [
 if (!/concurrency:\s*[\s\S]*group:\s*finnor-production-release/.test(workflow)) fail("production workflow lost its concurrency lock")
 const credentialGateAt = workflow.indexOf("Require production credentials before any mutation")
 const preflightAt = workflow.indexOf("preflight-production.mjs")
+const prepareFrontendAt = workflow.indexOf("deploy-production.mjs frontend --prepare-only")
+const prepareApiAt = workflow.indexOf("deploy-production.mjs api --prepare-only")
 const migrationAt = workflow.indexOf("release:migrate:production")
-const firstProductionMutationAt = workflow.indexOf("configure-azure-sse-ingress.mjs")
+const stageFrontendAt = workflow.indexOf("deploy-production.mjs frontend --stage-only")
+const verifyStagedFrontendAt = workflow.indexOf("Verify staged frontend artifact")
+const stageApiAt = workflow.indexOf("deploy-production.mjs api --stage-only")
+const verifyStagedApiAt = workflow.indexOf("Verify staged API artifact")
+const ingressAt = workflow.indexOf("configure-azure-sse-ingress.mjs")
+const workerDeployAt = workflow.indexOf("deploy-azure-worker.mjs")
+const promoteFrontendAt = workflow.indexOf("deploy-production.mjs frontend --promote-only")
+const promoteApiAt = workflow.indexOf("deploy-production.mjs api --promote-only")
+const parityAt = workflow.indexOf("verify-production-parity.mjs")
+const firstProductionMutationAt = Math.min(...[migrationAt, ingressAt].filter((value) => value >= 0))
 if (credentialGateAt < 0 || firstProductionMutationAt < 0 || credentialGateAt > firstProductionMutationAt) fail("production credentials are not gated before the first mutation")
 const nextStepAt = workflow.indexOf("- name:", credentialGateAt + 8)
 const credentialGate = workflow.slice(credentialGateAt, nextStepAt < 0 ? workflow.length : nextStepAt)
@@ -127,10 +156,12 @@ for (const credential of [
   if (!credentialGate.includes(credential)) fail(`pre-mutation credential gate omits ${credential}`)
 }
 if (preflightAt < 0 || migrationAt < 0 || preflightAt > migrationAt) fail("migration can run before production preflight")
-for (const component of ["frontend", "api"]) {
-  const deployAt = workflow.indexOf(`deploy-production.mjs ${component} --deploy-only`)
-  if (deployAt < migrationAt) fail(`${component} deployment is missing or can run before migration`)
+if (prepareFrontendAt < preflightAt || prepareApiAt < prepareFrontendAt || migrationAt < prepareApiAt) fail("commit-locked Vercel preparation must finish after preflight and before migration")
+if (stageFrontendAt < migrationAt || verifyStagedFrontendAt < stageFrontendAt || stageApiAt < verifyStagedFrontendAt || verifyStagedApiAt < stageApiAt) {
+  fail("staged frontend/API artifacts must be created and verified in order after migration")
 }
+if (ingressAt < verifyStagedApiAt || workerDeployAt < ingressAt) fail("Azure ingress/worker mutation can run before both staged Vercel artifacts verify")
+if (promoteFrontendAt < workerDeployAt || promoteApiAt < promoteFrontendAt || parityAt < promoteApiAt) fail("Vercel promotion or parity can run before the worker verifies")
 if (!/for run in 1 2; do[\s\S]*PRODUCT_TRUTH_CERTIFICATION_RUN="\$run"[\s\S]*verify-consecutive-human-certifications\.mjs/.test(workflow)) {
   fail("operational closure must require two ordered deployed Human Black-Box runs")
 }
