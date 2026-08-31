@@ -65,6 +65,7 @@ import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./use
 import { observeOperationalQueryIrShadow } from "./operational-ir-shadow";
 import { observeOperationalQueryP2EffectShadow } from "./operational-ir-effect-shadow";
 import { observeOperationalQueryP3EpistemicShadow } from "./epistemic-runtime-shadow";
+import { observeOperationalQueryP4ProgramSearchShadow } from "./program-search-shadow";
 
 export * from "./llm";
 export * from "./planner";
@@ -72,6 +73,7 @@ export * from "./compiler";
 export * from "./operational-ir-effect-resolution";
 export * from "./operational-ir-effect-shadow";
 export * from "./epistemic-runtime-shadow";
+export * from "./program-search-shadow";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";
@@ -690,6 +692,18 @@ export class FinnorOrchestrator implements Orchestrator {
         // Fire-and-contain: P3 observes only the already assembled context and
         // completed canonical query. The exact result below remains authoritative.
         void observeOperationalQueryP3EpistemicShadow({
+          routeDecision: instructionRoute,
+          readDecision: routeReadDecision,
+          instructionId,
+          workId,
+          workInputId,
+          compiledAt: result.execution.metadata.completedAt,
+          execution: result.execution,
+          context: operatingContext,
+        }, ctx.tenantId).catch(() => undefined);
+        // Fire-and-contain: P4 searches only typed shadow programs. It cannot
+        // authorize, dispatch, persist, create BusinessEffects, or alter this result.
+        void observeOperationalQueryP4ProgramSearchShadow({
           routeDecision: instructionRoute,
           readDecision: routeReadDecision,
           instructionId,

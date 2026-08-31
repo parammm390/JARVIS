@@ -12,6 +12,7 @@
     "@finnor/epistemic-runtime": "*",
     "@finnor/memory": "*",
     "@finnor/operational-ir": "*",
+    "@finnor/program-search": "*",
     "@finnor/policy-schema": "*",
     "@finnor/plugins-shared": "*",
     "@finnor/read-models": "*",

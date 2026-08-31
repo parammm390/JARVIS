@@ -28,6 +28,7 @@ import {
 } from "./operational-ir-shadow";
 
 const RESULT_PROPOSITION = "operational_query.result_sufficient";
+export const OPERATIONAL_QUERY_RESULT_PROPOSITION = RESULT_PROPOSITION;
 
 export interface OperationalQueryP3EpistemicShadowInput extends OperationalQueryShadowInput {
   /** The result already produced by the authoritative Operational Query Plane. */
@@ -134,6 +135,26 @@ function requirement(decisionId: string): DecisionRequirement {
     // would be redundant and asking the user is outside this shadow seam.
     acquisitionOptions: [],
   };
+}
+
+/** Read-only P4 reuse seam: exposes the exact already-certified P3 projection
+ * without introducing a second epistemic-state builder. */
+export function validateOperationalQueryP3AuthoritativeBoundary(
+  input: OperationalQueryP3EpistemicShadowInput,
+  trustedTenantId: string,
+): void {
+  validateAuthoritativeBoundary(input, trustedTenantId);
+}
+
+export function buildOperationalQueryP3DecisionState(
+  input: OperationalQueryP3EpistemicShadowInput,
+  trustedTenantId: string,
+) {
+  return buildState(input, trustedTenantId);
+}
+
+export function operationalQueryP3DecisionRequirement(decisionId: string): DecisionRequirement {
+  return requirement(decisionId);
 }
 
 function existingBehavior(
