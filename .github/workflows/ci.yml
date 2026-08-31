@@ -61,11 +61,11 @@ jobs:
       DATABASE_URL: postgres://finnor:finnor@localhost:5432/finnor
       REDIS_URL: redis://localhost:6379
       AUTH_DEV_BYPASS: "1"
-      # The closure branch is intentionally anchored to the current remote-main
-      # snapshot, not the historical P0 branch baseline. Keep the certifier
-      # fail-closed while teaching this PR runner which certified lineage it is
-      # checking; all ordinary branches retain the legacy P0 contract path.
+      # Keep exact phase certification on the P2 closure branch. The canonical
+      # production branch and main instead prove that the immutable P0-P4 phase
+      # commits and certified P4 tree survive the release reconciliation exactly.
       FINNOR_CERTIFICATION_CLOSURE: ${{ github.head_ref == 'codex/p2-operational-effect-system-closure' && '1' || '0' }}
+      FINNOR_CERTIFICATION_RELEASE_LINEAGE: ${{ (github.head_ref == 'codex/p0-p4-production-candidate' || github.ref_name == 'main') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -93,6 +93,9 @@ jobs:
       # dealer-zero-e2e.test.ts failed on this repo's first-ever real CI run with
       # `relation "finnor_langgraph.checkpoints" does not exist`.
       - run: npm run setup:langgraph
+      - name: Verify immutable P0-P4 production lineage
+        if: env.FINNOR_CERTIFICATION_RELEASE_LINEAGE == '1'
+        run: npm run release:p0-p4-lineage --prefix ..
       - run: npm test
       # Phase 6 (§6.3): the real dump/restore round-trip this repo's backup-restore
       # runbook documents as blocked on Postgres client tools — this runner has them

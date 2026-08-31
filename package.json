@@ -14,6 +14,7 @@
     "test:e2e:ui": "playwright test --ui",
     "release:verify": "node scripts/release/verify-release.mjs",
     "release:truth": "node scripts/release/validate-deployment-truth.mjs",
+    "release:p0-p4-lineage": "node scripts/release/verify-p0-p4-lineage.mjs",
     "test:release": "node --test scripts/release/release-policy.test.mjs scripts/release/product-truth-golden-matrix.test.mjs scripts/release/human-operability-matrix.test.mjs scripts/release/verify-consecutive-human-certifications.test.mjs"
   },
   "dependencies": {
