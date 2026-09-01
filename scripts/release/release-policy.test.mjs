@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
 import test from "node:test"
 import { managedRunCommandName, runManagedAzureCommand } from "./azure-managed-run-command.mjs"
+import { recoverAzureRunCommandTransport } from "./recover-azure-run-command.mjs"
 import { assertCanonicalRelease, assertDeploymentPlan, assertResolvedTarget, assertRuntimeParity, expectedRelease, loadContract } from "./release-policy.mjs"
 
 const contract = loadContract()
@@ -216,6 +217,103 @@ test("managed RunCommand surfaces remote failure and still removes the command",
   )
   assert.equal(exists, false)
   assert.ok(deletes >= 2)
+})
+
+test("Azure transport recovery deletes only FINNOR-owned stale commands without restarting when cleanup converges", async () => {
+  const worker = {
+    ...contract.topology.worker,
+    sseGatewayUrl: "https://worker.example.invalid",
+  }
+  const calls = []
+  let stale = true
+  const exec = (_az, args) => {
+    calls.push(args)
+    if (args[0] === "account") return JSON.stringify({ id: worker.subscriptionId, tenantId: worker.tenantId })
+    if (args[0] === "vm" && args[1] === "show") return JSON.stringify({
+      id: worker.resourceId,
+      vmId: worker.vmId,
+      location: worker.location,
+      osProfile: { adminUsername: worker.adminUsername },
+    })
+    if (args[0] === "vm" && args[1] === "get-instance-view") return JSON.stringify({
+      statuses: [{ code: "PowerState/running", displayStatus: "VM running" }],
+      vmAgent: { statuses: [{ code: "ProvisioningState/succeeded", displayStatus: "Ready" }] },
+    })
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "list") return JSON.stringify([
+      ...(stale ? [{ name: `finnor-preflight-${sha.slice(0, 12)}` }] : []),
+      { name: "customer-owned-command" },
+    ])
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "delete") {
+      stale = false
+      return "{}"
+    }
+    throw new Error(`unexpected Azure operation: ${args.join(" ")}`)
+  }
+  const result = await recoverAzureRunCommandTransport(
+    { worker, expectedCommitSha: sha },
+    { exec, sleep: () => {}, now: () => 0 },
+  )
+  assert.equal(result.action, "CLEANUP_ONLY")
+  const deletes = calls.filter((args) => args[0] === "vm" && args[1] === "run-command" && args[2] === "delete")
+  assert.equal(deletes.length, 1)
+  assert.equal(deletes[0][deletes[0].indexOf("--run-command-name") + 1], `finnor-preflight-${sha.slice(0, 12)}`)
+  assert.ok(!calls.some((args) => args[0] === "vm" && args[1] === "restart"))
+})
+
+test("Azure transport recovery restarts a healthy canonical worker only after stale cleanup cannot converge", async () => {
+  const worker = {
+    ...contract.topology.worker,
+    sseGatewayUrl: "https://worker.example.invalid",
+  }
+  let clock = 0
+  let deletes = 0
+  let restarted = false
+  let stale = true
+  const exec = (_az, args) => {
+    if (args[0] === "account") return JSON.stringify({ id: worker.subscriptionId, tenantId: worker.tenantId })
+    if (args[0] === "vm" && args[1] === "show") return JSON.stringify({
+      id: worker.resourceId,
+      vmId: worker.vmId,
+      location: worker.location,
+      osProfile: { adminUsername: worker.adminUsername },
+    })
+    if (args[0] === "vm" && args[1] === "get-instance-view") return JSON.stringify({
+      statuses: [{ code: "PowerState/running", displayStatus: "VM running" }],
+      vmAgent: { statuses: [{ code: "ProvisioningState/succeeded", displayStatus: "Ready" }] },
+    })
+    if (args[0] === "vm" && args[1] === "restart") {
+      restarted = true
+      return "{}"
+    }
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "list") {
+      return JSON.stringify(stale ? [{ name: `finnor-deploy-${sha.slice(0, 12)}` }] : [])
+    }
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "delete") {
+      deletes += 1
+      if (restarted) stale = false
+      return "{}"
+    }
+    throw new Error(`unexpected Azure operation: ${args.join(" ")}`)
+  }
+  const result = await recoverAzureRunCommandTransport(
+    { worker, expectedCommitSha: sha },
+    {
+      exec,
+      sleep: (ms) => { clock += Math.max(ms, 60_000) },
+      sleepAsync: async () => {},
+      now: () => clock,
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, realtime: true, release: { commitSha: "b".repeat(40) } }),
+      }),
+    },
+  )
+  assert.equal(result.action, "RESTART_AND_CLEANUP")
+  assert.equal(result.priorReleaseSha, "b".repeat(40))
+  assert.equal(restarted, true)
+  assert.equal(stale, false)
+  assert.equal(deletes, 2)
 })
 
 test("managed RunCommand surfaces provisioning failure without waiting for the script deadline", () => {
