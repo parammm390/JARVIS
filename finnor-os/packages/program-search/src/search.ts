@@ -40,6 +40,7 @@ import {
 } from "./identity";
 import { generateGuardedRewrites, type GuardedRewrite } from "./rewrites";
 import { solveCpSatConstraint, solveSmtConstraint } from "./solvers";
+import { validateProgramSimulationEvidence } from "./simulation-evidence";
 
 interface CandidateEnvelope extends CandidateProgramInput {
   parentProgramHash: ProgramSearchHash | null;
@@ -156,7 +157,9 @@ function validBounds(problem: SearchProblem): boolean {
     && problem.solverVersions.smt === PROGRAM_SEARCH_SMT_SOLVER_VERSION
     && problem.solverVersions.cpSat === PROGRAM_SEARCH_CP_SAT_SOLVER_VERSION
     && problem.costModelVersion === PROGRAM_SEARCH_COST_MODEL_VERSION
-    && problem.rewriteSetVersion === PROGRAM_SEARCH_REWRITE_SET_VERSION;
+    && problem.rewriteSetVersion === PROGRAM_SEARCH_REWRITE_SET_VERSION
+    && (problem.simulationPolicy === undefined
+      || (problem.simulationPolicy.version === 1 && problem.simulationPolicy.mode === "REQUIRED"));
 }
 
 function baseRecord(envelope: CandidateEnvelope): CandidateRecord {
@@ -198,7 +201,12 @@ function semanticDedupKey(record: CandidateRecord): string {
     fallback: estimate.fallbackAssumption.value,
     unit: estimate.unit,
   }]));
-  return stableFragment({ equivalenceClass: record.equivalenceClass, mandatory, cost });
+  return stableFragment({
+    equivalenceClass: record.equivalenceClass,
+    mandatory,
+    cost,
+    ...(record.simulationEvidence ? { simulationReplayIdentity: record.simulationEvidence.replayIdentity } : {}),
+  });
 }
 
 function makeStats(problem: SearchProblem): SearchStats {
@@ -218,6 +226,7 @@ function makeStats(problem: SearchProblem): SearchStats {
     estimatedMemoryBytes: 0,
     budgetExhausted: false,
     budgetReasonCodes: [],
+    ...(problem.simulationPolicy ? { simulationCalls: 0 } : {}),
   };
 }
 
@@ -257,6 +266,20 @@ function finish(input: {
     costModelVersion: input.problem.costModelVersion,
     rewriteSetVersion: input.problem.rewriteSetVersion,
     seed: input.problem.seed,
+    ...(input.problem.simulationPolicy ? {
+      simulation: {
+        policy: input.problem.simulationPolicy,
+        survivors: ranked.map((record) => ({
+          programHash: record.programHash,
+          replayIdentity: record.simulationEvidence?.replayIdentity ?? null,
+          traceId: record.simulationEvidence?.traceId ?? null,
+        })),
+        rejections: input.rejected.flatMap((record) => record.rejection?.stage === "P5_SPECULATIVE_EVIDENCE" ? [{
+          programHash: record.programHash,
+          reasonCode: record.rejection.reasonCode,
+        }] : []),
+      },
+    } : {}),
   };
   return {
     version: PROGRAM_SEARCH_VERSION,
@@ -467,6 +490,53 @@ export async function searchOperationalPrograms(
       return { record, survives: false, newRequirements: [] };
     }
 
+    if (problem.simulationPolicy?.mode === "REQUIRED") {
+      if (!dependencies.simulate) {
+        record.rejection = reject("P5_SPECULATIVE_EVIDENCE", "P5_SIMULATION_UNAVAILABLE", ["P5_SIMULATOR_NOT_CONFIGURED"], "P5 evidence is required but no speculative simulator was provided.");
+        return { record, survives: false, newRequirements: [] };
+      }
+      try {
+        stats.simulationCalls = (stats.simulationCalls ?? 0) + 1;
+        record.simulationEvidence = await dependencies.simulate({
+          candidateId: record.candidateId,
+          programHash: record.programHash,
+          program,
+          p2Status: "ADMISSIBLE",
+          fixedNow: problem.fixedNow,
+          epistemicState: problem.epistemicState,
+        });
+      } catch {
+        record.rejection = reject("P5_SPECULATIVE_EVIDENCE", "P5_SIMULATION_UNAVAILABLE", ["P5_SIMULATOR_FAILED"], "P5 simulation did not return structured evidence; P4 failed closed.");
+        return { record, survives: false, newRequirements: [] };
+      }
+      const validation = validateProgramSimulationEvidence(record.simulationEvidence, {
+        tenantId: problem.epistemicState.scope.tenantId,
+        programIrSemanticHash: program.irSemanticHash,
+        p4CandidateHash: record.programHash,
+      });
+      recordProof("SIMULATION_RESULT", [record.simulationEvidence.status, ...(validation.reasonCode ? [validation.reasonCode] : [])], {
+        status: record.simulationEvidence.status,
+        snapshotId: record.simulationEvidence.snapshotId,
+        replayIdentity: record.simulationEvidence.replayIdentity,
+        requiredBranches: record.simulationEvidence.requiredBranches,
+        simulatedBranches: record.simulationEvidence.simulatedBranches,
+        highRiskBranchesDiscarded: record.simulationEvidence.highRiskBranchesDiscarded,
+      }, record.programHash);
+      if (!validation.valid) {
+        record.rejection = reject(
+          "P5_SPECULATIVE_EVIDENCE",
+          validation.reasonCode ?? "P5_SIMULATION_EVIDENCE_INVALID",
+          validation.detailCodes,
+          "P5 speculative evidence failed a fixed hard gate; P4 cannot select this candidate.",
+        );
+        return { record, survives: false, newRequirements: [] };
+      }
+      if (!advance(Math.max(1, record.simulationEvidence.simulatedBranches))) {
+        record.rejection = reject("SEARCH_BUDGET", "SEARCH_TIME_BUDGET_EXHAUSTED", ["P5_EVIDENCE_ACCOUNTED"], "Search time bound reached after bounded P5 simulation.");
+        return { record, survives: false, newRequirements: [] };
+      }
+    }
+
     const dedupKey = semanticDedupKey(record);
     if (semanticKeys.has(dedupKey)) {
       stats.duplicatesEliminated += 1;
@@ -475,7 +545,13 @@ export async function searchOperationalPrograms(
     }
     semanticKeys.add(dedupKey);
 
-    const bytes = estimatedCanonicalBytes({ effects, dependencies: record.dependencies, constraints: record.constraintResults, cost: record.costEstimate });
+    const bytes = estimatedCanonicalBytes({
+      effects,
+      dependencies: record.dependencies,
+      constraints: record.constraintResults,
+      cost: record.costEstimate,
+      ...(record.simulationEvidence ? { simulationEvidence: record.simulationEvidence } : {}),
+    });
     if (stats.estimatedMemoryBytes + bytes > problem.searchBounds.maxMemoryBytes) {
       exhaust("SEARCH_MEMORY_BUDGET_EXHAUSTED");
       record.rejection = reject("SEARCH_BUDGET", "SEARCH_MEMORY_BUDGET_EXHAUSTED", [], "Candidate graph node would exceed the configured search-memory bound.");
@@ -571,7 +647,12 @@ export async function searchOperationalPrograms(
   if (initialCandidateBoundExceeded) exhaust("SEARCH_NODE_BUDGET_EXHAUSTED");
 
   const loweringUnsupportedOnly = survivors.length === 0 && rejected.length > 0
-    && rejected.every((record) => record.rejection?.reasonCode === "UNSUPPORTED_RUNTIME_LOWERING" || record.rejection?.reasonCode === "P2_UNRESOLVED");
+    && rejected.every((record) => [
+      "UNSUPPORTED_RUNTIME_LOWERING",
+      "P2_UNRESOLVED",
+      "P5_SIMULATION_UNAVAILABLE",
+      "P5_SIMULATION_UNSUPPORTED",
+    ].includes(record.rejection?.reasonCode ?? ""));
   const status: SearchResult["status"] = stats.budgetExhausted ? "BOUNDED_INCOMPLETE"
     : survivors.length > 0 ? "SELECTED"
       : requirements.size > 0 ? "P3_UNRESOLVED"

@@ -19,11 +19,13 @@ import {
   searchOperationalPrograms,
   type ProgramSemanticDiffClassification,
   type ProgramSearchDecisionReceipt,
+  type ProgramSimulationEvidence,
   type SearchCapability,
   type SearchProblem,
   type SearchResult,
 } from "@finnor/program-search";
 import type { CausalReplayNode } from "@finnor/shared-types";
+import { simulationToCausalReplayNodes, type SimulationResult } from "@finnor/speculative-runtime";
 import { logWithTrace } from "@finnor/tools";
 import {
   buildOperationalQueryP3DecisionState,
@@ -33,6 +35,7 @@ import {
 } from "./epistemic-runtime-shadow";
 import { finnorStaticResolutionProvider } from "./operational-ir-effect-resolution";
 import { operationalQueryShadowProgram } from "./operational-ir-shadow";
+import { createOperationalQueryP5Simulator } from "./speculative-runtime-shadow";
 
 export interface OperationalQueryP4ProgramSearchShadowSummary {
   event: "program_search_p4_shadow";
@@ -50,6 +53,12 @@ export interface OperationalQueryP4ProgramSearchShadowSummary {
   semanticDiffReasonCodes: string[];
   p2Statuses: string[];
   requirementsForP3: string[];
+  p5SimulationStatus: ProgramSimulationEvidence["status"] | "NOT_EVALUATED";
+  p5SnapshotId: string | null;
+  p5ReplayIdentity: string | null;
+  p5TraceId: string | null;
+  p5RequiredBranches: number;
+  p5SimulatedBranches: number;
   receiptId: string | null;
   causalReplay: Array<{ id: string; stage: CausalReplayNode["stage"]; status: string }>;
   failureReasonCodes: string[];
@@ -61,6 +70,15 @@ export interface OperationalQueryP4ProgramSearchShadowSummary {
   providerCalls: 0;
   computerRuns: 0;
   workTransitions: 0;
+  realDbMutations: 0;
+  realProviderCalls: 0;
+  realComputerMutations: 0;
+  realAuthorityDecisions: 0;
+  realApprovalRequests: 0;
+  realWorkTransitions: 0;
+  realOutboxWrites: 0;
+  realExternalWebhooks: 0;
+  realPaymentMutations: 0;
 }
 
 export type OperationalQueryP4ProgramSearchShadowRecorder = (summary: OperationalQueryP4ProgramSearchShadowSummary) => void;
@@ -162,6 +180,7 @@ function problemFor(input: OperationalQueryP3EpistemicShadowInput, trustedTenant
     solverVersions: { smt: PROGRAM_SEARCH_SMT_SOLVER_VERSION, cpSat: PROGRAM_SEARCH_CP_SAT_SOLVER_VERSION },
     costModelVersion: PROGRAM_SEARCH_COST_MODEL_VERSION,
     rewriteSetVersion: PROGRAM_SEARCH_REWRITE_SET_VERSION,
+    simulationPolicy: { version: 1, mode: "REQUIRED" },
   };
 }
 
@@ -182,10 +201,25 @@ function failureSummary(input: OperationalQueryP3EpistemicShadowInput): Operatio
     semanticDiffReasonCodes: ["P4_SHADOW_NOT_EVALUATED"],
     p2Statuses: [],
     requirementsForP3: [],
+    p5SimulationStatus: "NOT_EVALUATED",
+    p5SnapshotId: null,
+    p5ReplayIdentity: null,
+    p5TraceId: null,
+    p5RequiredBranches: 0,
+    p5SimulatedBranches: 0,
     receiptId: null,
     causalReplay: [],
     failureReasonCodes: ["P4_SHADOW_INTERNAL_FAILURE"],
     plannerCallsAdded: 0,
+    realDbMutations: 0,
+    realProviderCalls: 0,
+    realComputerMutations: 0,
+    realAuthorityDecisions: 0,
+    realApprovalRequests: 0,
+    realWorkTransitions: 0,
+    realOutboxWrites: 0,
+    realExternalWebhooks: 0,
+    realPaymentMutations: 0,
     ...P2_ZERO_SHADOW_MUTATIONS,
   };
 }
@@ -205,11 +239,13 @@ export async function observeOperationalQueryP4ProgramSearchShadow(
   let searchResult: SearchResult | null = null;
   let receipt: ProgramSearchDecisionReceipt | null = null;
   let causalReplayNodes: CausalReplayNode[] = [];
+  const p5Results: SimulationResult[] = [];
   try {
     validateOperationalQueryP3AuthoritativeBoundary(input, trustedTenantId);
     const problem = problemFor(input, trustedTenantId);
     searchResult = await searchOperationalPrograms(problem, {
       checkP2: (program) => checkOperationalProgramAdmissibility(program, { resolution: { tenantId: trustedTenantId, provider } }),
+      simulate: createOperationalQueryP5Simulator(input, trustedTenantId, (result) => p5Results.push(result)),
     });
     const authoritativeProgram = problem.initialPrograms[0]!.program;
     const capability = problem.capabilities[0]!;
@@ -226,7 +262,12 @@ export async function observeOperationalQueryP4ProgramSearchShadow(
       ...(optimized && candidateSemanticSnapshot(optimized) ? { optimized: candidateSemanticSnapshot(optimized)! } : {}),
     });
     receipt = createProgramSearchDecisionReceipt(problem, searchResult);
-    causalReplayNodes = programSearchReceiptToCausalReplayNodes(receipt);
+    causalReplayNodes = [
+      ...programSearchReceiptToCausalReplayNodes(receipt),
+      ...p5Results.flatMap((result) => simulationToCausalReplayNodes(result, { recordedAt: input.execution.metadata.completedAt })),
+    ];
+    const p5Evidence = [...searchResult.survivingCandidates, ...searchResult.rejectedCandidates]
+      .find((candidate) => candidate.simulationEvidence)?.simulationEvidence ?? null;
     summary = {
       event: "program_search_p4_shadow",
       version: 1,
@@ -243,10 +284,25 @@ export async function observeOperationalQueryP4ProgramSearchShadow(
       semanticDiffReasonCodes: semanticDiff.reasonCodes,
       p2Statuses: [...new Set([...searchResult.survivingCandidates, ...searchResult.rejectedCandidates].flatMap((candidate) => candidate.p2 ? [candidate.p2.status] : []))].sort(),
       requirementsForP3: searchResult.requirementsForP3,
+      p5SimulationStatus: p5Evidence?.status ?? "NOT_EVALUATED",
+      p5SnapshotId: p5Evidence?.snapshotId ?? null,
+      p5ReplayIdentity: p5Evidence?.replayIdentity ?? null,
+      p5TraceId: p5Evidence?.traceId ?? null,
+      p5RequiredBranches: p5Evidence?.requiredBranches ?? 0,
+      p5SimulatedBranches: p5Evidence?.simulatedBranches ?? 0,
       receiptId: receipt.receiptId,
       causalReplay: causalReplayNodes.map((node) => ({ id: node.id, stage: node.stage, status: node.status })),
       failureReasonCodes: [],
       plannerCallsAdded: 0,
+      realDbMutations: 0,
+      realProviderCalls: 0,
+      realComputerMutations: 0,
+      realAuthorityDecisions: 0,
+      realApprovalRequests: 0,
+      realWorkTransitions: 0,
+      realOutboxWrites: 0,
+      realExternalWebhooks: 0,
+      realPaymentMutations: 0,
       ...P2_ZERO_SHADOW_MUTATIONS,
     };
   } catch {

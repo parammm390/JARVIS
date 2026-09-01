@@ -69,15 +69,37 @@ export function extractionVector(input: {
   const preferredCapabilityBonus = input.softObjectives.filter((objective) =>
     objective.kind === "PREFER_CAPABILITY" && objective.capability && capabilities.has(objective.capability)).length;
   const success = candidate.successEstimate.ordinal ?? candidate.successEstimate.fallbackAssumption.ordinal;
+  const staticGoal = goalSatisfaction(input.goal, candidate);
+  const staticVerification = verificationStrength(candidate);
+  const staticReversibility = reversibility(candidate.effects);
+  const staticHumanInterruptions = effectiveEstimate(candidate.costEstimate.humanInterruptions);
+  const staticLatency = effectiveEstimate(candidate.costEstimate.expectedLatencyMs) + effectiveEstimate(candidate.costEstimate.computerUseMs);
+  const staticFinancialCost = effectiveEstimate(candidate.costEstimate.financialSpend) + effectiveEstimate(candidate.costEstimate.providerCalls);
+  const simulation = candidate.simulationEvidence;
+  const simulationGoal = simulation?.branches.length ? Math.min(...simulation.branches.map((branch) => branch.goalSatisfactionOrdinal)) : null;
+  const verificationRanks = { CANONICAL_PREDICTED: 1_000, HYPOTHETICAL_PREDICTED: 700, WEAK_PREDICTED: 400, UNKNOWN: 0 } as const;
+  const irreversibilityRanks = { READ_ONLY: 1_000, REVERSIBLE: 850, COMPENSATABLE: 650, UNKNOWN: 200, IRREVERSIBLE: 0 } as const;
+  const recoveryRanks = { NONE: 1_000, LOW: 850, MEDIUM: 650, HIGH: 200, UNKNOWN: 0 } as const;
+  const outcomeRanks = { PREDICTED_SUCCESS: 1_000, PREDICTED_PARTIAL: 500, UNKNOWN: 250, PREDICTED_FAILURE: 0 } as const;
+  const simulationVerification = simulation?.branches.length ? Math.min(...simulation.branches.map((branch) => verificationRanks[branch.verificationStrength])) : null;
+  const simulationRecoverability = simulation?.branches.length ? Math.min(...simulation.branches.map((branch) =>
+    Math.min(irreversibilityRanks[branch.irreversibility], recoveryRanks[branch.recoveryBurden]))) : null;
+  const simulationSuccess = simulation?.branches.length ? Math.min(...simulation.branches.map((branch) => outcomeRanks[branch.outcome])) : null;
+  const simulationHumanInterruptions = simulation?.branches.length ? Math.max(...simulation.branches.map((branch) => branch.humanInterruptionsUpperBound)) : null;
+  const knownLatencies = simulation?.branches.map((branch) => branch.latencyMs).filter((value): value is number => value !== null) ?? [];
+  const simulationLatency = simulation && knownLatencies.length === simulation.branches.length ? Math.max(...knownLatencies) : null;
+  const knownFinancialCosts = simulation?.branches.filter((branch) => branch.financialCost !== null
+    && branch.financialCurrency === candidate.costEstimate.financialSpend.unit).map((branch) => branch.financialCost!) ?? [];
+  const simulationFinancialCost = simulation && knownFinancialCosts.length === simulation.branches.length ? Math.max(...knownFinancialCosts) : null;
   return {
     safetyLegality: 1_000,
-    goalSatisfaction: goalSatisfaction(input.goal, candidate),
-    verificationStrength: verificationStrength(candidate),
-    reversibilityRecoverability: reversibility(candidate.effects),
-    successOrdinal: Math.min(1_000, success + preferredCapabilityBonus),
-    humanInterruptions: effectiveEstimate(candidate.costEstimate.humanInterruptions),
-    latencyMs: effectiveEstimate(candidate.costEstimate.expectedLatencyMs) + effectiveEstimate(candidate.costEstimate.computerUseMs),
-    financialCost: effectiveEstimate(candidate.costEstimate.financialSpend) + effectiveEstimate(candidate.costEstimate.providerCalls),
+    goalSatisfaction: simulationGoal === null ? staticGoal : Math.min(staticGoal, simulationGoal),
+    verificationStrength: simulationVerification === null ? staticVerification : Math.min(staticVerification, simulationVerification),
+    reversibilityRecoverability: simulationRecoverability === null ? staticReversibility : Math.min(staticReversibility, simulationRecoverability),
+    successOrdinal: Math.min(1_000, success + preferredCapabilityBonus, simulationSuccess ?? 1_000),
+    humanInterruptions: simulationHumanInterruptions === null ? staticHumanInterruptions : Math.max(staticHumanInterruptions, simulationHumanInterruptions),
+    latencyMs: simulationLatency === null ? staticLatency : Math.max(staticLatency, simulationLatency),
+    financialCost: simulationFinancialCost === null ? staticFinancialCost : Math.max(staticFinancialCost, simulationFinancialCost),
     modelTokenCost: effectiveEstimate(candidate.costEstimate.tokens) + effectiveEstimate(candidate.costEstimate.modelCalls) * 1_000,
     tieBreak: candidate.programHash,
   };

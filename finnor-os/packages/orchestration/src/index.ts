@@ -74,6 +74,7 @@ export * from "./operational-ir-effect-resolution";
 export * from "./operational-ir-effect-shadow";
 export * from "./epistemic-runtime-shadow";
 export * from "./program-search-shadow";
+export * from "./speculative-runtime-shadow";
 export * from "./executor";
 export * from "./reflection";
 export * from "./plugin-registry";

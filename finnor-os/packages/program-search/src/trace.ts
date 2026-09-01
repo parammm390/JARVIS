@@ -16,6 +16,16 @@ export interface ProgramSearchDecisionReceipt {
   rewrites: Array<{ ruleId: string; parentProgramHash: string; resultProgramHash: string; safetyClass: string; effectRelation: string }>;
   hardRejections: Array<{ programHash: string; stage: string; reasonCode: string; detailCodes: string[] }>;
   solverResults: Array<{ programHash: string; constraintId: string; solver: string; solverVersion: string; status: string; reasonCodes: string[] }>;
+  simulations?: Array<{
+    programHash: string;
+    snapshotId: string;
+    replayIdentity: string;
+    traceId: string;
+    status: string;
+    requiredBranches: number;
+    simulatedBranches: number;
+    outcomes: string[];
+  }>;
   survivors: Array<{ programHash: string; score: SearchResult["extractionScore"] }>;
   selectedProgramHash: string | null;
   tieBreak: string | null;
@@ -37,6 +47,16 @@ export function createProgramSearchDecisionReceipt(
     selectedProgramHash: result.selectedProgramHash,
     replay: result.deterministicReplayKey,
   };
+  const simulations = candidates.flatMap((candidate) => candidate.simulationEvidence ? [{
+    programHash: candidate.programHash,
+    snapshotId: candidate.simulationEvidence.snapshotId,
+    replayIdentity: candidate.simulationEvidence.replayIdentity,
+    traceId: candidate.simulationEvidence.traceId,
+    status: candidate.simulationEvidence.status,
+    requiredBranches: candidate.simulationEvidence.requiredBranches,
+    simulatedBranches: candidate.simulationEvidence.simulatedBranches,
+    outcomes: candidate.simulationEvidence.branches.map((branch) => branch.outcome).sort(),
+  }] : []).sort((left, right) => left.programHash.localeCompare(right.programHash));
   return {
     version: 1,
     receiptId: deterministicReplayKey(body).replace("p4:replay:sha256:", "p4:receipt:sha256:"),
@@ -75,6 +95,7 @@ export function createProgramSearchDecisionReceipt(
       status: solver.status,
       reasonCodes: solver.reasonCodes,
     }))),
+    ...(simulations.length > 0 ? { simulations } : {}),
     survivors: result.survivingCandidates.map((candidate) => ({ programHash: candidate.programHash, score: candidate.extractionScore ?? null })),
     selectedProgramHash: result.selectedProgramHash,
     tieBreak: result.extractionScore?.tieBreak ?? null,
@@ -110,6 +131,7 @@ export function programSearchReceiptToCausalReplayNodes(receipt: ProgramSearchDe
       rewrites: receipt.rewrites,
       hardRejections: receipt.hardRejections,
       solverResults: receipt.solverResults,
+      ...(receipt.simulations ? { simulations: receipt.simulations } : {}),
       survivors: receipt.survivors,
       selectedProgramHash: receipt.selectedProgramHash,
       tieBreak: receipt.tieBreak,

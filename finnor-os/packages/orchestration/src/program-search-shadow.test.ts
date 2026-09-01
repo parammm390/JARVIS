@@ -67,6 +67,9 @@ describe("P4 production program-search shadow", () => {
       survivingCandidates: 1,
       semanticDiff: "EQUIVALENT",
       p2Statuses: ["ADMISSIBLE"],
+      p5SimulationStatus: "COMPLETE",
+      p5RequiredBranches: 1,
+      p5SimulatedBranches: 1,
       plannerCallsAdded: 0,
       consequentialMutations: 0,
       persistenceWrites: 0,
@@ -75,10 +78,21 @@ describe("P4 production program-search shadow", () => {
       providerCalls: 0,
       computerRuns: 0,
       workTransitions: 0,
+      realDbMutations: 0,
+      realProviderCalls: 0,
+      realComputerMutations: 0,
+      realAuthorityDecisions: 0,
+      realApprovalRequests: 0,
+      realWorkTransitions: 0,
+      realOutboxWrites: 0,
+      realExternalWebhooks: 0,
+      realPaymentMutations: 0,
     });
+    expect(result.summary.p5SnapshotId).toMatch(/^p5:snapshot:sha256:/);
+    expect(result.summary.p5ReplayIdentity).toMatch(/^p5:replay:sha256:/);
     expect(result.searchResult?.selectedProgram).not.toBeNull();
     expect(result.receipt).toMatchObject({ redaction: "STRUCTURED_DECISIONS_ONLY", status: "SELECTED" });
-    expect(result.causalReplayNodes).toHaveLength(1);
+    expect(result.causalReplayNodes.map((node) => node.stage)).toEqual(["planning", "context", "planning"]);
     expect(recorded).toEqual([result.summary]);
     expect(JSON.stringify(result.summary)).not.toContain(HOUSEHOLD_ID);
   });

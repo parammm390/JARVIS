@@ -96,10 +96,10 @@ jobs:
       CERTIFICATION_TEST_PHONES: "+15550000001"
       P3_NO_EGRESS: "1"
       LIVE_SMOKE_ALLOWED: "0"
-      # Production main must retain every exact certified phase commit and the
-      # certified P4 FINNOR OS tree; phase-bound inventory snapshots are not
-      # regenerated against later phases.
-      FINNOR_CERTIFICATION_RELEASE_LINEAGE: "1"
+      # Production main must retain every exact certified phase commit through
+      # P6. Historical phase-bound certifiers are not regenerated or weakened.
+      FINNOR_CERTIFICATION_RELEASE_LINEAGE: "0"
+      FINNOR_CERTIFICATION_P0_P6_LINEAGE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,8 +144,16 @@ jobs:
         env:
           FINNOR_ENVIRONMENT: production
 
-      - name: Verify immutable P0-P4 production lineage
-        run: npm run release:p0-p4-lineage
+      - name: Verify immutable P0-P6 production lineage
+        env:
+          NO_COLOR: "1"
+          FORCE_COLOR: "0"
+        run: |
+          npm run p6:lineage
+          npm run p5:certify
+          npm run p6:certify
+          npm run test:p0-p6:replay
+        working-directory: finnor-os
 
       - name: Apply migrations from an empty database
         run: |
@@ -155,7 +163,7 @@ jobs:
           npm run setup:langgraph
         working-directory: finnor-os
 
-      - name: Phase 5 type, security, runtime, and regression suite
+      - name: P0-P6 type, security, runtime, and regression suite
         run: |
           npm run openapi
           npm run release:human-operability -- --check
