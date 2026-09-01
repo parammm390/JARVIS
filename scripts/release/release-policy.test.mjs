@@ -130,7 +130,7 @@ test("Azure release stages use bounded, self-cleaning managed RunCommand resourc
     assert.doesNotMatch(source, /"run-command",\s*"invoke"/)
   }
   assert.match(managed, /"run-command", "create"/)
-  assert.match(managed, /"--async-execution", "true"/)
+  assert.match(managed, /"--async-execution", "false"/)
   assert.match(managed, /"--no-wait"/)
   assert.match(managed, /"--timeout-in-seconds"/)
   assert.match(managed, /"run-command", "show"/)
@@ -140,7 +140,7 @@ test("Azure release stages use bounded, self-cleaning managed RunCommand resourc
   assert.match(managed, /finally/)
 })
 
-test("managed RunCommand detaches execution, retries transient control-plane failures, and cleans up", () => {
+test("managed RunCommand detaches ARM polling, keeps guest execution terminal, retries transient failures, and cleans up", () => {
   const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
   const calls = []
   let exists = false
@@ -178,7 +178,7 @@ test("managed RunCommand detaches execution, retries transient control-plane fai
     error: "",
   })
   const create = calls.find((args) => args[2] === "create")
-  assert.equal(create[create.indexOf("--async-execution") + 1], "true")
+  assert.equal(create[create.indexOf("--async-execution") + 1], "false")
   assert.ok(create.includes("--no-wait"))
   assert.ok(calls.filter((args) => args[2] === "show").length >= 3)
   assert.equal(exists, false)
@@ -216,6 +216,74 @@ test("managed RunCommand surfaces remote failure and still removes the command",
   )
   assert.equal(exists, false)
   assert.ok(deletes >= 2)
+})
+
+test("managed RunCommand surfaces provisioning failure without waiting for the script deadline", () => {
+  const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
+  let exists = false
+  let clock = 0
+  const exec = (_az, args) => {
+    const operation = args[2]
+    if (operation === "delete") {
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      exists = false
+      return "{}"
+    }
+    if (operation === "create") {
+      exists = true
+      return "{}"
+    }
+    if (operation === "show") {
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      return JSON.stringify({ provisioningState: "Failed", instanceView: { error: "extension unavailable" } })
+    }
+    throw new Error(`unexpected Azure operation: ${operation}`)
+  }
+  assert.throws(
+    () => runManagedAzureCommand(
+      { stage: "preflight", commitSha: "e".repeat(40), script: "echo FINNOR_OK", timeoutSeconds: 60, worker },
+      { exec, sleep: (ms) => { clock += ms }, now: () => clock },
+    ),
+    /provisioning failed.*extension unavailable/s,
+  )
+  assert.equal(clock, 0)
+  assert.equal(exists, false)
+})
+
+test("managed RunCommand issues one asynchronous delete and then polls for absence", () => {
+  const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
+  let exists = false
+  let deletePending = false
+  let deletes = 0
+  const exec = (_az, args) => {
+    const operation = args[2]
+    if (operation === "delete") {
+      deletes += 1
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      deletePending = true
+      return "{}"
+    }
+    if (operation === "create") {
+      exists = true
+      return "{}"
+    }
+    if (operation === "show") {
+      if (deletePending) {
+        exists = false
+        deletePending = false
+        throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      }
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      return JSON.stringify({ instanceView: { executionState: "Succeeded", exitCode: 0, output: "FINNOR_OK", error: "" } })
+    }
+    throw new Error(`unexpected Azure operation: ${operation}`)
+  }
+  runManagedAzureCommand(
+    { stage: "preflight", commitSha: "f".repeat(40), script: "echo FINNOR_OK", timeoutSeconds: 60, worker },
+    { exec, sleep: () => {} },
+  )
+  assert.equal(deletes, 2)
+  assert.equal(exists, false)
 })
 
 test("managed RunCommand fails closed when cleanup cannot converge", () => {
