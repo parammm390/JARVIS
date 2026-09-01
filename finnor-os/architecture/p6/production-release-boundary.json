@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "p6BaselineSha": "baa777e8caedaaf09fdfde5f6e901393b90c201f",
+  "p5LocalSha": "baa777e8caedaaf09fdfde5f6e901393b90c201f",
+  "p5LocalStatus": "PASS_LOCAL_SHADOW_ONLY",
+  "p5FinalCertification": "BLOCKED_BY_P0_P4_RELEASE_FAILURE",
+  "currentMainSha": "7ec3cee9528b54490e35ae77c19156d466362146",
+  "productionRelease": {
+    "githubRunId": 33510316331,
+    "url": "https://github.com/parammm390/finnor-ai/actions/runs/33510316331",
+    "headSha": "7ec3cee9528b54490e35ae77c19156d466362146",
+    "createdAt": "2026-09-01T12:54:57Z",
+    "completedAt": "2026-09-01T13:28:57Z",
+    "status": "completed",
+    "conclusion": "failure",
+    "passingJobs": ["canonical-graph-gate", "phase5-readiness"],
+    "failedJob": "release",
+    "failedStep": "Preflight every production target before mutation",
+    "productionBuildStep": "skipped",
+    "productionMigrationStep": "skipped",
+    "deploymentSteps": "skipped",
+    "promotionSteps": "skipped",
+    "productionMutationOccurred": false,
+    "deploymentOccurred": false,
+    "finalPassReached": false
+  },
+  "p6PermittedScope": "PURE_CONTRACTS_OFFLINE_EXTRACTION_AND_EVALUATION_ONLY",
+  "reconciliationCount": 0,
+  "requiredBeforeFinalP6Certification": "P5 final PASS followed by exactly one P6 reconciliation onto the certified P5 lineage"
+}

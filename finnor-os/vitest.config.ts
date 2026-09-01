@@ -24,6 +24,7 @@ export default defineConfig({
       "@finnor/operational-ir": r("./packages/operational-ir/src/index.ts"),
       "@finnor/program-search": r("./packages/program-search/src/index.ts"),
       "@finnor/speculative-runtime": r("./packages/speculative-runtime/src/index.ts"),
+      "@finnor/trace-compiler": r("./packages/trace-compiler/src/index.ts"),
       "@finnor/policy-schema": r("./packages/policy-schema/src/index.ts"),
       // Deep subpath imports (apps/api's admin/migrate route uses these two) — must
       // come before the bare "@finnor/db" entry below since Vite's object-form alias
