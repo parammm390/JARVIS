@@ -303,7 +303,12 @@ jobs:
           vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
         working-directory: finnor-os/apps/api
 
-      - name: Preflight every production target before mutation
+      - name: Recover stale FINNOR Azure command transport if required
+        run: |
+          node scripts/release/recover-azure-run-command.mjs \
+            --output-file "$RUNNER_TEMP/azure-transport-recovery.json"
+
+      - name: Preflight every production target after transport recovery
         run: |
           node scripts/release/preflight-production.mjs \
             --database-env finnor-os/apps/api/.vercel/.env.production.local \

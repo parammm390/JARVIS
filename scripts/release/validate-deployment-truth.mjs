@@ -115,6 +115,7 @@ if (!/VERCEL_ORG_ID:\s*TEAM_ID/.test(vercelDeployScript) || !/VERCEL_PROJECT_ID:
   fail("Vercel release commands must be scoped to the exact canonical organization and project IDs")
 }
 for (const invariant of [
+  "node scripts/release/recover-azure-run-command.mjs",
   "node scripts/release/preflight-production.mjs",
   "npm run release:human-operability -- --check",
   "npm run release:migrate:production",

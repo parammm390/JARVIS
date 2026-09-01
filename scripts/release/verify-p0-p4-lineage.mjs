@@ -37,6 +37,7 @@ const RELEASE_RECONCILIATION_PATHS = [
   "scripts/release/deploy-azure-worker.mjs",
   "scripts/release/deploy-production.mjs",
   "scripts/release/preflight-production.mjs",
+  "scripts/release/recover-azure-run-command.mjs",
   "scripts/release/release-policy.test.mjs",
   "scripts/release/validate-deployment-truth.mjs",
   "scripts/release/verify-p0-p4-lineage.mjs",
