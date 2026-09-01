@@ -124,58 +124,123 @@ test("Azure release stages use bounded, self-cleaning managed RunCommand resourc
     assert.doesNotMatch(source, /"run-command",\s*"invoke"/)
   }
   assert.match(managed, /"run-command", "create"/)
-  assert.match(managed, /"--async-execution", "false"/)
+  assert.match(managed, /"--async-execution", "true"/)
+  assert.match(managed, /"--no-wait"/)
   assert.match(managed, /"--timeout-in-seconds"/)
   assert.match(managed, /"run-command", "show"/)
   assert.match(managed, /"--instance-view"/)
+  assert.match(managed, /TRANSIENT_CONTROL_PLANE/)
   assert.match(managed, /"run-command", "delete"/)
   assert.match(managed, /finally/)
 })
 
-test("managed RunCommand retries cancel stale same-stage resources and fail closed", () => {
+test("managed RunCommand detaches execution, retries transient control-plane failures, and cleans up", () => {
   const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
   const calls = []
-  let deletes = 0
+  let exists = false
+  let executionShows = 0
   const exec = (_az, args) => {
     calls.push(args)
     const operation = args[2]
     if (operation === "delete") {
-      deletes += 1
-      if (deletes === 1) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound: command was not found" })
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound: command was not found" })
+      exists = false
       return "{}"
     }
-    if (operation === "create") return "{}"
-    if (operation === "show") return JSON.stringify({ instanceView: { executionState: "Succeeded", exitCode: 0, output: "FINNOR_OK", error: "" } })
+    if (operation === "create") {
+      exists = true
+      return "{}"
+    }
+    if (operation === "show") {
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      executionShows += 1
+      if (executionShows === 1) throw Object.assign(new Error("control plane timeout"), { stderr: "ETIMEDOUT" })
+      return JSON.stringify({ instanceView: { executionState: "Succeeded", exitCode: 0, output: "FINNOR_OK", error: "" } })
+    }
     throw new Error(`unexpected Azure operation: ${operation}`)
   }
   const commitSha = "b".repeat(40)
   assert.equal(managedRunCommandName("preflight", commitSha), "finnor-preflight-bbbbbbbbbbbb")
-  assert.deepEqual(runManagedAzureCommand({ stage: "preflight", commitSha, script: "echo FINNOR_OK", timeoutSeconds: 60, worker }, { exec }), {
+  assert.deepEqual(runManagedAzureCommand(
+    { stage: "preflight", commitSha, script: "echo FINNOR_OK", timeoutSeconds: 60, worker },
+    { exec, sleep: () => {} },
+  ), {
     name: "finnor-preflight-bbbbbbbbbbbb",
     executionState: "Succeeded",
     exitCode: 0,
     output: "FINNOR_OK",
     error: "",
   })
-  assert.deepEqual(calls.map((args) => args[2]), ["delete", "create", "show", "delete"])
+  const create = calls.find((args) => args[2] === "create")
+  assert.equal(create[create.indexOf("--async-execution") + 1], "true")
+  assert.ok(create.includes("--no-wait"))
+  assert.ok(calls.filter((args) => args[2] === "show").length >= 3)
+  assert.equal(exists, false)
+})
 
-  let failureDeletes = 0
-  const failingExec = (_az, args) => {
+test("managed RunCommand surfaces remote failure and still removes the command", () => {
+  const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
+  let exists = false
+  let deletes = 0
+  const exec = (_az, args) => {
     const operation = args[2]
     if (operation === "delete") {
-      failureDeletes += 1
-      if (failureDeletes === 1) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      deletes += 1
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      exists = false
       return "{}"
     }
-    if (operation === "create") return "{}"
-    if (operation === "show") return JSON.stringify({ instanceView: { executionState: "Failed", exitCode: 23, output: "", error: "remote failure" } })
+    if (operation === "create") {
+      exists = true
+      return "{}"
+    }
+    if (operation === "show") {
+      if (!exists) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      return JSON.stringify({ instanceView: { executionState: "Failed", exitCode: 23, output: "", error: "remote failure" } })
+    }
     throw new Error(`unexpected Azure operation: ${operation}`)
   }
+  const commitSha = "c".repeat(40)
   assert.throws(
-    () => runManagedAzureCommand({ stage: "deploy", commitSha, script: "exit 23", timeoutSeconds: 60, worker }, { exec: failingExec }),
+    () => runManagedAzureCommand(
+      { stage: "deploy", commitSha, script: "exit 23", timeoutSeconds: 60, worker },
+      { exec, sleep: () => {} },
+    ),
     /state=Failed, exit=23.*remote failure/s,
   )
-  assert.equal(failureDeletes, 2)
+  assert.equal(exists, false)
+  assert.ok(deletes >= 2)
+})
+
+test("managed RunCommand fails closed when cleanup cannot converge", () => {
+  const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
+  let clock = 0
+  let created = false
+  const exec = (_az, args) => {
+    const operation = args[2]
+    if (operation === "delete") {
+      if (!created) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      throw Object.assign(new Error("delete timeout"), { stderr: "ETIMEDOUT" })
+    }
+    if (operation === "create") {
+      created = true
+      return "{}"
+    }
+    if (operation === "show") {
+      if (!created) throw Object.assign(new Error("missing"), { stderr: "ResourceNotFound" })
+      return JSON.stringify({ instanceView: { executionState: "Succeeded", exitCode: 0, output: "FINNOR_OK", error: "" } })
+    }
+    throw new Error(`unexpected Azure operation: ${operation}`)
+  }
+  const now = () => clock
+  const sleep = (ms) => { clock += Math.max(ms, 60_000) }
+  assert.throws(
+    () => runManagedAzureCommand(
+      { stage: "parity", commitSha: "d".repeat(40), script: "echo FINNOR_OK", timeoutSeconds: 60, worker },
+      { exec, sleep, now },
+    ),
+    /cleanup timed out|could not be cleaned up/,
+  )
 })
 
 test("Azure ingress retries only the known hosted-CLI module-lock transient", () => {

@@ -91,10 +91,12 @@ for (const [label, source] of [["preflight", preflightScript], ["worker deploy",
 }
 for (const invariant of [
   '"run-command", "create"',
-  '"--async-execution", "false"',
+  '"--async-execution", "true"',
+  '"--no-wait"',
   '"--timeout-in-seconds"',
   '"run-command", "show"',
   '"--instance-view"',
+  'TRANSIENT_CONTROL_PLANE',
   '"run-command", "delete"',
   "finally",
 ]) {
