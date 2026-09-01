@@ -9,4 +9,5 @@ export * from "./rewrites";
 export * from "./search";
 export * from "./semantic-diff";
 export * from "./solvers";
+export * from "./simulation-evidence";
 export * from "./trace";

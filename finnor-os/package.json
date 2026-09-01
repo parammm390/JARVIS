@@ -35,6 +35,10 @@
     "test:p4:locked": "npm run test:p4:locked --workspace @finnor/program-search",
     "test:p4:contract": "vitest run tests/unit/p4-architecture-contract.test.ts tests/unit/p4-locked-replay.test.ts",
     "test:p4:replay": "tsx scripts/p4/run-locked-replay.ts",
+    "test:p5:unit": "vitest run packages/speculative-runtime/src packages/program-search/src/simulation-evidence.test.ts packages/orchestration/src/speculative-runtime-shadow.test.ts packages/orchestration/src/program-search-shadow.test.ts",
+    "test:p5:locked": "npm run test:p5:locked --workspace @finnor/speculative-runtime",
+    "test:p5:contract": "vitest run tests/unit/p5-architecture-contract.test.ts tests/unit/p5-locked-replay.test.ts",
+    "test:p5:replay": "tsx scripts/p5/run-locked-replay.ts",
     "test:p1:db": "tsx scripts/p1/run-ephemeral-db-tests.ts tests/integration/client-lifecycle.test.ts",
     "test:p1:release-contract": "tsx scripts/p1/run-ephemeral-db-tests.ts --npm-script=release:contract",
     "test:live:steel": "vitest run tests/live/steel-provider.live.test.ts",
@@ -85,6 +89,7 @@
     "p2:certify": "tsx scripts/p2/certify.ts --run",
     "p3:certify": "tsx scripts/p3/certify.ts --run",
     "p4:certify": "tsx scripts/p4/certify.ts --run",
+    "p5:certify": "tsx scripts/p5/certify.ts --run",
     "release:certify": "tsx scripts/release/run-release-certification.ts",
     "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts"
   },

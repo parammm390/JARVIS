@@ -259,6 +259,80 @@ export interface SearchProblem {
   };
   costModelVersion: typeof PROGRAM_SEARCH_COST_MODEL_VERSION | string;
   rewriteSetVersion: typeof PROGRAM_SEARCH_REWRITE_SET_VERSION | string;
+  /**
+   * Optional P5 evidence gate. Existing P4 callers remain byte-for-byte unchanged
+   * when this is absent. REQUIRED fails closed unless every candidate is simulated.
+   */
+  simulationPolicy?: {
+    version: 1;
+    mode: "REQUIRED";
+  };
+}
+
+export interface ProgramSimulationBranchEvidence {
+  branchId: string;
+  outcome: "PREDICTED_SUCCESS" | "PREDICTED_FAILURE" | "PREDICTED_PARTIAL" | "UNKNOWN";
+  goalSatisfactionOrdinal: 0 | 250 | 500 | 750 | 1000;
+  hardConstraintStatus: "SATISFIED" | "VIOLATED" | "UNKNOWN";
+  verificationStrength: "CANONICAL_PREDICTED" | "HYPOTHETICAL_PREDICTED" | "WEAK_PREDICTED" | "UNKNOWN";
+  recoveryBurden: "NONE" | "LOW" | "MEDIUM" | "HIGH" | "UNKNOWN";
+  irreversibility: "READ_ONLY" | "REVERSIBLE" | "COMPENSATABLE" | "IRREVERSIBLE" | "UNKNOWN";
+  humanInterruptionsUpperBound: number;
+  latencyMs: number | null;
+  financialCost: number | null;
+  financialCurrency: string | null;
+  failureModeCodes: string[];
+  consequentialFailure: boolean;
+  uncertaintyRemaining: string[];
+}
+
+/**
+ * Narrow P5 -> P4 evidence contract. It intentionally excludes callbacks,
+ * authoritative receipts, raw entity values, and selection recommendations.
+ */
+export interface ProgramSimulationEvidence {
+  version: 1;
+  source: "P5";
+  status: "COMPLETE" | "BOUNDED_INCOMPLETE" | "UNSUPPORTED" | "P2_BLOCKED" | "P3_BLOCKED" | "FAILED";
+  tenantId: string;
+  programIrSemanticHash: OperationalProgram["irSemanticHash"];
+  p4CandidateHash: ProgramSearchHash;
+  snapshotId: string;
+  replayIdentity: string;
+  traceId: string;
+  requiredBranches: number;
+  simulatedBranches: number;
+  budgetExhausted: boolean;
+  highRiskBranchesDiscarded: number;
+  realSideEffects: {
+    dbMutations: number;
+    providerCalls: number;
+    computerMutations: number;
+    authorityDecisions: number;
+    approvalRequests: number;
+    workTransitions: number;
+    outboxWrites: number;
+    externalWebhooks: number;
+    paymentMutations: number;
+  };
+  ownership: {
+    predictsWorlds: "P5";
+    selectsPrograms: "P4";
+    epistemicOwner: "P3";
+    staticAdmissibilityOwner: "P2";
+    authoritativeExecution: "EXISTING_GOVERNED_RUNTIME";
+  };
+  branches: ProgramSimulationBranchEvidence[];
+  issueCodes: string[];
+}
+
+export interface ProgramSimulationRequest {
+  candidateId: string;
+  programHash: ProgramSearchHash;
+  program: OperationalProgram;
+  p2Status: "ADMISSIBLE";
+  fixedNow: string;
+  epistemicState: EpistemicState;
 }
 
 export type RewriteSafetyClass = "SEMANTIC_EQUIVALENCE" | "STRICTER_SAFE";
@@ -283,7 +357,8 @@ export type SearchRejectionStage =
   | "SMT_SOLVER"
   | "CP_SAT_SOLVER"
   | "SEARCH_BUDGET"
-  | "RUNTIME_LOWERING";
+  | "RUNTIME_LOWERING"
+  | "P5_SPECULATIVE_EVIDENCE";
 
 export type SearchRejectionReasonCode =
   | "IR_STRUCTURAL_INVALID"
@@ -306,7 +381,15 @@ export type SearchRejectionReasonCode =
   | "SEARCH_MEMORY_BUDGET_EXHAUSTED"
   | "SOLVER_TIME_BUDGET_EXHAUSTED"
   | "DUPLICATE_PROGRAM"
-  | "UNSUPPORTED_RUNTIME_LOWERING";
+  | "UNSUPPORTED_RUNTIME_LOWERING"
+  | "P5_SIMULATION_UNAVAILABLE"
+  | "P5_SIMULATION_INCOMPLETE"
+  | "P5_SIMULATION_UNSUPPORTED"
+  | "P5_SIMULATION_SIDE_EFFECT_ESCAPE"
+  | "P5_SIMULATION_BRANCH_COVERAGE_INCOMPLETE"
+  | "P5_SIMULATION_HARD_CONSTRAINT_VIOLATION"
+  | "P5_SIMULATION_OWNERSHIP_VIOLATION"
+  | "P5_SIMULATION_EVIDENCE_INVALID";
 
 export interface SearchRejection {
   stage: SearchRejectionStage;
@@ -359,6 +442,7 @@ export interface CandidateRecord {
   extractionScore?: ExtractionScoreVector;
   p2?: Pick<StaticAdmissibilityResult, "status" | "reasonCodes" | "issues">;
   lowering?: Pick<CompatibilityLoweringResult, "status" | "classification" | "reasons">;
+  simulationEvidence?: ProgramSimulationEvidence;
   rewriteApplications: RewriteApplication[];
   rejection?: SearchRejection;
 }
@@ -372,6 +456,7 @@ export interface SearchProofRecord {
     | "DUPLICATE_ELIMINATED"
     | "REWRITE_APPLIED"
     | "SOLVER_RESULT"
+    | "SIMULATION_RESULT"
     | "BUDGET_STOP"
     | "EXTRACTION";
   programHash?: ProgramSearchHash;
@@ -394,6 +479,8 @@ export interface SearchStats {
   estimatedMemoryBytes: number;
   budgetExhausted: boolean;
   budgetReasonCodes: SearchRejectionReasonCode[];
+  /** Present only when P5 simulationPolicy is REQUIRED. */
+  simulationCalls?: number;
 }
 
 export type SearchResultStatus =
@@ -426,5 +513,6 @@ export interface ProgramSearchClock {
 export interface ProgramSearchDependencies {
   checkP2?: (program: OperationalProgram) => Promise<StaticAdmissibilityResult>;
   lower?: (program: OperationalProgram) => CompatibilityLoweringResult;
+  simulate?: (request: ProgramSimulationRequest) => Promise<ProgramSimulationEvidence>;
   clock?: ProgramSearchClock;
 }

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "p5BaselineSha": "7ec3cee9528b54490e35ae77c19156d466362146",
+  "p4CertifiedSha": "39a114f963b46b2abfde3420037395dfb95610cc",
+  "canonicalMainShaAtFork": "7ec3cee9528b54490e35ae77c19156d466362146",
+  "canonicalMainCommit": "Promote certified P0-P4 lineage to production (#46)",
+  "productionRelease": {
+    "githubRunId": 33452634289,
+    "conclusion": "FAILURE",
+    "passingJobs": ["canonical-graph-gate", "phase5-readiness"],
+    "failedJob": "release",
+    "failedStep": "Preflight every production target before mutation",
+    "productionMutationOccurred": false,
+    "deploymentOccurred": false,
+    "finalPassReached": false
+  },
+  "p5PermittedScope": "PURE_CONTRACTS_AND_SHADOW_ONLY",
+  "reconciliation": "P5 forked directly from the exact signed canonical main commit; final production certification remains blocked until the P0-P4 release reaches final PASS."
+}
