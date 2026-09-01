@@ -5,12 +5,12 @@ P6 is an offline, non-executing hypothesis compiler. It consumes existing govern
 ## Status and lineage boundary
 
 - `P6_BASELINE_SHA`: `baa777e8caedaaf09fdfde5f6e901393b90c201f`
-- P5 local SHA: `baa777e8caedaaf09fdfde5f6e901393b90c201f`
-- P5 status: `PASS_LOCAL_SHADOW_ONLY`; final production certification is `BLOCKED_BY_P0_P4_RELEASE_FAILURE`
-- current promoted `origin/main`: `7ec3cee9528b54490e35ae77c19156d466362146`
-- P6 branch: `codex/p6-trace-compiler`
+- P5 source SHA: `baa777e8caedaaf09fdfde5f6e901393b90c201f`
+- P6 source SHA: `04360c912efd6f9c37e54d1b840255701e61a262`
+- final lineage status: `PASS_FINAL_DESCENDANT_LINEAGE_OFFLINE_ONLY`
+- P6 closure branch: `codex/p0-p6-production-closure`
 - permitted integration: pure contracts, offline fixtures, evaluation, and stored/reported hypotheses only
-- final P6 certification: blocked until P5 reaches final certification and P6 is reconciled exactly once onto that certified descendant
+- P5 and P6 reconciliation counts: exactly one each
 
 ## Data path
 

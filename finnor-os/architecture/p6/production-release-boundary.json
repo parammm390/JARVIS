@@ -1,30 +1,20 @@
 {
-  "schemaVersion": 1,
-  "p6BaselineSha": "baa777e8caedaaf09fdfde5f6e901393b90c201f",
-  "p5LocalSha": "baa777e8caedaaf09fdfde5f6e901393b90c201f",
-  "p5LocalStatus": "PASS_LOCAL_SHADOW_ONLY",
-  "p5FinalCertification": "BLOCKED_BY_P0_P4_RELEASE_FAILURE",
-  "currentMainSha": "7ec3cee9528b54490e35ae77c19156d466362146",
-  "productionRelease": {
-    "githubRunId": 33510316331,
-    "url": "https://github.com/parammm390/finnor-ai/actions/runs/33510316331",
-    "headSha": "7ec3cee9528b54490e35ae77c19156d466362146",
-    "createdAt": "2026-09-01T12:54:57Z",
-    "completedAt": "2026-09-01T13:28:57Z",
-    "status": "completed",
-    "conclusion": "failure",
-    "passingJobs": ["canonical-graph-gate", "phase5-readiness"],
-    "failedJob": "release",
-    "failedStep": "Preflight every production target before mutation",
-    "productionBuildStep": "skipped",
-    "productionMigrationStep": "skipped",
-    "deploymentSteps": "skipped",
-    "promotionSteps": "skipped",
-    "productionMutationOccurred": false,
-    "deploymentOccurred": false,
-    "finalPassReached": false
+  "schemaVersion": 2,
+  "p6SourceSha": "04360c912efd6f9c37e54d1b840255701e61a262",
+  "reconciledMainSha": "17a1490cc95159902fe04751746937a52278ad05",
+  "p5FinalSha": "7dbeee4217ef69d209638152559a093ec886347a",
+  "p5FinalCertification": "PASS",
+  "p6ImplementationSha": "566fdc1b6279affdcaed396d7fd27a606ef824c9",
+  "p6FinalCertification": "PASS_FINAL_DESCENDANT_LINEAGE_OFFLINE_ONLY",
+  "reconciliationCount": 1,
+  "runtimeScope": {
+    "p3": "SHADOW_READ_ONLY",
+    "p4": "SHADOW_SEARCH",
+    "p5": "SPECULATIVE_SHADOW_ONLY",
+    "p6": "NON_EXECUTABLE_OFFLINE_ONLY"
   },
-  "p6PermittedScope": "PURE_CONTRACTS_OFFLINE_EXTRACTION_AND_EVALUATION_ONLY",
-  "reconciliationCount": 0,
-  "requiredBeforeFinalP6Certification": "P5 final PASS followed by exactly one P6 reconciliation onto the certified P5 lineage"
+  "automaticPlannerInput": false,
+  "procedureCandidateExecutable": false,
+  "authorityGrantPossible": false,
+  "guardedProductionDeploymentRequired": true
 }

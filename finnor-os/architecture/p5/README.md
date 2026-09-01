@@ -40,4 +40,8 @@ P4 exposes a narrow evidence callback rather than depending on P5. When `simulat
 
 The production integration is shadow-only and is limited to an already-completed authoritative operational query. It materializes a redacted bounded observation, runs P5, records comparison evidence through the existing P4 shadow receipt/CausalReplay seam, and returns the authoritative query execution by object identity. CausalReplay receives structured snapshot provenance, program graph, assumption references, hypothetical effect descriptors, predicted observations, branch outcomes, and recovery paths; raw assumption/effect values and reasoning are excluded. It adds no approval, Work, provider/computer call, persistence write, or route change.
 
+## Final lineage
+
+The original P5 source tree at `baa777e8caedaaf09fdfde5f6e901393b90c201f` is reconciled exactly once onto the final production-infrastructure descendant. Final certification is `PASS_FINAL_DESCENDANT_LINEAGE_SHADOW_ONLY`: this certifies the artifact and its immutable ancestry, not authority to execute simulations as reality. P5 remains speculative and shadow-only.
+
 The production release boundary is recorded in `production-release-boundary.json`. The exact pre-change ownership inventory, hard gates, corpus identity, and deferred seams are recorded beside this document.

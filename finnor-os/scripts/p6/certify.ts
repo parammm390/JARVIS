@@ -142,40 +142,40 @@ export const P0_P5_REGRESSION_COMMANDS = [
   "npm run test:p5:unit", "npm run test:p5:contract", "npm run test:p5:replay",
 ];
 
-export async function certifyP6LocalOffline() {
+export async function certifyP6FinalOffline() {
   const lineage = verifyP6DescendantLineage();
   const graph = await validatePackageGraph();
   const hardGates = await validateContractsAndGates();
   const corpus = await validateCorpora();
   const boundary = await readJson<JsonObject>(join(root, "architecture/p6/production-release-boundary.json"));
-  assert.equal(boundary.p5FinalCertification, "BLOCKED_BY_P0_P4_RELEASE_FAILURE");
-  assert.equal(boundary.reconciliationCount, 0);
+  assert.equal(boundary.p5FinalCertification, "PASS");
+  assert.equal(boundary.p6FinalCertification, "PASS_FINAL_DESCENDANT_LINEAGE_OFFLINE_ONLY");
+  assert.equal(boundary.reconciliationCount, 1);
   return {
-    status: "PASS_LOCAL_OFFLINE_ONLY",
-    finalCertification: "BLOCKED_BY_P5_FINAL_CERTIFICATION",
-    p6PassEligible: false,
-    p6BaselineSha: P6_LINEAGE.p5Local,
-    p5LocalSha: P6_LINEAGE.p5Local,
-    p5LocalStatus: boundary.p5LocalStatus,
-    p5FinalStatus: boundary.p5FinalCertification,
-    currentMainSha: P6_LINEAGE.promotedMain,
+    status: "PASS_FINAL_DESCENDANT_LINEAGE_OFFLINE_ONLY",
+    finalCertification: "PASS",
+    p6PassEligible: true,
+    p6SourceSha: P6_LINEAGE.p6Source,
+    p5FinalSha: P6_LINEAGE.p5Final,
+    p5FinalStatus: "PASS",
+    closureMainSha: P6_LINEAGE.closureMain,
     branch: lineage.branch,
     head: lineage.head,
-    changedPaths: lineage.changedPaths,
     lineage: lineage.lineage,
-    protectedP0P5DiffCount: lineage.protectedP0P5DiffCount,
-    p6ReconciliationCount: lineage.p6ReconciliationCount,
+    protectedArtifactHashes: lineage.protectedArtifactHashes,
+    p6ReconciliationCount: lineage.reconciliationCount.p6,
+    unexplainedSemanticDrift: lineage.unexplainedSemanticDrift,
     internalPackages: graph.packages,
     internalPackageCycles: graph.cycles,
     sourceTraceOwners: TRACE_SOURCE_OWNERS.length,
     corpus,
     hardGates,
-    productionRelease: boundary.productionRelease,
+    runtimeScope: boundary.runtimeScope,
   } as const;
 }
 
 if (process.argv.includes("--run")) {
-  void certifyP6LocalOffline().then((result) => console.log(JSON.stringify(result, null, 2))).catch((error) => {
+  void certifyP6FinalOffline().then((result) => console.log(JSON.stringify(result, null, 2))).catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });

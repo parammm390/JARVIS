@@ -66,20 +66,24 @@ jobs:
       # commits and certified P4 tree survive the release reconciliation exactly.
       FINNOR_CERTIFICATION_CLOSURE: ${{ github.head_ref == 'codex/p2-operational-effect-system-closure' && '1' || '0' }}
       FINNOR_CERTIFICATION_RELEASE_LINEAGE: "0"
+      FINNOR_CERTIFICATION_P0_P6_LINEAGE: "0"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      # Any descendant of the immutable P4 commit uses the release-lineage
-      # adapter. The adapter remains strict about the complete allowed diff and
-      # protected tree; this only selects composition instead of a phase-local
-      # branch assertion.
-      - name: Select immutable P0-P4 descendant certification
+      # Select the highest immutable descendant proof present in the exact tree.
+      # Historical phase certifiers remain unchanged and the P0-P4 adapter still
+      # owns descendants that have not incorporated P5/P6.
+      - name: Select immutable descendant certification
         working-directory: .
         shell: bash
         run: |
           if git merge-base --is-ancestor 39a114f963b46b2abfde3420037395dfb95610cc HEAD; then
-            echo "FINNOR_CERTIFICATION_RELEASE_LINEAGE=1" >> "$GITHUB_ENV"
+            if test -f finnor-os/architecture/p6/final-lineage.json; then
+              echo "FINNOR_CERTIFICATION_P0_P6_LINEAGE=1" >> "$GITHUB_ENV"
+            else
+              echo "FINNOR_CERTIFICATION_RELEASE_LINEAGE=1" >> "$GITHUB_ENV"
+            fi
           fi
       - uses: actions/setup-node@v4
         with:
@@ -107,6 +111,13 @@ jobs:
       - name: Verify immutable P0-P4 production lineage
         if: env.FINNOR_CERTIFICATION_RELEASE_LINEAGE == '1'
         run: npm run release:p0-p4-lineage --prefix ..
+      - name: Verify immutable P0-P6 production lineage
+        if: env.FINNOR_CERTIFICATION_P0_P6_LINEAGE == '1'
+        run: |
+          npm run p6:lineage
+          npm run p5:certify
+          npm run p6:certify
+          npm run test:p0-p6:replay
       - run: npm test
       # Phase 6 (§6.3): the real dump/restore round-trip this repo's backup-restore
       # runbook documents as blocked on Postgres client tools — this runner has them

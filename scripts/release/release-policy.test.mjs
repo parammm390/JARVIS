@@ -80,6 +80,12 @@ test("production certification uses the explicit deferred-load profile", () => {
   assert.match(productionWorkflow, /name: Materialize protected load identities[\s\S]*if: env\.FINNOR_RELEASE_PROFILE != 'production'/)
 })
 
+test("production release requires final P0-P6 descendant certification without enabling P5 or P6", () => {
+  assert.match(productionWorkflow, /FINNOR_CERTIFICATION_P0_P6_LINEAGE:\s*"1"/)
+  assert.match(productionWorkflow, /name: Verify immutable P0-P6 production lineage[\s\S]*npm run p6:lineage[\s\S]*npm run p5:certify[\s\S]*npm run p6:certify[\s\S]*npm run test:p0-p6:replay/)
+  assert.doesNotMatch(productionWorkflow, /P5_AUTHORITATIVE|P6_AUTHORITATIVE|PROCEDURE_CANDIDATE_EXECUTION_ENABLED/)
+})
+
 test("Azure worker rollback restores release identity before restarting previous code", () => {
   assert.match(workerDeployScript, /previous_release_env_exists=0/)
   assert.match(workerDeployScript, /if \[ "\$release_env_written" -eq 1 \]; then[\s\S]*install -o root -g finnor -m 0644 "\$previous_release_env" "\$release_env"/)

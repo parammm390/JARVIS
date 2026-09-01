@@ -3,10 +3,10 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { TRACE_COMPILER_VERSION } from "@finnor/trace-compiler";
+import { verifyP6DescendantLineage } from "../../scripts/p6/verify-descendant-lineage";
 
 const OS_ROOT = resolve(import.meta.dirname, "../..");
 const REPOSITORY_ROOT = resolve(OS_ROOT, "..");
-const BASELINE = "baa777e8caedaaf09fdfde5f6e901393b90c201f";
 
 function json(path: string): any {
   return JSON.parse(readFileSync(join(OS_ROOT, path), "utf8"));
@@ -38,30 +38,24 @@ function cycles(graph: Map<string, string[]>): string[][] {
 }
 
 describe("P6 architecture contract", () => {
-  it("records local P5 status and blocks final P6 certification", () => {
+  it("records one final reconciliation while preserving the offline-only boundary", () => {
     const boundary = json("architecture/p6/production-release-boundary.json");
     expect(boundary).toMatchObject({
-      p6BaselineSha: BASELINE,
-      p5LocalSha: BASELINE,
-      p5LocalStatus: "PASS_LOCAL_SHADOW_ONLY",
-      p5FinalCertification: "BLOCKED_BY_P0_P4_RELEASE_FAILURE",
-      currentMainSha: "7ec3cee9528b54490e35ae77c19156d466362146",
-      productionRelease: { githubRunId: 33510316331, conclusion: "failure", productionMutationOccurred: false, deploymentOccurred: false, finalPassReached: false },
-      reconciliationCount: 0,
+      p6SourceSha: "04360c912efd6f9c37e54d1b840255701e61a262",
+      p5FinalCertification: "PASS",
+      p6FinalCertification: "PASS_FINAL_DESCENDANT_LINEAGE_OFFLINE_ONLY",
+      reconciliationCount: 1,
+      automaticPlannerInput: false,
+      procedureCandidateExecutable: false,
+      authorityGrantPossible: false,
     });
-    expect(execFileSync("git", ["merge-base", "--is-ancestor", BASELINE, "HEAD"], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
+    expect(execFileSync("git", ["merge-base", "--is-ancestor", boundary.reconciledMainSha, boundary.p5FinalSha], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
+    expect(execFileSync("git", ["merge-base", "--is-ancestor", boundary.p5FinalSha, boundary.p6ImplementationSha], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
   });
 
   it("keeps P0-P5 protected owners and historical certifiers unchanged", () => {
-    const protectedPaths = [
-      "finnor-os/architecture/p0", "finnor-os/architecture/p1", "finnor-os/architecture/p2", "finnor-os/architecture/p3", "finnor-os/architecture/p4", "finnor-os/architecture/p5",
-      "finnor-os/scripts/p0", "finnor-os/scripts/p1", "finnor-os/scripts/p2", "finnor-os/scripts/p3", "finnor-os/scripts/p4", "finnor-os/scripts/p5",
-      "finnor-os/packages/db", "finnor-os/packages/authority", "finnor-os/packages/computer", "finnor-os/packages/workflow-runtime",
-      "finnor-os/packages/shared-types", "finnor-os/packages/operational-ir", "finnor-os/packages/epistemic-runtime", "finnor-os/packages/program-search", "finnor-os/packages/speculative-runtime",
-      "finnor-os/packages/data-platform", "finnor-os/packages/read-models", "finnor-os/packages/orchestration",
-    ];
-    const changed = execFileSync("git", ["diff", "--name-only", BASELINE, "--", ...protectedPaths], { cwd: REPOSITORY_ROOT, encoding: "utf8" }).trim();
-    expect(changed).toBe("");
+    const lineage = verifyP6DescendantLineage();
+    expect(lineage).toMatchObject({ status: "PASS_FINAL_DESCENDANT_LINEAGE", unexplainedSemanticDrift: 0 });
     expect(json("architecture/p6/pre-change-reference-inventory.json")).toMatchObject({ databaseTablesAdded: 0, parallelEventLogsCreated: 0, authoritativeOwnersReplaced: 0 });
   });
 

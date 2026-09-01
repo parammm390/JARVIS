@@ -13,16 +13,21 @@ function json(path: string): any {
 }
 
 describe("P5 architecture contract", () => {
-  it("records the exact signed baseline and failed no-mutation production release boundary", () => {
+  it("records the exact signed baseline and one final shadow-only reconciliation", () => {
     const boundary = json("architecture/p5/production-release-boundary.json");
     expect(boundary).toMatchObject({
       p5BaselineSha: BASELINE,
       p4CertifiedSha: "39a114f963b46b2abfde3420037395dfb95610cc",
-      canonicalMainShaAtFork: BASELINE,
-      productionRelease: { githubRunId: 33452634289, conclusion: "FAILURE", productionMutationOccurred: false, deploymentOccurred: false, finalPassReached: false },
-      p5PermittedScope: "PURE_CONTRACTS_AND_SHADOW_ONLY",
+      p5SourceSha: "baa777e8caedaaf09fdfde5f6e901393b90c201f",
+      p5FinalCertification: "PASS",
+      reconciliationCount: 1,
+      runtimeScope: "SPECULATIVE_SHADOW_ONLY",
+      authorityChanges: 0,
+      workLifecycleChanges: 0,
+      businessEffectIdentityChanges: 0,
     });
-    expect(execFileSync("git", ["merge-base", "--is-ancestor", BASELINE, "HEAD"], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
+    expect(execFileSync("git", ["merge-base", "--is-ancestor", boundary.reconciledMainSha, boundary.p5FinalSha], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
+    expect(execFileSync("git", ["merge-base", "--is-ancestor", boundary.p5FinalSha, "HEAD"], { cwd: REPOSITORY_ROOT }).toString()).toBe("");
   });
 
   it("keeps canonical owners and governed mutation runtimes unchanged", () => {

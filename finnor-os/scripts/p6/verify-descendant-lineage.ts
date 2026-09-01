@@ -7,18 +7,61 @@ import { fileURLToPath } from "node:url";
 const osRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repositoryRoot = resolve(osRoot, "..");
 
-export const P6_LINEAGE = Object.freeze({
-  remoteMain: "ff9221538f671970c98b83d408b51ca5d63604c5",
-  p0: "4257973fcd2ea8624ed179bf5b18d1ab513eccf6",
-  p1: "1a31904b35fff39aa1cab1c404f1d7467d723989",
-  p2: "5cc95730babeee99055b5cb00c88b7d66dff8ab8",
-  p3: "c0965059b92c1b0f73100c4556301044c1b7e9c4",
-  p4: "39a114f963b46b2abfde3420037395dfb95610cc",
-  promotedMain: "7ec3cee9528b54490e35ae77c19156d466362146",
-  p5Local: "baa777e8caedaaf09fdfde5f6e901393b90c201f",
-});
+type FinalLineageManifest = {
+  schemaVersion: 1;
+  mode: "P0_P6_IMMUTABLE_DESCENDANT";
+  lineage: {
+    remoteMain: string;
+    p0: string;
+    p1: string;
+    p2: string;
+    p3: string;
+    p4: string;
+    closureMain: string;
+    p5Source: string;
+    p5Final: string;
+    p6Source: string;
+    p6Implementation: string;
+  };
+  reconciliationCount: { p5: 1; p6: 1 };
+  protectedGitObjects: Record<string, string>;
+  corpora: Record<string, string>;
+  scope: Record<string, string>;
+};
 
-const P6_BRANCH = "codex/p6-trace-compiler";
+const manifest = JSON.parse(readFileSync(join(osRoot, "architecture/p6/final-lineage.json"), "utf8")) as FinalLineageManifest;
+export const P6_LINEAGE = Object.freeze(manifest.lineage);
+
+const FINAL_COMPOSITION_PATHS = new Set([
+  ".github/workflows/ci.yml",
+  ".github/workflows/production-release.yml",
+  "package.json",
+  "scripts/release/release-policy.test.mjs",
+  "finnor-os/architecture/p5/README.md",
+  "finnor-os/architecture/p5/production-release-boundary.json",
+  "finnor-os/architecture/p6/README.md",
+  "finnor-os/architecture/p6/final-lineage.json",
+  "finnor-os/architecture/p6/production-release-boundary.json",
+  "finnor-os/package.json",
+  "finnor-os/scripts/p5/certify.ts",
+  "finnor-os/scripts/p6/certify.ts",
+  "finnor-os/scripts/p6/verify-descendant-lineage.ts",
+  "finnor-os/tests/unit/p0-architecture-contract.test.ts",
+  "finnor-os/tests/unit/p5-architecture-contract.test.ts",
+  "finnor-os/tests/unit/p6-architecture-contract.test.ts",
+]);
+
+const PROTECTED_RUNTIME_OWNERS = [
+  "finnor-os/packages/db",
+  "finnor-os/packages/authority",
+  "finnor-os/packages/computer",
+  "finnor-os/packages/workflow-runtime",
+  "finnor-os/packages/shared-types",
+  "finnor-os/packages/operational-ir",
+  "finnor-os/packages/epistemic-runtime",
+  "finnor-os/packages/data-platform",
+  "finnor-os/packages/read-models",
+];
 
 function git(args: string[]): string {
   return execFileSync("git", args, { cwd: repositoryRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trimEnd();
@@ -28,59 +71,102 @@ function assertAncestor(ancestor: string, descendant: string, label: string): vo
   assert.doesNotThrow(() => git(["merge-base", "--is-ancestor", ancestor, descendant]), `${label}: ${ancestor} is not an ancestor of ${descendant}`);
 }
 
-function changedPaths(): string[] {
-  const committed = git(["diff", "--name-only", P6_LINEAGE.p5Local, "--", "finnor-os"])
-    .split("\n").filter(Boolean).map((path) => path.replace(/^finnor-os\//, ""));
-  const untracked = git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
-    .split("\n").filter(Boolean).map((line) => line.slice(3).split(" -> ").at(-1)!.replace(/^finnor-os\//, ""));
-  return [...new Set([...committed, ...untracked])].sort();
+function assertSingleParent(commit: string, expectedParent: string, label: string): void {
+  const row = git(["rev-list", "--parents", "-n", "1", commit]).split(" ");
+  assert.deepEqual(row, [commit, expectedParent], `${label} must be reconciled exactly once as a single-parent descendant`);
+}
+
+function assertGitObject(commit: string, path: string, expected: string, label: string): void {
+  assert.equal(git(["rev-parse", `${commit}:${path}`]), expected, `${label} protected Git object drifted`);
+}
+
+function gateCount(path: string): number {
+  const document = JSON.parse(readFileSync(join(osRoot, path), "utf8")) as { gates: Array<{ expected: number }> };
+  assert.ok(document.gates.length > 0, `${path} has no gates`);
+  assert.ok(document.gates.every((gate) => gate.expected === 0), `${path} contains a non-zero hard gate`);
+  return document.gates.length;
+}
+
+function validateCorpora(): void {
+  const p5 = JSON.parse(readFileSync(join(osRoot, "architecture/p5/replay-corpus.json"), "utf8"));
+  const p6 = JSON.parse(readFileSync(join(osRoot, "architecture/p6/replay-corpus.json"), "utf8"));
+  assert.equal(p5.fixtureCanonicalSha256, manifest.corpora.p5);
+  assert.equal(p6.fixtureCanonicalSha256, manifest.corpora.p6);
+  assert.equal(p6.combined.corpusHash, manifest.corpora.combinedP0P6);
+  for (const phase of ["p0", "p1", "p2", "p3", "p4"] as const) {
+    assert.equal(p6.phaseCorpora[phase].corpusHash, manifest.corpora[phase]);
+  }
 }
 
 export function verifyP6DescendantLineage() {
+  assert.equal(manifest.schemaVersion, 1);
+  assert.equal(manifest.mode, "P0_P6_IMMUTABLE_DESCENDANT");
+  assert.deepEqual(manifest.reconciliationCount, { p5: 1, p6: 1 });
+  assert.deepEqual(manifest.scope, {
+    p3: "SHADOW_READ_ONLY",
+    p4: "SHADOW_SEARCH",
+    p5: "SPECULATIVE_SHADOW_ONLY",
+    p6: "NON_EXECUTABLE_OFFLINE_ONLY",
+  });
+
   const head = git(["rev-parse", "HEAD"]);
   const ordered = [
-    P6_LINEAGE.remoteMain, P6_LINEAGE.p0, P6_LINEAGE.p1, P6_LINEAGE.p2, P6_LINEAGE.p3,
-    P6_LINEAGE.p4, P6_LINEAGE.promotedMain, P6_LINEAGE.p5Local, head,
+    P6_LINEAGE.remoteMain,
+    P6_LINEAGE.p0,
+    P6_LINEAGE.p1,
+    P6_LINEAGE.p2,
+    P6_LINEAGE.p3,
+    P6_LINEAGE.p4,
+    P6_LINEAGE.closureMain,
+    P6_LINEAGE.p5Final,
+    P6_LINEAGE.p6Implementation,
+    head,
   ];
-  for (let index = 0; index < ordered.length - 1; index += 1) assertAncestor(ordered[index]!, ordered[index + 1]!, `P6 descendant lineage step ${index + 1}`);
-  assert.equal(git(["branch", "--show-current"]), P6_BRANCH);
+  for (let index = 0; index < ordered.length - 1; index += 1) {
+    assertAncestor(ordered[index]!, ordered[index + 1]!, `P0-P6 descendant lineage step ${index + 1}`);
+  }
+  assertSingleParent(P6_LINEAGE.p5Final, P6_LINEAGE.closureMain, "P5");
+  assertSingleParent(P6_LINEAGE.p6Implementation, P6_LINEAGE.p5Final, "P6");
 
-  const changed = changedPaths();
-  const outOfScope = changed.filter((path) => !(path === "package.json"
-    || path === "package-lock.json"
-    || path === "tsconfig.base.json"
-    || path === "vitest.config.ts"
-    || path.startsWith("architecture/p6/")
-    || path.startsWith("scripts/p6/")
-    || path.startsWith("packages/trace-compiler/")
-    || /^tests\/unit\/p6-[^/]+\.test\.ts$/.test(path)));
-  assert.deepEqual(outOfScope, [], `P6 contains out-of-scope changes: ${outOfScope.join(", ")}`);
+  assertGitObject(P6_LINEAGE.p4, "finnor-os/architecture/p0", manifest.protectedGitObjects.p0Architecture!, "P0 architecture");
+  assertGitObject(P6_LINEAGE.p4, "finnor-os/architecture/p1", manifest.protectedGitObjects.p1Architecture!, "P1 architecture");
+  assertGitObject(P6_LINEAGE.p4, "finnor-os/architecture/p2", manifest.protectedGitObjects.p2Architecture!, "P2 architecture");
+  assertGitObject(P6_LINEAGE.p4, "finnor-os/architecture/p3", manifest.protectedGitObjects.p3Architecture!, "P3 architecture");
+  assertGitObject(P6_LINEAGE.p4, "finnor-os/architecture/p4", manifest.protectedGitObjects.p4Architecture!, "P4 architecture");
+  assertGitObject(P6_LINEAGE.p5Final, "finnor-os", manifest.protectedGitObjects.p5FinnorTree!, "P5 complete FINNOR tree");
+  assertGitObject(P6_LINEAGE.p5Final, "finnor-os/packages/speculative-runtime", manifest.protectedGitObjects.p5Runtime!, "P5 speculative runtime");
+  assertGitObject(P6_LINEAGE.p6Implementation, "finnor-os", manifest.protectedGitObjects.p6FinnorTree!, "P6 complete FINNOR tree");
+  assertGitObject(P6_LINEAGE.p6Implementation, "finnor-os/packages/trace-compiler", manifest.protectedGitObjects.p6Runtime!, "P6 trace compiler");
 
-  const protectedPaths = [
-    "finnor-os/architecture/p0", "finnor-os/architecture/p1", "finnor-os/architecture/p2", "finnor-os/architecture/p3", "finnor-os/architecture/p4", "finnor-os/architecture/p5",
-    "finnor-os/scripts/p0", "finnor-os/scripts/p1", "finnor-os/scripts/p2", "finnor-os/scripts/p3", "finnor-os/scripts/p4", "finnor-os/scripts/p5",
-    "finnor-os/packages/db", "finnor-os/packages/authority", "finnor-os/packages/computer", "finnor-os/packages/workflow-runtime",
-    "finnor-os/packages/shared-types", "finnor-os/packages/operational-ir", "finnor-os/packages/epistemic-runtime", "finnor-os/packages/program-search", "finnor-os/packages/speculative-runtime",
-    "finnor-os/packages/data-platform", "finnor-os/packages/read-models", "finnor-os/packages/orchestration",
-  ];
-  assert.equal(git(["diff", "--name-only", P6_LINEAGE.p5Local, "--", ...protectedPaths]), "", "P6 changed a P0-P5 artifact, Work, Authority, BusinessEffect, provider/computer, planner, or governed evidence owner");
+  const protectedOwnerDiff = git(["diff", "--name-only", P6_LINEAGE.closureMain, head, "--", ...PROTECTED_RUNTIME_OWNERS]);
+  assert.equal(protectedOwnerDiff, "", `P5/P6 changed protected Authority, BusinessEffect, Work, provider/computer, or evidence owners: ${protectedOwnerDiff}`);
 
-  const boundary = JSON.parse(readFileSync(join(osRoot, "architecture/p6/production-release-boundary.json"), "utf8"));
-  assert.equal(boundary.p5LocalSha, P6_LINEAGE.p5Local);
-  assert.equal(boundary.p5FinalCertification, "BLOCKED_BY_P0_P4_RELEASE_FAILURE");
-  assert.equal(boundary.reconciliationCount, 0);
-  assert.equal(boundary.productionRelease.finalPassReached, false);
+  const compositionPaths = git(["diff", "--name-only", P6_LINEAGE.p6Implementation, head]).split("\n").filter(Boolean).sort();
+  const unexplained = compositionPaths.filter((path) => !FINAL_COMPOSITION_PATHS.has(path));
+  assert.deepEqual(unexplained, [], `unexplained final semantic drift: ${unexplained.join(", ")}`);
+  assert.equal(git(["status", "--porcelain=v1", "-uall"]), "", "final certification requires a clean exact-SHA worktree");
+
+  const p5HardGates = gateCount("architecture/p5/hard-gates.json");
+  const p6HardGates = gateCount("architecture/p6/hard-gates.json");
+  validateCorpora();
 
   return {
-    status: "PASS_LOCAL_DESCENDANT_LINEAGE",
-    finalP6CertificationEligible: false,
-    finalBlocker: "P5_FINAL_CERTIFICATION_NOT_PASSED",
+    status: "PASS_FINAL_DESCENDANT_LINEAGE",
+    finalP5Certification: "PASS",
+    finalP6Certification: "PASS",
     head,
-    branch: P6_BRANCH,
+    branch: git(["branch", "--show-current"]) || process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || "DETACHED",
     lineage: P6_LINEAGE,
-    changedPaths: changed,
-    protectedP0P5DiffCount: 0,
-    p6ReconciliationCount: 0,
+    p5FinalSha: P6_LINEAGE.p5Final,
+    p6ImplementationSha: P6_LINEAGE.p6Implementation,
+    p6FinalSha: head,
+    reconciliationCount: manifest.reconciliationCount,
+    protectedArtifactHashes: manifest.protectedGitObjects,
+    corpusHashes: manifest.corpora,
+    hardGates: { p5: p5HardGates, p6: p6HardGates, nonZero: 0 },
+    unexplainedSemanticDrift: 0,
+    finalCompositionPaths: compositionPaths,
+    scope: manifest.scope,
   } as const;
 }
 

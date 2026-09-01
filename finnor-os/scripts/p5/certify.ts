@@ -8,12 +8,12 @@ import { fileURLToPath } from "node:url";
 import { canonicalSerialize, canonicalizeIrFragment } from "@finnor/operational-ir";
 import { P5_LOCKED_CASES, runP5LockedCorpus } from "../../packages/speculative-runtime/fixtures/locked-corpus";
 import { SPECULATIVE_ADAPTER_INVENTORY, ZERO_REAL_SIDE_EFFECTS } from "../../packages/speculative-runtime/src/index";
+import { P6_LINEAGE, verifyP6DescendantLineage } from "../p6/verify-descendant-lineage";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const repositoryRoot = resolve(root, "..");
 const P5_BASELINE_SHA = "7ec3cee9528b54490e35ae77c19156d466362146";
 const P4_CERTIFIED_SHA = "39a114f963b46b2abfde3420037395dfb95610cc";
-const P5_BRANCH = "codex/p5-branchable-world-runtime";
 const P5_FIXTURE_SHA = "0575d50dfa75c915fd0160b76c6eeb69df813336dd2c4e07733bc94805cf8d36";
 const P5_RAW_FIXTURE_SHA = "1a5ec39882f37656e02dee9dd8938e467e0147e39dc1626ae0da16ef5c145fb0";
 const P5_COMBINED_SHA = "683d68028325d7747e82ddca8d155e0b3b4bff97ca2a6033ab25866fd5be1df1";
@@ -76,19 +76,21 @@ async function filesBelow(directory: string, predicate: (path: string) => boolea
   return result.sort();
 }
 
-function changedPaths(): string[] {
-  const committed = git(["diff", "--name-only", P5_BASELINE_SHA, "--", "finnor-os"])
+function changedPaths(baseline: string, head: string, includeWorktree: boolean): string[] {
+  const committed = git(["diff", "--name-only", baseline, head, "--", "finnor-os"])
     .split("\n").filter(Boolean).map((path) => path.replace(/^finnor-os\//, ""));
-  const untracked = git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
-    .split("\n").filter(Boolean).map((line) => line.slice(3).split(" -> ").at(-1)!.replace(/^finnor-os\//, ""));
+  const untracked = includeWorktree
+    ? git(["status", "--porcelain=v1", "-uall", "--", "finnor-os"])
+      .split("\n").filter(Boolean).map((line) => line.slice(3).split(" -> ").at(-1)!.replace(/^finnor-os\//, ""))
+    : [];
   return [...new Set([...committed, ...untracked])].sort();
 }
 
-function validateLineageAndScope(): string[] {
-  assert.equal(git(["branch", "--show-current"]), P5_BRANCH);
-  assert.doesNotThrow(() => git(["merge-base", "--is-ancestor", P5_BASELINE_SHA, "HEAD"]));
-  assert.doesNotThrow(() => git(["merge-base", "--is-ancestor", P4_CERTIFIED_SHA, "HEAD"]));
-  const changed = changedPaths();
+function validateLineageAndScope(baseline: string, head: string, requiredBranch: string | null, includeWorktree: boolean): string[] {
+  if (requiredBranch) assert.equal(git(["branch", "--show-current"]), requiredBranch);
+  assert.doesNotThrow(() => git(["merge-base", "--is-ancestor", baseline, head]));
+  assert.doesNotThrow(() => git(["merge-base", "--is-ancestor", P4_CERTIFIED_SHA, head]));
+  const changed = changedPaths(baseline, head, includeWorktree);
   const allowed = changed.filter((path) =>
     path === "package.json"
     || path === "package-lock.json"
@@ -122,8 +124,8 @@ function validateLineageAndScope(): string[] {
     "finnor-os/packages/orchestration/src/business-effects.ts", "finnor-os/packages/orchestration/src/runtime-bridge.ts",
     "finnor-os/packages/orchestration/src/objective-loop.ts", "finnor-os/packages/orchestration/src/executor.ts",
   ];
-  assert.equal(git(["diff", "--name-only", P5_BASELINE_SHA, "--", ...protectedPaths]), "", "P5 changed a canonical truth, P0-P4 artifact, execution, Authority, BusinessEffect, Work, Objective, planner, or provider/computer owner");
-  const indexDiff = git(["diff", "--unified=0", P5_BASELINE_SHA, "--", "finnor-os/packages/orchestration/src/index.ts"]);
+  assert.equal(git(["diff", "--name-only", baseline, head, "--", ...protectedPaths]), "", "P5 changed a canonical truth, P0-P4 artifact, execution, Authority, BusinessEffect, Work, Objective, planner, or provider/computer owner");
+  const indexDiff = git(["diff", "--unified=0", baseline, head, "--", "finnor-os/packages/orchestration/src/index.ts"]);
   assert.deepEqual(indexDiff.split("\n").filter((line) => line.startsWith("-") && !line.startsWith("---")), [], "P5 removed production orchestration behavior");
   return changed;
 }
@@ -209,45 +211,32 @@ async function validateCorpora(): Promise<{ count: 26; canonicalHash: string; co
   return { count: 26, canonicalHash, combinedHash };
 }
 
-function validateReleaseBoundary(): { productionFinalPass: false; releaseRunId: number } {
+function validateReleaseBoundary(): { finalCertification: "PASS"; reconciliationCount: 1; runtimeScope: "SPECULATIVE_SHADOW_ONLY" } {
   const boundary = JSON.parse(readFileSync(join(root, "architecture/p5/production-release-boundary.json"), "utf8")) as JsonObject;
   assert.equal(boundary.p5BaselineSha, P5_BASELINE_SHA);
   assert.equal(boundary.p4CertifiedSha, P4_CERTIFIED_SHA);
-  assert.equal(boundary.productionRelease.finalPassReached, false);
-  assert.equal(boundary.productionRelease.productionMutationOccurred, false);
-  assert.equal(boundary.productionRelease.deploymentOccurred, false);
-  return { productionFinalPass: false, releaseRunId: boundary.productionRelease.githubRunId };
+  assert.equal(boundary.p5FinalCertification, "PASS");
+  assert.equal(boundary.reconciliationCount, 1);
+  assert.equal(boundary.runtimeScope, "SPECULATIVE_SHADOW_ONLY");
+  return { finalCertification: "PASS", reconciliationCount: 1, runtimeScope: "SPECULATIVE_SHADOW_ONLY" };
 }
 
-export interface P5CertificationResult {
-  status: "PASS_LOCAL_SHADOW_ONLY";
-  finalProductionCertification: "BLOCKED_BY_P0_P4_RELEASE_FAILURE";
-  p5BaselineSha: string;
-  p4CertifiedSha: string;
-  branch: string;
-  changedPaths: string[];
-  internalPackages: number;
-  internalPackageCycles: 0;
-  p5ExtensionCases: 26;
-  combinedCorpusCases: 156;
-  p5CorpusHash: string;
-  combinedCorpusHash: string;
-  hardGates: Record<string, 0>;
-  productionRelease: { productionFinalPass: false; releaseRunId: number };
-}
-
-export async function certifyP5(): Promise<P5CertificationResult> {
-  const changed = validateLineageAndScope();
+export async function certifyP5() {
+  const lineage = verifyP6DescendantLineage();
+  const changed = validateLineageAndScope(P6_LINEAGE.closureMain, P6_LINEAGE.p5Final, null, false);
   const graph = await validatePackageGraph();
   const hardGates = await validateContractsAndGates();
   const corpus = await validateCorpora();
   const productionRelease = validateReleaseBoundary();
   return {
-    status: "PASS_LOCAL_SHADOW_ONLY",
-    finalProductionCertification: "BLOCKED_BY_P0_P4_RELEASE_FAILURE",
+    status: "PASS_FINAL_DESCENDANT_LINEAGE_SHADOW_ONLY",
+    finalCertification: "PASS",
     p5BaselineSha: P5_BASELINE_SHA,
+    p5SourceSha: P6_LINEAGE.p5Source,
+    p5FinalSha: P6_LINEAGE.p5Final,
     p4CertifiedSha: P4_CERTIFIED_SHA,
-    branch: P5_BRANCH,
+    closureMainSha: P6_LINEAGE.closureMain,
+    branch: lineage.branch,
     changedPaths: changed,
     internalPackages: graph.packages,
     internalPackageCycles: graph.cycles,
@@ -256,7 +245,8 @@ export async function certifyP5(): Promise<P5CertificationResult> {
     p5CorpusHash: corpus.canonicalHash,
     combinedCorpusHash: corpus.combinedHash,
     hardGates,
-    productionRelease,
+    productionBoundary: productionRelease,
+    runtimeScope: "SPECULATIVE_SHADOW_ONLY",
   };
 }
 

@@ -43,6 +43,7 @@
     "test:p6:locked": "npm run test:p6:locked --workspace @finnor/trace-compiler",
     "test:p6:contract": "vitest run tests/unit/p6-architecture-contract.test.ts tests/unit/p6-locked-replay.test.ts",
     "test:p6:replay": "tsx scripts/p6/run-locked-replay.ts",
+    "test:p0-p6:replay": "npm run test:p0:replay && npm run test:p1:locked && npm run test:p2:replay && npm run test:p3:replay && npm run test:p4:replay && npm run test:p5:replay && npm run test:p6:replay",
     "test:p1:db": "tsx scripts/p1/run-ephemeral-db-tests.ts tests/integration/client-lifecycle.test.ts",
     "test:p1:release-contract": "tsx scripts/p1/run-ephemeral-db-tests.ts --npm-script=release:contract",
     "test:live:steel": "vitest run tests/live/steel-provider.live.test.ts",
@@ -96,6 +97,7 @@
     "p5:certify": "tsx scripts/p5/certify.ts --run",
     "p6:lineage": "tsx scripts/p6/verify-descendant-lineage.ts --run",
     "p6:certify": "tsx scripts/p6/certify.ts --run",
+    "p0-p6:certify": "npm run p6:lineage && npm run p5:certify && npm run p6:certify",
     "release:certify": "tsx scripts/release/run-release-certification.ts",
     "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts"
   },
