@@ -145,6 +145,9 @@ jobs:
           FINNOR_ENVIRONMENT: production
 
       - name: Verify immutable P0-P6 production lineage
+        env:
+          NO_COLOR: "1"
+          FORCE_COLOR: "0"
         run: |
           npm run p6:lineage
           npm run p5:certify
