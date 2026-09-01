@@ -70,32 +70,32 @@ function showCommand({ exec, az, worker, name, deadline, sleep, now, allowMissin
 function deleteCommand({ exec, az, worker, name, allowMissing, sleep, now }) {
   const deadline = now() + CLEANUP_GRACE_MS
   let lastError
-  while (now() < deadline) {
-    try {
-      runAzWithTransientRetry({
-        exec,
-        az,
-        args: [
-          "vm", "run-command", "delete",
-          "--resource-group", worker.resourceGroup,
-          "--vm-name", worker.resourceName,
-          "--run-command-name", name,
-          "--yes",
-          "--no-wait",
-        ],
-        deadline,
-        sleep,
-        now,
-      })
-    } catch (error) {
-      const diagnostic = errorDiagnostic(error)
-      if (allowMissing && NOT_FOUND.test(diagnostic)) return
-      if (!TRANSIENT_CONTROL_PLANE.test(diagnostic)) {
-        throw new Error(`Azure managed RunCommand cleanup failed for ${name}:\n${diagnostic}`, { cause: error })
-      }
-      lastError = error
+  try {
+    runAzWithTransientRetry({
+      exec,
+      az,
+      args: [
+        "vm", "run-command", "delete",
+        "--resource-group", worker.resourceGroup,
+        "--vm-name", worker.resourceName,
+        "--run-command-name", name,
+        "--yes",
+        "--no-wait",
+      ],
+      deadline,
+      sleep,
+      now,
+    })
+  } catch (error) {
+    const diagnostic = errorDiagnostic(error)
+    if (allowMissing && NOT_FOUND.test(diagnostic)) return
+    if (!TRANSIENT_CONTROL_PLANE.test(diagnostic)) {
+      throw new Error(`Azure managed RunCommand cleanup failed for ${name}:\n${diagnostic}`, { cause: error })
     }
+    lastError = error
+  }
 
+  while (now() < deadline) {
     try {
       const current = showCommand({ exec, az, worker, name, deadline, sleep, now, allowMissing: true })
       if (current === null) return
@@ -123,7 +123,10 @@ function createCommand({ exec, az, worker, name, script, timeoutSeconds, deadlin
         "--vm-name", worker.resourceName,
         "--location", worker.location,
         "--run-command-name", name,
-        "--async-execution", "true",
+        // --no-wait detaches the hosted runner from the ARM long-running
+        // operation. Keep guest execution synchronous so provisioning and
+        // instance-view reach a terminal state only after the script exits.
+        "--async-execution", "false",
         "--no-wait",
         "--timeout-in-seconds", String(timeoutSeconds),
         "--script", script,
@@ -194,6 +197,7 @@ export function runManagedAzureCommand({
       }
 
       const view = result.instanceView ?? result.properties?.instanceView
+      const provisioningState = result.provisioningState ?? result.properties?.provisioningState
       const executionState = view?.executionState
       const exitCode = Number(view?.exitCode)
       const output = typeof view?.output === "string" ? view.output : ""
@@ -207,6 +211,9 @@ export function runManagedAzureCommand({
       }
       if (TERMINAL_FAILURE_STATES.has(executionState)) {
         throw new Error(`Azure managed RunCommand ${name} failed (state=${executionState}, exit=${Number.isFinite(exitCode) ? exitCode : "missing"}):\n${error || output || "no command output"}`)
+      }
+      if (TERMINAL_FAILURE_STATES.has(provisioningState)) {
+        throw new Error(`Azure managed RunCommand ${name} provisioning failed (state=${provisioningState}):\n${error || output || "no command output"}`)
       }
       sleep(POLL_INTERVAL_MS)
     }

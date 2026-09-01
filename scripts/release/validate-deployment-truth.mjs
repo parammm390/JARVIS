@@ -91,7 +91,7 @@ for (const [label, source] of [["preflight", preflightScript], ["worker deploy",
 }
 for (const invariant of [
   '"run-command", "create"',
-  '"--async-execution", "true"',
+  '"--async-execution", "false"',
   '"--no-wait"',
   '"--timeout-in-seconds"',
   '"run-command", "show"',
