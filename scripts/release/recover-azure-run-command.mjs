@@ -29,6 +29,10 @@ function diagnostic(error) {
   return [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
 }
 
+function governedReleaseRequiresTransportProof() {
+  return process.env.FINNOR_RELEASE_SOURCE === "github-actions"
+}
+
 function runAz(exec, az, args, timeout = 90_000) {
   return exec(az, [...args, "--only-show-errors", "-o", "json"], {
     encoding: "utf8",
@@ -270,10 +274,11 @@ async function recoverStuckTransport({ exec, az, worker, expectedCommitSha, slee
     issueDeletes(exec, az, worker, remaining)
     const afterRestart = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
     if (afterRestart.length) throw new Error(`Azure VM restart left FINNOR-owned RunCommands: ${afterRestart.join(", ")}`)
+    if (governedReleaseRequiresTransportProof()) probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
     return {
       action: "RESTART_AND_CLEANUP",
       priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
-      transportProbe: "VM_RESTART",
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "VM_RESTART",
     }
   } catch (error) {
     restartError = error
@@ -305,10 +310,11 @@ async function recoverStuckTransport({ exec, az, worker, expectedCommitSha, slee
     issueDeletes(exec, az, worker, remaining)
     remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
     if (remaining.length) throw new Error(`guest-agent SSH recovery left FINNOR-owned resources: ${remaining.join(", ")}`)
+    if (governedReleaseRequiresTransportProof()) probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
     return {
       action: "SSH_AGENT_RESTART_AND_CLEANUP",
       priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
-      transportProbe: "GUEST_AGENT_RESTART",
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "GUEST_AGENT_RESTART",
     }
   } catch (sshError) {
     throw new Error(
@@ -354,7 +360,22 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
   issueDeletes(exec, az, worker, initial)
   const remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
   if (!remaining.length) {
-    return { ok: true, commitSha: expectedCommitSha, action: "CLEANUP_ONLY", staleCommands: initial, priorReleaseSha: null, transportProbe: "CLEANUP_CONVERGED" }
+    if (governedReleaseRequiresTransportProof()) {
+      try {
+        probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+      } catch {
+        const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+        return { ok: true, commitSha: expectedCommitSha, staleCommands: initial, ...recovered }
+      }
+    }
+    return {
+      ok: true,
+      commitSha: expectedCommitSha,
+      action: "CLEANUP_ONLY",
+      staleCommands: initial,
+      priorReleaseSha: null,
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "CLEANUP_CONVERGED",
+    }
   }
 
   const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
