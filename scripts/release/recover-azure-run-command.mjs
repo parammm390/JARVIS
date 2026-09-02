@@ -9,7 +9,7 @@ const NOT_FOUND = /(?:ResourceNotFound|could not be found|was not found|does not
 const DELETE_IN_PROGRESS = /(?:AnotherOperationInProgress|OperationPreempted|Conflict|HTTP\s+409|operation.*in progress)/i
 const TERMINAL_FAILURE_STATES = new Set(["Failed", "Canceled", "Cancelled", "TimedOut", "Timedout"])
 const POLL_INTERVAL_MS = 5_000
-const INITIAL_CLEANUP_MS = 45_000
+const INITIAL_CLEANUP_MS = 60_000
 const FINAL_CLEANUP_MS = 2 * 60_000
 const RESTART_TIMEOUT_MS = 10 * 60_000
 const EXTENSION_RESET_TIMEOUT_MS = 5 * 60_000
@@ -17,6 +17,7 @@ const READY_TIMEOUT_MS = 5 * 60_000
 const GUEST_AGENT_SETTLE_MS = 20_000
 const PROBE_TIMEOUT_MS = 90_000
 const PROBE_GUEST_TIMEOUT_SECONDS = 30
+const RESTART_AUTHORIZATION_DENIED = /AuthorizationFailed[\s\S]*virtualMachines\/restart\/action/i
 
 function defaultSleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
@@ -117,6 +118,24 @@ function waitForWorkerReady(exec, az, worker, sleep, now) {
   }
 }
 
+async function observeWorkerHealth(fetchImpl, worker) {
+  try {
+    const response = await fetchImpl(`${worker.sseGatewayUrl}/healthz`, {
+      headers: { accept: "application/json", "cache-control": "no-cache" },
+      signal: AbortSignal.timeout(10_000),
+    })
+    const body = await response.json().catch(() => null)
+    if (response.ok && body?.ok === true && body?.realtime === true && typeof body?.release?.commitSha === "string") {
+      return body.release.commitSha
+    }
+  } catch {
+    // Recovery is for the Azure command transport. The old FINNOR worker may be
+    // unhealthy precisely because this deployment needs to replace it, so prior
+    // application health is diagnostic only and can never block transport repair.
+  }
+  return null
+}
+
 function runCommandExtensionNames(exec, az, worker) {
   const rows = azJson(exec, az, [
     "vm", "extension", "list",
@@ -135,7 +154,7 @@ function runCommandExtensionNames(exec, az, worker) {
 
 function resetRunCommandExtension(exec, az, worker, sleep, now) {
   const names = runCommandExtensionNames(exec, az, worker)
-  if (!names.length) return false
+  if (!names.length) throw new Error("Azure RunCommandLinux VM extension was not found for control-plane recovery")
 
   for (const name of names) {
     runAz(exec, az, [
@@ -157,7 +176,6 @@ function resetRunCommandExtension(exec, az, worker, sleep, now) {
     throw new Error(`Azure RunCommandLinux VM extension did not delete through the control plane: ${remaining.join(", ")}`)
   }
   sleep(GUEST_AGENT_SETTLE_MS)
-  return true
 }
 
 function restartGuestAgentOverSsh(exec, az, worker) {
@@ -195,8 +213,8 @@ function probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, no
   const marker = `FINNOR_AZURE_TRANSPORT_OK ${expectedCommitSha}`
 
   issueDeletes(exec, az, worker, [name])
-  const preexisting = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
-  if (preexisting.includes(name)) throw new Error(`Azure transport probe could not clear prior ${name}`)
+  const existing = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+  if (existing.includes(name)) throw new Error(`Azure transport probe could not clear prior ${name}`)
 
   runAz(exec, az, [
     "vm", "run-command", "create",
@@ -243,69 +261,71 @@ function probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, no
   throw new Error(`Azure transport probe did not reach terminal success within ${PROBE_TIMEOUT_MS / 1000}s (${last})`)
 }
 
-function cleanupOwnedCommands(exec, az, worker, timeoutMs, sleep, now) {
-  const names = ownedCommands(exec, az, worker)
-  issueDeletes(exec, az, worker, names)
-  return waitForNoOwnedCommands(exec, az, worker, timeoutMs, sleep, now)
-}
-
-function recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now) {
-  let extensionReset = false
-  let usedSsh = false
-  let extensionError = null
-
+async function recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl }) {
+  let restartError = null
   try {
-    extensionReset = resetRunCommandExtension(exec, az, worker, sleep, now)
+    runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
+    sleep(GUEST_AGENT_SETTLE_MS)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    const remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    const afterRestart = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (afterRestart.length) throw new Error(`Azure VM restart left FINNOR-owned RunCommands: ${afterRestart.join(", ")}`)
+    return {
+      action: "RESTART_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: "VM_RESTART",
+    }
+  } catch (error) {
+    restartError = error
+    if (!RESTART_AUTHORIZATION_DENIED.test(diagnostic(error))) {
+      // A restart can itself fail transiently. Continue to the narrower extension
+      // reset rather than failing a release before trying the transport-specific repair.
+    }
+  }
+
+  let extensionError = null
+  try {
+    resetRunCommandExtension(exec, az, worker, sleep, now)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    let remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (remaining.length) throw new Error(`RunCommand extension reset left FINNOR-owned resources: ${remaining.join(", ")}`)
+    probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    return {
+      action: "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: "PASS",
+    }
   } catch (error) {
     extensionError = error
   }
 
-  waitForWorkerReady(exec, az, worker, sleep, now)
-  let remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-
-  if (remaining.length || extensionError) {
-    try {
-      restartGuestAgentOverSsh(exec, az, worker)
-      usedSsh = true
-      sleep(GUEST_AGENT_SETTLE_MS)
-      waitForWorkerReady(exec, az, worker, sleep, now)
-      remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-    } catch (sshError) {
-      const prefix = extensionError ? `RunCommand extension reset failed (${diagnostic(extensionError)}); ` : ""
-      throw new Error(`${prefix}guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
-    }
-  }
-
-  if (remaining.length) {
-    throw new Error(`Azure RunCommand transport recovery left FINNOR-owned resources: ${remaining.join(", ")}`)
-  }
-
   try {
-    probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
-  } catch (probeError) {
-    if (usedSsh) throw probeError
-    try {
-      restartGuestAgentOverSsh(exec, az, worker)
-      usedSsh = true
-      sleep(GUEST_AGENT_SETTLE_MS)
-      waitForWorkerReady(exec, az, worker, sleep, now)
-      remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-      if (remaining.length) throw new Error(`stale FINNOR RunCommands remain after SSH recovery: ${remaining.join(", ")}`)
-      probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
-    } catch (sshError) {
-      throw new Error(`Azure RunCommand transport remained unhealthy after control-plane recovery (${diagnostic(probeError)}); SSH fallback failed:\n${diagnostic(sshError)}`, { cause: sshError })
+    restartGuestAgentOverSsh(exec, az, worker)
+    sleep(GUEST_AGENT_SETTLE_MS)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    let remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (remaining.length) throw new Error(`guest-agent SSH recovery left FINNOR-owned resources: ${remaining.join(", ")}`)
+    return {
+      action: "SSH_AGENT_RESTART_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: "GUEST_AGENT_RESTART",
     }
+  } catch (sshError) {
+    throw new Error(
+      `Azure RunCommand recovery exhausted all bounded paths. VM restart: ${diagnostic(restartError)}; extension reset: ${diagnostic(extensionError)}; SSH guest-agent recovery: ${diagnostic(sshError)}`,
+      { cause: sshError },
+    )
   }
-
-  return usedSsh
-    ? "SSH_AGENT_RESTART_AND_CLEANUP"
-    : extensionReset
-      ? "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP"
-      : "TRANSPORT_PROBE_RECOVERY"
 }
 
 export async function recoverAzureRunCommandTransport({ worker, expectedCommitSha, az = process.env.AZURE_CLI || "az" }, {
   exec = execFileSync,
+  fetchImpl = globalThis.fetch,
   sleep = defaultSleep,
   now = Date.now,
 } = {}) {
@@ -325,30 +345,56 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
 
   waitForWorkerReady(exec, az, worker, sleep, now)
   const initial = ownedCommands(exec, az, worker)
-  let action = "NONE"
 
-  if (initial.length) {
-    issueDeletes(exec, az, worker, initial)
-    const remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
-    if (!remaining.length) action = "CLEANUP_ONLY"
-    else action = recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now)
-  }
-
-  if (action === "NONE" || action === "CLEANUP_ONLY") {
+  if (!initial.length) {
     try {
       probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+      return { ok: true, commitSha: expectedCommitSha, action: "NONE", staleCommands: [], priorReleaseSha: null, transportProbe: "PASS" }
     } catch {
-      action = recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now)
+      const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+      return { ok: true, commitSha: expectedCommitSha, staleCommands: [], ...recovered }
     }
   }
 
-  return {
-    ok: true,
-    commitSha: expectedCommitSha,
-    action,
-    staleCommands: initial,
-    priorReleaseSha: null,
-    transportProbe: "PASS",
+  issueDeletes(exec, az, worker, initial)
+  const remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+  if (!remaining.length) {
+    return { ok: true, commitSha: expectedCommitSha, action: "CLEANUP_ONLY", staleCommands: initial, priorReleaseSha: null, transportProbe: "CLEANUP_CONVERGED" }
+  }
+
+  const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+  return { ok: true, commitSha: expectedCommitSha, staleCommands: initial, ...recovered }
+}
+
+function decodeReleaseJwt(name) {
+  const value = process.env[name]?.trim()
+  if (!value) throw new Error(`${name} is required before production release recovery`)
+  const parts = value.split(".")
+  if (parts.length !== 3) throw new Error(`${name} is not a JWT`)
+  let claims
+  try {
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"))
+  } catch {
+    throw new Error(`${name} has an invalid JWT payload`)
+  }
+  const now = Math.floor(Date.now() / 1000)
+  const exp = Number(claims.exp)
+  if (!Number.isFinite(exp)) throw new Error(`${name} has no finite exp claim`)
+  if (exp <= now + 30 * 60) throw new Error(`${name} expires too soon for production certification (${Math.max(0, exp - now)}s remaining)`)
+  if (claims.nbf !== undefined && Number(claims.nbf) > now + 60) throw new Error(`${name} is not valid yet`)
+  if (typeof claims.sub !== "string" || !claims.sub) throw new Error(`${name} has no subject claim`)
+  if (typeof claims.iss !== "string" || !claims.iss) throw new Error(`${name} has no issuer claim`)
+  return { value, claims }
+}
+
+function validateProductTruthCredentials() {
+  const primary = decodeReleaseJwt("PRODUCT_TRUTH_AUTH_BEARER")
+  const other = decodeReleaseJwt("PRODUCT_TRUTH_OTHER_AUTH_BEARER")
+  if (primary.value === other.value || primary.claims.sub === other.claims.sub) {
+    throw new Error("Product Truth primary and cross-tenant bearer identities must be distinct")
+  }
+  if (primary.claims.iss !== other.claims.iss) {
+    throw new Error("Product Truth bearer identities must come from the same canonical auth issuer")
   }
 }
 
@@ -356,6 +402,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const outputIndex = process.argv.indexOf("--output-file")
   const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
   if (!outputPath) throw new Error("Usage: node scripts/release/recover-azure-run-command.mjs --output-file <path>")
+
+  // Fail before touching Azure if the credentials required by the final deployed
+  // black-box certification are already unusable. This prevents promoting a
+  // release only to discover an expired certification identity at the last step.
+  validateProductTruthCredentials()
 
   const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
   const contract = loadContract()
