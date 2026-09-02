@@ -90,6 +90,13 @@ test("active release path has no Azure or static worker AWS credential seam", ()
   assert.doesNotMatch(worker, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/)
 })
 
+test("API readiness cannot be satisfied by a non-ECS or capability-incomplete worker heartbeat", () => {
+  const readiness = readFileSync(new URL("../../finnor-os/apps/api/lib/worker-readiness.ts", import.meta.url), "utf8")
+  assert.match(readiness, /deployment_id\s+LIKE\s+'ecs:%'/)
+  assert.match(readiness, /environment='production'/)
+  assert.match(readiness, /capabilities\s+@>\s+ARRAY\['jobs','orchestration','realtime','sse'\]::text\[\]/)
+})
+
 test("runtime parity requires jobs, orchestration, realtime, SSE, and exact migration", () => {
   const observed = {
     frontend: { ...expected, service: "finnor-frontend", traceable: true },

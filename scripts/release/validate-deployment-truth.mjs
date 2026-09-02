@@ -57,6 +57,7 @@ const activeFiles = [
   join(repoRoot, "scripts/release/release-policy.mjs"),
   join(repoRoot, "scripts/release/preflight-production.mjs"),
   join(repoRoot, "scripts/release/deploy-aws-worker.mjs"),
+  join(repoRoot, "finnor-os/apps/api/lib/worker-readiness.ts"),
   join(repoRoot, "finnor-os/scripts/release/migrate-production.ts"),
   join(repoRoot, "scripts/release/verify-production-parity.mjs"),
   join(repoRoot, "scripts/release/deploy-production.mjs"),
