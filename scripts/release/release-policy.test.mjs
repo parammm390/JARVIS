@@ -90,6 +90,12 @@ test("active release path has no Azure or static worker AWS credential seam", ()
   assert.doesNotMatch(worker, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/)
 })
 
+test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {
+  const cfn = readFileSync(new URL("../../infra/aws/finnor-production.yaml", import.meta.url), "utf8")
+  assert.equal((cfn.match(/aws:SourceArn: !Sub 'arn:\${AWS::Partition}:ecs:\${AWS::Region}:\${AWS::AccountId}:\*'/g) ?? []).length, 2)
+  assert.equal((cfn.match(/aws:SourceAccount: !Ref AWS::AccountId/g) ?? []).length, 2)
+})
+
 test("API readiness cannot be satisfied by a non-ECS or capability-incomplete worker heartbeat", () => {
   const readiness = readFileSync(new URL("../../finnor-os/apps/api/lib/worker-readiness.ts", import.meta.url), "utf8")
   assert.match(readiness, /deployment_id\s+LIKE\s+'ecs:%'/)
