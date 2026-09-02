@@ -11,6 +11,7 @@ const POLL_INTERVAL_MS = 5_000
 const INITIAL_CLEANUP_MS = 60_000
 const FINAL_CLEANUP_MS = 6 * 60_000
 const RESTART_TIMEOUT_MS = 10 * 60_000
+const EXTENSION_RESET_TIMEOUT_MS = 5 * 60_000
 const READY_TIMEOUT_MS = 5 * 60_000
 const HEALTH_TIMEOUT_MS = 3 * 60_000
 const GUEST_AGENT_SETTLE_MS = 20_000
@@ -137,6 +138,20 @@ async function waitForWorkerHealth(fetchImpl, worker, sleepAsync, now) {
   throw new Error(`Azure worker did not recover its prior healthy release after restart: ${last}`)
 }
 
+function resetRunCommandExtension(exec, az, worker, sleep) {
+  // Azure documents RemoveRunCommandLinuxExtension as the supported recovery
+  // when the Linux RunCommand extension is wedged. This stays inside the same
+  // RunCommand permission boundary already required by FINNOR's release identity
+  // and avoids requiring VM restart permission or inbound SSH.
+  runAz(exec, az, [
+    "vm", "run-command", "invoke",
+    "--resource-group", worker.resourceGroup,
+    "--name", worker.resourceName,
+    "--command-id", "RemoveRunCommandLinuxExtension",
+  ], EXTENSION_RESET_TIMEOUT_MS)
+  sleep(GUEST_AGENT_SETTLE_MS)
+}
+
 function restartGuestAgentOverSsh(exec, az, worker) {
   // The CLI extension is installed in the ephemeral release runner only.  The
   // remote command is deliberately limited to the canonical worker's Azure
@@ -197,12 +212,50 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
   } catch (error) {
     const detail = diagnostic(error)
     if (!RESTART_AUTHORIZATION_DENIED.test(detail)) throw error
+
+    // The production identity is intentionally denied VM restart. Before any
+    // network-dependent SSH fallback, use Azure's supported RunCommand extension
+    // reset and immediately retry cleanup. Applying RunCommand later reinstalls
+    // the extension automatically.
     try {
-      restartGuestAgentOverSsh(exec, az, worker)
-    } catch (sshError) {
-      throw new Error(`Azure VM restart is unauthorized and guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
+      resetRunCommandExtension(exec, az, worker, sleep)
+      remaining = ownedCommands(exec, az, worker)
+      issueDeletes(exec, az, worker, remaining)
+      remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+      if (!remaining.length) {
+        waitForWorkerReady(exec, az, worker, sleep, now)
+        const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
+        return {
+          ok: true,
+          commitSha: expectedCommitSha,
+          action: "RUNCOMMAND_EXTENSION_RESET_AND_CLEANUP",
+          staleCommands: initial,
+          priorReleaseSha,
+        }
+      }
+    } catch (extensionError) {
+      // Preserve the older SSH fallback only as a last resort. Its failure is
+      // reported together with the extension-reset diagnostic below.
+      try {
+        restartGuestAgentOverSsh(exec, az, worker)
+      } catch (sshError) {
+        throw new Error(
+          `Azure VM restart is unauthorized; RunCommand extension reset failed (${diagnostic(extensionError)}); guest-agent SSH recovery also failed:\n${diagnostic(sshError)}`,
+          { cause: sshError },
+        )
+      }
+      action = "SSH_AGENT_RESTART_AND_CLEANUP"
+      remaining = []
     }
-    action = "SSH_AGENT_RESTART_AND_CLEANUP"
+
+    if (remaining.length) {
+      try {
+        restartGuestAgentOverSsh(exec, az, worker)
+      } catch (sshError) {
+        throw new Error(`Azure VM restart is unauthorized; RunCommand extension reset did not clear ${remaining.join(", ")}; guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
+      }
+      action = "SSH_AGENT_RESTART_AND_CLEANUP"
+    }
   }
   if (action === "SSH_AGENT_RESTART_AND_CLEANUP") sleep(GUEST_AGENT_SETTLE_MS)
   waitForWorkerReady(exec, az, worker, sleep, now)
