@@ -1,20 +1,22 @@
 import { execFileSync } from "node:child_process"
-import { writeFileSync } from "node:fs"
+import { appendFileSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assertCanonicalRelease, assertResolvedTarget, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 
-const OWNED_COMMAND = /^finnor-(?:preflight|deploy|parity)-[0-9a-f]{12}$/
+const OWNED_COMMAND = /^finnor-(?:probe|preflight|deploy|parity)-[0-9a-f]{12}$/
 const NOT_FOUND = /(?:ResourceNotFound|could not be found|was not found|does not exist)/i
 const DELETE_IN_PROGRESS = /(?:AnotherOperationInProgress|OperationPreempted|Conflict|HTTP\s+409|operation.*in progress)/i
+const TERMINAL_FAILURE_STATES = new Set(["Failed", "Canceled", "Cancelled", "TimedOut", "Timedout"])
 const POLL_INTERVAL_MS = 5_000
 const INITIAL_CLEANUP_MS = 60_000
-const FINAL_CLEANUP_MS = 6 * 60_000
+const FINAL_CLEANUP_MS = 2 * 60_000
 const RESTART_TIMEOUT_MS = 10 * 60_000
 const EXTENSION_RESET_TIMEOUT_MS = 5 * 60_000
 const READY_TIMEOUT_MS = 5 * 60_000
-const HEALTH_TIMEOUT_MS = 3 * 60_000
 const GUEST_AGENT_SETTLE_MS = 20_000
+const PROBE_TIMEOUT_MS = 90_000
+const PROBE_GUEST_TIMEOUT_SECONDS = 30
 const RESTART_AUTHORIZATION_DENIED = /AuthorizationFailed[\s\S]*virtualMachines\/restart\/action/i
 
 function defaultSleep(ms) {
@@ -25,6 +27,10 @@ function diagnostic(error) {
   const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
   const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : ""
   return [stdout, stderr].filter(Boolean).join("\n") || (error instanceof Error ? error.message : String(error))
+}
+
+function governedReleaseRequiresTransportProof() {
+  return process.env.FINNOR_RELEASE_SOURCE === "github-actions"
 }
 
 function runAz(exec, az, args, timeout = 90_000) {
@@ -116,26 +122,21 @@ function waitForWorkerReady(exec, az, worker, sleep, now) {
   }
 }
 
-async function waitForWorkerHealth(fetchImpl, worker, sleepAsync, now) {
-  const deadline = now() + HEALTH_TIMEOUT_MS
-  let last = "no response"
-  while (now() < deadline) {
-    try {
-      const response = await fetchImpl(`${worker.sseGatewayUrl}/healthz`, {
-        headers: { accept: "application/json", "cache-control": "no-cache" },
-        signal: AbortSignal.timeout(10_000),
-      })
-      const body = await response.json().catch(() => null)
-      if (response.ok && body?.ok === true && body?.realtime === true && typeof body?.release?.commitSha === "string") {
-        return body.release.commitSha
-      }
-      last = `HTTP ${response.status}`
-    } catch (error) {
-      last = diagnostic(error)
+async function observeWorkerHealth(fetchImpl, worker) {
+  try {
+    const response = await fetchImpl(`${worker.sseGatewayUrl}/healthz`, {
+      headers: { accept: "application/json", "cache-control": "no-cache" },
+      signal: AbortSignal.timeout(10_000),
+    })
+    const body = await response.json().catch(() => null)
+    if (response.ok && body?.ok === true && body?.realtime === true && typeof body?.release?.commitSha === "string") {
+      return body.release.commitSha
     }
-    await sleepAsync(POLL_INTERVAL_MS)
+  } catch {
+    // The old worker can be unhealthy precisely because this release must replace
+    // it. Prior application health is diagnostic only, never a transport gate.
   }
-  throw new Error(`Azure worker did not recover its prior healthy release after restart: ${last}`)
+  return null
 }
 
 function runCommandExtensionNames(exec, az, worker) {
@@ -155,10 +156,6 @@ function runCommandExtensionNames(exec, az, worker) {
 }
 
 function resetRunCommandExtension(exec, az, worker, sleep, now) {
-  // Do not invoke another RunCommand here: the RunCommand transport is the
-  // component that is wedged. Azure documents the underlying VM extension as
-  // Microsoft.CPlat.Core / RunCommandLinux and supports deleting that extension
-  // through the control plane. A later RunCommand reinstalls it automatically.
   const names = runCommandExtensionNames(exec, az, worker)
   if (!names.length) throw new Error("Azure RunCommandLinux VM extension was not found for control-plane recovery")
 
@@ -185,9 +182,6 @@ function resetRunCommandExtension(exec, az, worker, sleep, now) {
 }
 
 function restartGuestAgentOverSsh(exec, az, worker) {
-  // The CLI extension is installed in the ephemeral release runner only.  The
-  // remote command is deliberately limited to the canonical worker's Azure
-  // guest agent; it neither changes application code nor grants any authority.
   runRawAz(exec, az, ["extension", "add", "--name", "ssh", "--yes", "--only-show-errors"], RESTART_TIMEOUT_MS)
   runRawAz(exec, az, [
     "ssh", "vm",
@@ -202,11 +196,138 @@ function restartGuestAgentOverSsh(exec, az, worker) {
   ], RESTART_TIMEOUT_MS)
 }
 
+function showRunCommand(exec, az, worker, name) {
+  try {
+    return azJson(exec, az, [
+      "vm", "run-command", "show",
+      "--resource-group", worker.resourceGroup,
+      "--vm-name", worker.resourceName,
+      "--run-command-name", name,
+      "--instance-view",
+    ])
+  } catch (error) {
+    if (NOT_FOUND.test(diagnostic(error))) return null
+    throw error
+  }
+}
+
+function probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now) {
+  const name = `finnor-probe-${expectedCommitSha.slice(0, 12)}`
+  const marker = `FINNOR_AZURE_TRANSPORT_OK ${expectedCommitSha}`
+
+  issueDeletes(exec, az, worker, [name])
+  const existing = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+  if (existing.includes(name)) throw new Error(`Azure transport probe could not clear prior ${name}`)
+
+  runAz(exec, az, [
+    "vm", "run-command", "create",
+    "--resource-group", worker.resourceGroup,
+    "--vm-name", worker.resourceName,
+    "--location", worker.location,
+    "--run-command-name", name,
+    "--async-execution", "false",
+    "--no-wait",
+    "--timeout-in-seconds", String(PROBE_GUEST_TIMEOUT_SECONDS),
+    "--script", `printf '%s\\n' '${marker}'`,
+  ])
+
+  const deadline = now() + PROBE_TIMEOUT_MS
+  let last = "command not visible"
+  while (now() < deadline) {
+    const result = showRunCommand(exec, az, worker, name)
+    if (!result) {
+      sleep(POLL_INTERVAL_MS)
+      continue
+    }
+    const view = result.instanceView ?? result.properties?.instanceView
+    const provisioningState = result.provisioningState ?? result.properties?.provisioningState
+    const executionState = view?.executionState
+    const exitCode = Number(view?.exitCode)
+    const output = typeof view?.output === "string" ? view.output : ""
+    const error = typeof view?.error === "string" ? view.error : ""
+    last = `provisioning=${provisioningState ?? "unknown"}, execution=${executionState ?? "unknown"}, exit=${Number.isFinite(exitCode) ? exitCode : "missing"}`
+
+    if (executionState === "Succeeded") {
+      if (exitCode !== 0 || !output.includes(marker)) {
+        throw new Error(`Azure transport probe returned an invalid terminal result (${last}):\n${error || output || "no output"}`)
+      }
+      issueDeletes(exec, az, worker, [name])
+      const remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+      if (remaining.includes(name)) throw new Error(`Azure transport probe succeeded but ${name} could not be cleaned up`)
+      return
+    }
+    if (TERMINAL_FAILURE_STATES.has(executionState) || TERMINAL_FAILURE_STATES.has(provisioningState)) {
+      throw new Error(`Azure transport probe failed (${last}):\n${error || output || "no output"}`)
+    }
+    sleep(POLL_INTERVAL_MS)
+  }
+  throw new Error(`Azure transport probe did not reach terminal success within ${PROBE_TIMEOUT_MS / 1000}s (${last})`)
+}
+
+async function recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl }) {
+  let restartError = null
+  try {
+    runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
+    sleep(GUEST_AGENT_SETTLE_MS)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    const remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    const afterRestart = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (afterRestart.length) throw new Error(`Azure VM restart left FINNOR-owned RunCommands: ${afterRestart.join(", ")}`)
+    if (governedReleaseRequiresTransportProof()) probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    return {
+      action: "RESTART_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "VM_RESTART",
+    }
+  } catch (error) {
+    restartError = error
+  }
+
+  let extensionError = null
+  try {
+    resetRunCommandExtension(exec, az, worker, sleep, now)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    let remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (remaining.length) throw new Error(`RunCommand extension reset left FINNOR-owned resources: ${remaining.join(", ")}`)
+    probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    return {
+      action: "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: "PASS",
+    }
+  } catch (error) {
+    extensionError = error
+  }
+
+  try {
+    restartGuestAgentOverSsh(exec, az, worker)
+    sleep(GUEST_AGENT_SETTLE_MS)
+    waitForWorkerReady(exec, az, worker, sleep, now)
+    let remaining = ownedCommands(exec, az, worker)
+    issueDeletes(exec, az, worker, remaining)
+    remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    if (remaining.length) throw new Error(`guest-agent SSH recovery left FINNOR-owned resources: ${remaining.join(", ")}`)
+    if (governedReleaseRequiresTransportProof()) probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    return {
+      action: "SSH_AGENT_RESTART_AND_CLEANUP",
+      priorReleaseSha: await observeWorkerHealth(fetchImpl, worker),
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "GUEST_AGENT_RESTART",
+    }
+  } catch (sshError) {
+    throw new Error(
+      `Azure RunCommand recovery exhausted all bounded paths. VM restart: ${diagnostic(restartError)}; extension reset: ${diagnostic(extensionError)}; SSH guest-agent recovery: ${diagnostic(sshError)}`,
+      { cause: sshError },
+    )
+  }
+}
+
 export async function recoverAzureRunCommandTransport({ worker, expectedCommitSha, az = process.env.AZURE_CLI || "az" }, {
   exec = execFileSync,
   fetchImpl = globalThis.fetch,
   sleep = defaultSleep,
-  sleepAsync = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
   now = Date.now,
 } = {}) {
   if (!/^[0-9a-f]{40}$/.test(expectedCommitSha)) throw new Error("transport recovery requires the exact lowercase release SHA")
@@ -223,83 +344,109 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
     adminUsername: vm?.osProfile?.adminUsername,
   }, ["resourceId", "vmId", "location", "adminUsername"])
 
+  waitForWorkerReady(exec, az, worker, sleep, now)
   const initial = ownedCommands(exec, az, worker)
+
   if (!initial.length) {
-    const state = workerState(exec, az, worker)
-    if (state.power !== "VM running" || !state.agentReady) {
-      throw new Error(`Azure worker is not ready and has no FINNOR-owned stale RunCommand to justify recovery (power=${state.power ?? "unknown"}, agentReady=${state.agentReady})`)
+    try {
+      probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+      return { ok: true, commitSha: expectedCommitSha, action: "NONE", staleCommands: [], priorReleaseSha: null, transportProbe: "PASS" }
+    } catch {
+      const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+      return { ok: true, commitSha: expectedCommitSha, staleCommands: [], ...recovered }
     }
-    return { ok: true, commitSha: expectedCommitSha, action: "NONE", staleCommands: [], priorReleaseSha: null }
   }
 
   issueDeletes(exec, az, worker, initial)
-  let remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+  const remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
   if (!remaining.length) {
-    return { ok: true, commitSha: expectedCommitSha, action: "CLEANUP_ONLY", staleCommands: initial, priorReleaseSha: null }
+    if (governedReleaseRequiresTransportProof()) {
+      try {
+        probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+      } catch {
+        const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+        return { ok: true, commitSha: expectedCommitSha, staleCommands: initial, ...recovered }
+      }
+    }
+    return {
+      ok: true,
+      commitSha: expectedCommitSha,
+      action: "CLEANUP_ONLY",
+      staleCommands: initial,
+      priorReleaseSha: null,
+      transportProbe: governedReleaseRequiresTransportProof() ? "PASS" : "CLEANUP_CONVERGED",
+    }
   }
 
-  let action = "RESTART_AND_CLEANUP"
+  const recovered = await recoverStuckTransport({ exec, az, worker, expectedCommitSha, sleep, now, fetchImpl })
+  return { ok: true, commitSha: expectedCommitSha, staleCommands: initial, ...recovered }
+}
+
+function decodeReleaseJwt(name) {
+  const value = process.env[name]?.trim()
+  if (!value) throw new Error(`${name} is required before production release recovery`)
+  const parts = value.split(".")
+  if (parts.length !== 3) throw new Error(`${name} is not a JWT`)
+  let claims
   try {
-    runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
-  } catch (error) {
-    const detail = diagnostic(error)
-    if (!RESTART_AUTHORIZATION_DENIED.test(detail)) throw error
-
-    // The production identity is intentionally denied VM restart. Recover the
-    // wedged RunCommand handler through the VM-extension control plane before
-    // falling back to network-dependent SSH.
-    try {
-      resetRunCommandExtension(exec, az, worker, sleep, now)
-      remaining = ownedCommands(exec, az, worker)
-      issueDeletes(exec, az, worker, remaining)
-      remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-      if (!remaining.length) {
-        waitForWorkerReady(exec, az, worker, sleep, now)
-        const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
-        return {
-          ok: true,
-          commitSha: expectedCommitSha,
-          action: "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP",
-          staleCommands: initial,
-          priorReleaseSha,
-        }
-      }
-    } catch (extensionError) {
-      // Preserve the older SSH fallback only as a last resort. Its failure is
-      // reported together with the control-plane extension diagnostic below.
-      try {
-        restartGuestAgentOverSsh(exec, az, worker)
-      } catch (sshError) {
-        throw new Error(
-          `Azure VM restart is unauthorized; RunCommand extension control-plane reset failed (${diagnostic(extensionError)}); guest-agent SSH recovery also failed:\n${diagnostic(sshError)}`,
-          { cause: sshError },
-        )
-      }
-      action = "SSH_AGENT_RESTART_AND_CLEANUP"
-      remaining = []
-    }
-
-    if (remaining.length) {
-      try {
-        restartGuestAgentOverSsh(exec, az, worker)
-      } catch (sshError) {
-        throw new Error(`Azure VM restart is unauthorized; RunCommand extension control-plane reset did not clear ${remaining.join(", ")}; guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
-      }
-      action = "SSH_AGENT_RESTART_AND_CLEANUP"
-    }
+    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"))
+  } catch {
+    throw new Error(`${name} has an invalid JWT payload`)
   }
-  if (action === "SSH_AGENT_RESTART_AND_CLEANUP") sleep(GUEST_AGENT_SETTLE_MS)
-  waitForWorkerReady(exec, az, worker, sleep, now)
-  const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
+  const now = Math.floor(Date.now() / 1000)
+  const exp = Number(claims.exp)
+  if (!Number.isFinite(exp)) throw new Error(`${name} has no finite exp claim`)
+  if (exp <= now + 30 * 60) throw new Error(`${name} expires too soon for production certification (${Math.max(0, exp - now)}s remaining)`)
+  if (claims.nbf !== undefined && Number(claims.nbf) > now + 60) throw new Error(`${name} is not valid yet`)
+  if (typeof claims.sub !== "string" || !claims.sub) throw new Error(`${name} has no subject claim`)
+  if (typeof claims.iss !== "string" || !claims.iss) throw new Error(`${name} has no issuer claim`)
+  return { value, claims }
+}
 
-  remaining = ownedCommands(exec, az, worker)
-  issueDeletes(exec, az, worker, remaining)
-  remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-  if (remaining.length) {
-    throw new Error(`Azure RunCommand transport recovery left FINNOR-owned resources after restart: ${remaining.join(", ")}`)
+function validateProductTruthCredentials() {
+  const primary = decodeReleaseJwt("PRODUCT_TRUTH_AUTH_BEARER")
+  const other = decodeReleaseJwt("PRODUCT_TRUTH_OTHER_AUTH_BEARER")
+  if (primary.value === other.value || primary.claims.sub === other.claims.sub) {
+    throw new Error("Product Truth primary and cross-tenant bearer identities must be distinct")
   }
+  if (primary.claims.iss !== other.claims.iss) {
+    throw new Error("Product Truth bearer identities must come from the same canonical auth issuer")
+  }
+}
 
-  return { ok: true, commitSha: expectedCommitSha, action, staleCommands: initial, priorReleaseSha }
+function refreshProductTruthCredentials(repoRoot) {
+  const runnerTemp = process.env.RUNNER_TEMP?.trim()
+  if (!runnerTemp) throw new Error("RUNNER_TEMP is required for guarded Product Truth auth refresh")
+  const productionEnv = resolve(repoRoot, "finnor-os/apps/api/.vercel/.env.production.local")
+  const outputFile = resolve(runnerTemp, `product-truth-auth-${process.pid}-${Date.now()}.json`)
+  try {
+    execFileSync(process.execPath, [
+      resolve(repoRoot, "scripts/release/refresh-product-truth-auth.mjs"),
+      "--production-env", productionEnv,
+      "--output-file", outputFile,
+    ], {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: "utf8",
+      stdio: ["ignore", "inherit", "inherit"],
+      timeout: 2 * 60_000,
+    })
+    const auth = JSON.parse(readFileSync(outputFile, "utf8"))
+    if (typeof auth.primary !== "string" || typeof auth.secondary !== "string") {
+      throw new Error("refreshed Product Truth auth output is incomplete")
+    }
+    process.env.PRODUCT_TRUTH_AUTH_BEARER = auth.primary
+    process.env.PRODUCT_TRUTH_OTHER_AUTH_BEARER = auth.secondary
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::add-mask::${auth.primary}`)
+      console.log(`::add-mask::${auth.secondary}`)
+    }
+    if (process.env.GITHUB_ENV) {
+      appendFileSync(process.env.GITHUB_ENV, `PRODUCT_TRUTH_AUTH_BEARER=${auth.primary}\nPRODUCT_TRUTH_OTHER_AUTH_BEARER=${auth.secondary}\n`)
+    }
+  } finally {
+    try { unlinkSync(outputFile) } catch { /* best-effort removal of ephemeral bearer file */ }
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -308,6 +455,13 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (!outputPath) throw new Error("Usage: node scripts/release/recover-azure-run-command.mjs --output-file <path>")
 
   const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
+  // Vercel production configuration was pulled in the immediately preceding
+  // release step. Refresh only the dedicated A5 internal certification users,
+  // export the one-run sessions to later steps, then validate their remaining
+  // lifetime before touching Azure.
+  refreshProductTruthCredentials(repoRoot)
+  validateProductTruthCredentials()
+
   const contract = loadContract()
   const gitRelease = readGitRelease(repoRoot, contract)
   assertCanonicalRelease(gitRelease)

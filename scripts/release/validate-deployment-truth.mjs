@@ -74,6 +74,7 @@ const managedRunCommand = readFileSync(join(repoRoot, "scripts/release/azure-man
 const workerDeployClient = readFileSync(join(repoRoot, "scripts/release/deploy-azure-worker.mjs"), "utf8")
 const preflightScript = readFileSync(join(repoRoot, "scripts/release/preflight-production.mjs"), "utf8")
 const parityScript = readFileSync(join(repoRoot, "scripts/release/verify-production-parity.mjs"), "utf8")
+const recoveryScript = readFileSync(join(repoRoot, "scripts/release/recover-azure-run-command.mjs"), "utf8")
 for (const invariant of [
   'sudo -u finnor git -C "$staging_dir" rev-parse HEAD',
   'sudo -u finnor git -C "$staging_dir" status --porcelain=v1 --untracked-files=all',
@@ -82,12 +83,12 @@ for (const invariant of [
 ]) {
   if (!azureDeployScript.includes(invariant)) fail(`Azure release verification lost runtime-owner Git guard: ${invariant}`)
 }
-if (!parityScript.includes("sudo -u finnor git -C '${worker.currentSymlink}' rev-parse HEAD")) {
-  fail("Azure parity verification must inspect the runtime-owned checkout as finnor")
-}
-for (const [label, source] of [["preflight", preflightScript], ["worker deploy", workerDeployClient], ["parity", parityScript]]) {
+for (const [label, source] of [["preflight", preflightScript], ["worker deploy", workerDeployClient]]) {
   if (!source.includes("runManagedAzureCommand")) fail(`Azure ${label} must use managed RunCommand`)
   if (/"run-command",\s*"invoke"/.test(source)) fail(`Azure ${label} still uses the legacy single-active action RunCommand`)
+}
+if (/import\s*\{[^}]*runManagedAzureCommand[^}]*\}/.test(parityScript)) {
+  fail("post-promotion parity must not depend on another Azure RunCommand")
 }
 for (const invariant of [
   '"run-command", "create"',
@@ -102,8 +103,28 @@ for (const invariant of [
 ]) {
   if (!managedRunCommand.includes(invariant)) fail(`managed RunCommand lost bounded cleanup invariant: ${invariant}`)
 }
+for (const invariant of [
+  "finnor-probe-",
+  "PROBE_TIMEOUT_MS",
+  "resetRunCommandExtension",
+  "transportProbe",
+  "validateProductTruthCredentials",
+  "expires too soon for production certification",
+]) {
+  if (!recoveryScript.includes(invariant)) fail(`Azure recovery lost proactive release guard: ${invariant}`)
+}
 if (!parityScript.includes("heartbeatDeadline = Date.now() + 120_000") || !parityScript.includes("observedCommit === expected.commitSha")) {
   fail("runtime parity must wait for a fresh heartbeat carrying the canonical release SHA")
+}
+for (const invariant of [
+  "worker.sseGatewayUrl",
+  "gateway?.release?.commitSha !== expected.commitSha",
+  '["buildId", expected.buildId]',
+  '["version", expected.version]',
+  '["environment", expected.environment]',
+  '["jobs", "orchestration", "realtime", "sse"]',
+]) {
+  if (!parityScript.includes(invariant)) fail(`runtime parity lost independent worker gateway invariant: ${invariant}`)
 }
 if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) {
   fail("production workflow must resolve Vercel target IDs from the canonical contract")
