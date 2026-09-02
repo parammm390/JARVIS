@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { writeFileSync } from "node:fs"
+import { appendFileSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assertCanonicalRelease, assertResolvedTarget, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
@@ -129,9 +129,8 @@ async function observeWorkerHealth(fetchImpl, worker) {
       return body.release.commitSha
     }
   } catch {
-    // Recovery is for the Azure command transport. The old FINNOR worker may be
-    // unhealthy precisely because this deployment needs to replace it, so prior
-    // application health is diagnostic only and can never block transport repair.
+    // The old worker can be unhealthy precisely because this release must replace
+    // it. Prior application health is diagnostic only, never a transport gate.
   }
   return null
 }
@@ -278,10 +277,6 @@ async function recoverStuckTransport({ exec, az, worker, expectedCommitSha, slee
     }
   } catch (error) {
     restartError = error
-    if (!RESTART_AUTHORIZATION_DENIED.test(diagnostic(error))) {
-      // A restart can itself fail transiently. Continue to the narrower extension
-      // reset rather than failing a release before trying the transport-specific repair.
-    }
   }
 
   let extensionError = null
@@ -398,17 +393,54 @@ function validateProductTruthCredentials() {
   }
 }
 
+function refreshProductTruthCredentials(repoRoot) {
+  const runnerTemp = process.env.RUNNER_TEMP?.trim()
+  if (!runnerTemp) throw new Error("RUNNER_TEMP is required for guarded Product Truth auth refresh")
+  const productionEnv = resolve(repoRoot, "finnor-os/apps/api/.vercel/.env.production.local")
+  const outputFile = resolve(runnerTemp, `product-truth-auth-${process.pid}-${Date.now()}.json`)
+  try {
+    execFileSync(process.execPath, [
+      resolve(repoRoot, "scripts/release/refresh-product-truth-auth.mjs"),
+      "--production-env", productionEnv,
+      "--output-file", outputFile,
+    ], {
+      cwd: repoRoot,
+      env: process.env,
+      encoding: "utf8",
+      stdio: ["ignore", "inherit", "inherit"],
+      timeout: 2 * 60_000,
+    })
+    const auth = JSON.parse(readFileSync(outputFile, "utf8"))
+    if (typeof auth.primary !== "string" || typeof auth.secondary !== "string") {
+      throw new Error("refreshed Product Truth auth output is incomplete")
+    }
+    process.env.PRODUCT_TRUTH_AUTH_BEARER = auth.primary
+    process.env.PRODUCT_TRUTH_OTHER_AUTH_BEARER = auth.secondary
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::add-mask::${auth.primary}`)
+      console.log(`::add-mask::${auth.secondary}`)
+    }
+    if (process.env.GITHUB_ENV) {
+      appendFileSync(process.env.GITHUB_ENV, `PRODUCT_TRUTH_AUTH_BEARER=${auth.primary}\nPRODUCT_TRUTH_OTHER_AUTH_BEARER=${auth.secondary}\n`)
+    }
+  } finally {
+    try { unlinkSync(outputFile) } catch { /* best-effort removal of ephemeral bearer file */ }
+  }
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const outputIndex = process.argv.indexOf("--output-file")
   const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
   if (!outputPath) throw new Error("Usage: node scripts/release/recover-azure-run-command.mjs --output-file <path>")
 
-  // Fail before touching Azure if the credentials required by the final deployed
-  // black-box certification are already unusable. This prevents promoting a
-  // release only to discover an expired certification identity at the last step.
+  const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
+  // Vercel production configuration was pulled in the immediately preceding
+  // release step. Refresh only the dedicated A5 internal certification users,
+  // export the one-run sessions to later steps, then validate their remaining
+  // lifetime before touching Azure.
+  refreshProductTruthCredentials(repoRoot)
   validateProductTruthCredentials()
 
-  const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)))
   const contract = loadContract()
   const gitRelease = readGitRelease(repoRoot, contract)
   assertCanonicalRelease(gitRelease)
