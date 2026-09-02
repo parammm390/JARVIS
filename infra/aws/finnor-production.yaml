@@ -298,7 +298,17 @@ Resources:
               - Sid: LoadBalancerHealth
                 Effect: Allow
                 Action:
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeListeners
+                  - elasticloadbalancing:DescribeLoadBalancerAttributes
                   - elasticloadbalancing:DescribeTargetHealth
+                Resource: '*'
+              - Sid: NetworkInspection
+                Effect: Allow
+                Action:
+                  - ec2:DescribeSecurityGroups
+                  - ec2:DescribeNatGateways
                 Resource: '*'
               - Sid: ReleaseLogs
                 Effect: Allow
