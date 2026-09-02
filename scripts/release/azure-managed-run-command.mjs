@@ -7,8 +7,8 @@ const CONTROL_PLANE_REQUEST_TIMEOUT_MS = 90 * 1000
 const CONTROL_PLANE_RETRY_ATTEMPTS = 3
 const CONTROL_PLANE_RETRY_BASE_MS = 2 * 1000
 const POLL_INTERVAL_MS = 5 * 1000
-const EXECUTION_GRACE_MS = 10 * 60 * 1000
-const CLEANUP_GRACE_MS = 6 * 60 * 1000
+const EXECUTION_GRACE_MS = 2 * 60 * 1000
+const CLEANUP_GRACE_MS = 2 * 60 * 1000
 
 function errorDiagnostic(error) {
   const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : ""
