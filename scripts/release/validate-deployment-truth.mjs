@@ -41,7 +41,7 @@ for (const obsolete of ["finnor-os/railway.json", "finnor-os/railway.staging.jso
 
 const dockerfile = readFileSync(join(repoRoot, "finnor-os/Dockerfile.worker"), "utf8")
 const dockerignore = readFileSync(join(repoRoot, "finnor-os/.dockerignore"), "utf8")
-for (const invariant of ["FROM node:22", "COPY package.json package-lock.json", "COPY apps ./apps", "COPY packages ./packages", "npm ci", "EXPOSE 8090", "apps/worker/src/index.ts"]) if (!dockerfile.includes(invariant)) fail(`worker container lost ${invariant}`)
+for (const invariant of ["FROM node:22", "COPY package.json package-lock.json", "COPY apps ./apps", "COPY packages ./packages", "COPY scripts ./scripts", "npm ci", "EXPOSE 8090", "apps/worker/src/index.ts"]) if (!dockerfile.includes(invariant)) fail(`worker container lost ${invariant}`)
 for (const invariant of [".env", ".vercel", "node_modules", ".git"]) if (!dockerignore.includes(invariant)) fail(`worker Docker context does not exclude ${invariant}`)
 const cfnPath = join(repoRoot, "infra/aws/finnor-production.yaml")
 if (!existsSync(cfnPath)) fail("AWS CloudFormation target template is missing")
@@ -57,6 +57,7 @@ const activeFiles = [
   join(repoRoot, "scripts/release/release-policy.mjs"),
   join(repoRoot, "scripts/release/preflight-production.mjs"),
   join(repoRoot, "scripts/release/deploy-aws-worker.mjs"),
+  join(repoRoot, "finnor-os/scripts/release/migrate-production.ts"),
   join(repoRoot, "scripts/release/verify-production-parity.mjs"),
   join(repoRoot, "scripts/release/deploy-production.mjs"),
   join(repoRoot, "scripts/release/certify-product-truth-deployed.mjs"),
@@ -80,6 +81,8 @@ for (const invariant of [
   "aws-actions/configure-aws-credentials@v4",
   "docker build",
   "docker run",
+  "--entrypoint npx",
+  "tsx -e",
   "docker push",
   "preflight-production.mjs",
   "configure-vercel-realtime.mjs --apply",

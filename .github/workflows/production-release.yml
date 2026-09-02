@@ -311,7 +311,7 @@ jobs:
           }
           trap cleanup EXIT
           docker build --file finnor-os/Dockerfile.worker --tag "$image" finnor-os
-          container_id="$(docker run --detach --publish 18090:8090 --entrypoint node "$image" --import tsx/esm --input-type=module -e "import {createSseGateway} from './apps/worker/src/sse/gateway.ts'; createSseGateway().listen(8090, '0.0.0.0')")"
+          container_id="$(docker run --detach --publish 18090:8090 --entrypoint npx "$image" tsx -e "import {createSseGateway} from './apps/worker/src/sse/gateway.ts'; createSseGateway().listen(8090, '0.0.0.0')")"
           ready=0
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error http://127.0.0.1:18090/healthz | node -e 'const fs=require("node:fs"); const body=JSON.parse(fs.readFileSync(0,"utf8")); if(body.ok!==true || body.realtime!==true || !body.capabilities?.includes("orchestration") || !body.capabilities?.includes("sse")) process.exit(1)'; then
