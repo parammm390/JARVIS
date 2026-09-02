@@ -50,6 +50,7 @@ const FINAL_COMPOSITION_PATHS = new Set([
   "finnor-os/architecture/p6/final-lineage.json",
   "finnor-os/architecture/p6/production-release-boundary.json",
   "finnor-os/package.json",
+  "finnor-os/package-lock.json",
   "finnor-os/scripts/p5/certify.ts",
   "finnor-os/scripts/p6/certify.ts",
   "finnor-os/scripts/p6/verify-descendant-lineage.ts",
