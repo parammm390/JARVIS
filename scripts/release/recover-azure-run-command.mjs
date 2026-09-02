@@ -245,6 +245,7 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
         )
       }
       action = "SSH_AGENT_RESTART_AND_CLEANUP"
+      remaining = []
     }
 
     if (remaining.length) {
