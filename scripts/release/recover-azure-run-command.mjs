@@ -138,17 +138,49 @@ async function waitForWorkerHealth(fetchImpl, worker, sleepAsync, now) {
   throw new Error(`Azure worker did not recover its prior healthy release after restart: ${last}`)
 }
 
-function resetRunCommandExtension(exec, az, worker, sleep) {
-  // Azure documents RemoveRunCommandLinuxExtension as the supported recovery
-  // when the Linux RunCommand extension is wedged. This stays inside the same
-  // RunCommand permission boundary already required by FINNOR's release identity
-  // and avoids requiring VM restart permission or inbound SSH.
-  runAz(exec, az, [
-    "vm", "run-command", "invoke",
+function runCommandExtensionNames(exec, az, worker) {
+  const rows = azJson(exec, az, [
+    "vm", "extension", "list",
     "--resource-group", worker.resourceGroup,
-    "--name", worker.resourceName,
-    "--command-id", "RemoveRunCommandLinuxExtension",
-  ], EXTENSION_RESET_TIMEOUT_MS)
+    "--vm-name", worker.resourceName,
+  ]) ?? []
+  return rows
+    .filter((row) => {
+      const publisher = row?.publisher ?? row?.properties?.publisher
+      const type = row?.virtualMachineExtensionType ?? row?.typePropertiesType ?? row?.properties?.type
+      return publisher === "Microsoft.CPlat.Core" && type === "RunCommandLinux"
+    })
+    .map((row) => row?.name)
+    .filter((name) => typeof name === "string" && name.length > 0)
+}
+
+function resetRunCommandExtension(exec, az, worker, sleep, now) {
+  // Do not invoke another RunCommand here: the RunCommand transport is the
+  // component that is wedged. Azure documents the underlying VM extension as
+  // Microsoft.CPlat.Core / RunCommandLinux and supports deleting that extension
+  // through the control plane. A later RunCommand reinstalls it automatically.
+  const names = runCommandExtensionNames(exec, az, worker)
+  if (!names.length) throw new Error("Azure RunCommandLinux VM extension was not found for control-plane recovery")
+
+  for (const name of names) {
+    runAz(exec, az, [
+      "vm", "extension", "delete",
+      "--resource-group", worker.resourceGroup,
+      "--vm-name", worker.resourceName,
+      "--name", name,
+      "--no-wait",
+    ], EXTENSION_RESET_TIMEOUT_MS)
+  }
+
+  const deadline = now() + EXTENSION_RESET_TIMEOUT_MS
+  let remaining = runCommandExtensionNames(exec, az, worker)
+  while (remaining.length && now() < deadline) {
+    sleep(POLL_INTERVAL_MS)
+    remaining = runCommandExtensionNames(exec, az, worker)
+  }
+  if (remaining.length) {
+    throw new Error(`Azure RunCommandLinux VM extension did not delete through the control plane: ${remaining.join(", ")}`)
+  }
   sleep(GUEST_AGENT_SETTLE_MS)
 }
 
@@ -213,12 +245,11 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
     const detail = diagnostic(error)
     if (!RESTART_AUTHORIZATION_DENIED.test(detail)) throw error
 
-    // The production identity is intentionally denied VM restart. Before any
-    // network-dependent SSH fallback, use Azure's supported RunCommand extension
-    // reset and immediately retry cleanup. Applying RunCommand later reinstalls
-    // the extension automatically.
+    // The production identity is intentionally denied VM restart. Recover the
+    // wedged RunCommand handler through the VM-extension control plane before
+    // falling back to network-dependent SSH.
     try {
-      resetRunCommandExtension(exec, az, worker, sleep)
+      resetRunCommandExtension(exec, az, worker, sleep, now)
       remaining = ownedCommands(exec, az, worker)
       issueDeletes(exec, az, worker, remaining)
       remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
@@ -228,19 +259,19 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
         return {
           ok: true,
           commitSha: expectedCommitSha,
-          action: "RUNCOMMAND_EXTENSION_RESET_AND_CLEANUP",
+          action: "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP",
           staleCommands: initial,
           priorReleaseSha,
         }
       }
     } catch (extensionError) {
       // Preserve the older SSH fallback only as a last resort. Its failure is
-      // reported together with the extension-reset diagnostic below.
+      // reported together with the control-plane extension diagnostic below.
       try {
         restartGuestAgentOverSsh(exec, az, worker)
       } catch (sshError) {
         throw new Error(
-          `Azure VM restart is unauthorized; RunCommand extension reset failed (${diagnostic(extensionError)}); guest-agent SSH recovery also failed:\n${diagnostic(sshError)}`,
+          `Azure VM restart is unauthorized; RunCommand extension control-plane reset failed (${diagnostic(extensionError)}); guest-agent SSH recovery also failed:\n${diagnostic(sshError)}`,
           { cause: sshError },
         )
       }
@@ -252,7 +283,7 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
       try {
         restartGuestAgentOverSsh(exec, az, worker)
       } catch (sshError) {
-        throw new Error(`Azure VM restart is unauthorized; RunCommand extension reset did not clear ${remaining.join(", ")}; guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
+        throw new Error(`Azure VM restart is unauthorized; RunCommand extension control-plane reset did not clear ${remaining.join(", ")}; guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
       }
       action = "SSH_AGENT_RESTART_AND_CLEANUP"
     }
