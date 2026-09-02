@@ -37,6 +37,7 @@ const FINAL_COMPOSITION_PATHS = new Set([
   ".github/workflows/production-release.yml",
   "package.json",
   "scripts/release/azure-managed-run-command.mjs",
+  "scripts/release/azure-runcommand-recovery.test.mjs",
   "scripts/release/release-policy.test.mjs",
   "scripts/release/recover-azure-run-command.mjs",
   "scripts/release/validate-deployment-truth.mjs",
