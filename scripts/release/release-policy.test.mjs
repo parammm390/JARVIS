@@ -316,6 +316,69 @@ test("Azure transport recovery restarts a healthy canonical worker only after st
   assert.equal(deletes, 2)
 })
 
+test("Azure transport recovery restarts only the guest agent over Entra SSH when VM restart is unauthorized", async () => {
+  const worker = {
+    ...contract.topology.worker,
+    sseGatewayUrl: "https://worker.example.invalid",
+  }
+  let clock = 0
+  let stale = true
+  let guestAgentRestarted = false
+  const calls = []
+  const exec = (_az, args) => {
+    calls.push(args)
+    if (args[0] === "account") return JSON.stringify({ id: worker.subscriptionId, tenantId: worker.tenantId })
+    if (args[0] === "vm" && args[1] === "show") return JSON.stringify({
+      id: worker.resourceId,
+      vmId: worker.vmId,
+      location: worker.location,
+      osProfile: { adminUsername: worker.adminUsername },
+    })
+    if (args[0] === "vm" && args[1] === "get-instance-view") return JSON.stringify({
+      statuses: [{ code: "PowerState/running", displayStatus: "VM running" }],
+      vmAgent: { statuses: [{ code: "ProvisioningState/succeeded", displayStatus: "Ready" }] },
+    })
+    if (args[0] === "vm" && args[1] === "restart") {
+      throw Object.assign(new Error("restart denied"), {
+        stderr: "AuthorizationFailed: Microsoft.Compute/virtualMachines/restart/action is not allowed",
+      })
+    }
+    if (args[0] === "extension" && args[1] === "add") return ""
+    if (args[0] === "ssh" && args[1] === "vm") {
+      guestAgentRestarted = true
+      return ""
+    }
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "list") {
+      return JSON.stringify(stale ? [{ name: `finnor-parity-${sha.slice(0, 12)}` }] : [])
+    }
+    if (args[0] === "vm" && args[1] === "run-command" && args[2] === "delete") {
+      if (guestAgentRestarted) stale = false
+      return "{}"
+    }
+    throw new Error(`unexpected Azure operation: ${args.join(" ")}`)
+  }
+  const result = await recoverAzureRunCommandTransport(
+    { worker, expectedCommitSha: sha },
+    {
+      exec,
+      sleep: (ms) => { clock += Math.max(ms, 60_000) },
+      sleepAsync: async () => {},
+      now: () => clock,
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, realtime: true, release: { commitSha: "b".repeat(40) } }),
+      }),
+    },
+  )
+  assert.equal(result.action, "SSH_AGENT_RESTART_AND_CLEANUP")
+  assert.equal(guestAgentRestarted, true)
+  assert.ok(calls.some((args) => args[0] === "extension" && args[1] === "add"))
+  const ssh = calls.find((args) => args[0] === "ssh" && args[1] === "vm")
+  assert.ok(ssh?.includes("sudo sh -c 'systemctl restart walinuxagent.service || systemctl restart waagent.service'"))
+  assert.equal(stale, false)
+})
+
 test("managed RunCommand surfaces provisioning failure without waiting for the script deadline", () => {
   const worker = { resourceGroup: "canonical-rg", resourceName: "canonical-vm", location: "North Central US" }
   let exists = false
