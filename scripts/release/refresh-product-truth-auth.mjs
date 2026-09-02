@@ -2,7 +2,6 @@ import { randomBytes } from "node:crypto"
 import { chmodSync, existsSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
-import { fileURLToPath } from "node:url"
 
 const requireFromOs = createRequire(new URL("../../finnor-os/package.json", import.meta.url))
 const { Client: PgClient } = requireFromOs("pg")
