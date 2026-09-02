@@ -13,6 +13,8 @@ const FINAL_CLEANUP_MS = 6 * 60_000
 const RESTART_TIMEOUT_MS = 10 * 60_000
 const READY_TIMEOUT_MS = 5 * 60_000
 const HEALTH_TIMEOUT_MS = 3 * 60_000
+const GUEST_AGENT_SETTLE_MS = 20_000
+const RESTART_AUTHORIZATION_DENIED = /AuthorizationFailed[\s\S]*virtualMachines\/restart\/action/i
 
 function defaultSleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
@@ -26,6 +28,14 @@ function diagnostic(error) {
 
 function runAz(exec, az, args, timeout = 90_000) {
   return exec(az, [...args, "--only-show-errors", "-o", "json"], {
+    encoding: "utf8",
+    maxBuffer: 32 * 1024 * 1024,
+    timeout,
+  })
+}
+
+function runRawAz(exec, az, args, timeout = 90_000) {
+  return exec(az, args, {
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
     timeout,
@@ -127,6 +137,24 @@ async function waitForWorkerHealth(fetchImpl, worker, sleepAsync, now) {
   throw new Error(`Azure worker did not recover its prior healthy release after restart: ${last}`)
 }
 
+function restartGuestAgentOverSsh(exec, az, worker) {
+  // The CLI extension is installed in the ephemeral release runner only.  The
+  // remote command is deliberately limited to the canonical worker's Azure
+  // guest agent; it neither changes application code nor grants any authority.
+  runRawAz(exec, az, ["extension", "add", "--name", "ssh", "--yes", "--only-show-errors"], RESTART_TIMEOUT_MS)
+  runRawAz(exec, az, [
+    "ssh", "vm",
+    "--resource-group", worker.resourceGroup,
+    "--name", worker.resourceName,
+    "--resource-type", "Microsoft.Compute/virtualMachines",
+    "--yes-without-prompt",
+    "--",
+    "-o", "BatchMode=yes",
+    "-o", "ConnectTimeout=30",
+    "sudo sh -c 'systemctl restart walinuxagent.service || systemctl restart waagent.service'",
+  ], RESTART_TIMEOUT_MS)
+}
+
 export async function recoverAzureRunCommandTransport({ worker, expectedCommitSha, az = process.env.AZURE_CLI || "az" }, {
   exec = execFileSync,
   fetchImpl = globalThis.fetch,
@@ -163,7 +191,20 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
     return { ok: true, commitSha: expectedCommitSha, action: "CLEANUP_ONLY", staleCommands: initial, priorReleaseSha: null }
   }
 
-  runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
+  let action = "RESTART_AND_CLEANUP"
+  try {
+    runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
+  } catch (error) {
+    const detail = diagnostic(error)
+    if (!RESTART_AUTHORIZATION_DENIED.test(detail)) throw error
+    try {
+      restartGuestAgentOverSsh(exec, az, worker)
+    } catch (sshError) {
+      throw new Error(`Azure VM restart is unauthorized and guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
+    }
+    action = "SSH_AGENT_RESTART_AND_CLEANUP"
+  }
+  if (action === "SSH_AGENT_RESTART_AND_CLEANUP") sleep(GUEST_AGENT_SETTLE_MS)
   waitForWorkerReady(exec, az, worker, sleep, now)
   const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
 
@@ -174,7 +215,7 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
     throw new Error(`Azure RunCommand transport recovery left FINNOR-owned resources after restart: ${remaining.join(", ")}`)
   }
 
-  return { ok: true, commitSha: expectedCommitSha, action: "RESTART_AND_CLEANUP", staleCommands: initial, priorReleaseSha }
+  return { ok: true, commitSha: expectedCommitSha, action, staleCommands: initial, priorReleaseSha }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
