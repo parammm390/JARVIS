@@ -4,18 +4,19 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { assertCanonicalRelease, assertResolvedTarget, expectedRelease, loadContract, readGitRelease } from "./release-policy.mjs"
 
-const OWNED_COMMAND = /^finnor-(?:preflight|deploy|parity)-[0-9a-f]{12}$/
+const OWNED_COMMAND = /^finnor-(?:probe|preflight|deploy|parity)-[0-9a-f]{12}$/
 const NOT_FOUND = /(?:ResourceNotFound|could not be found|was not found|does not exist)/i
 const DELETE_IN_PROGRESS = /(?:AnotherOperationInProgress|OperationPreempted|Conflict|HTTP\s+409|operation.*in progress)/i
+const TERMINAL_FAILURE_STATES = new Set(["Failed", "Canceled", "Cancelled", "TimedOut", "Timedout"])
 const POLL_INTERVAL_MS = 5_000
-const INITIAL_CLEANUP_MS = 60_000
-const FINAL_CLEANUP_MS = 6 * 60_000
+const INITIAL_CLEANUP_MS = 45_000
+const FINAL_CLEANUP_MS = 2 * 60_000
 const RESTART_TIMEOUT_MS = 10 * 60_000
 const EXTENSION_RESET_TIMEOUT_MS = 5 * 60_000
 const READY_TIMEOUT_MS = 5 * 60_000
-const HEALTH_TIMEOUT_MS = 3 * 60_000
 const GUEST_AGENT_SETTLE_MS = 20_000
-const RESTART_AUTHORIZATION_DENIED = /AuthorizationFailed[\s\S]*virtualMachines\/restart\/action/i
+const PROBE_TIMEOUT_MS = 90_000
+const PROBE_GUEST_TIMEOUT_SECONDS = 30
 
 function defaultSleep(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
@@ -116,28 +117,6 @@ function waitForWorkerReady(exec, az, worker, sleep, now) {
   }
 }
 
-async function waitForWorkerHealth(fetchImpl, worker, sleepAsync, now) {
-  const deadline = now() + HEALTH_TIMEOUT_MS
-  let last = "no response"
-  while (now() < deadline) {
-    try {
-      const response = await fetchImpl(`${worker.sseGatewayUrl}/healthz`, {
-        headers: { accept: "application/json", "cache-control": "no-cache" },
-        signal: AbortSignal.timeout(10_000),
-      })
-      const body = await response.json().catch(() => null)
-      if (response.ok && body?.ok === true && body?.realtime === true && typeof body?.release?.commitSha === "string") {
-        return body.release.commitSha
-      }
-      last = `HTTP ${response.status}`
-    } catch (error) {
-      last = diagnostic(error)
-    }
-    await sleepAsync(POLL_INTERVAL_MS)
-  }
-  throw new Error(`Azure worker did not recover its prior healthy release after restart: ${last}`)
-}
-
 function runCommandExtensionNames(exec, az, worker) {
   const rows = azJson(exec, az, [
     "vm", "extension", "list",
@@ -155,12 +134,8 @@ function runCommandExtensionNames(exec, az, worker) {
 }
 
 function resetRunCommandExtension(exec, az, worker, sleep, now) {
-  // Do not invoke another RunCommand here: the RunCommand transport is the
-  // component that is wedged. Azure documents the underlying VM extension as
-  // Microsoft.CPlat.Core / RunCommandLinux and supports deleting that extension
-  // through the control plane. A later RunCommand reinstalls it automatically.
   const names = runCommandExtensionNames(exec, az, worker)
-  if (!names.length) throw new Error("Azure RunCommandLinux VM extension was not found for control-plane recovery")
+  if (!names.length) return false
 
   for (const name of names) {
     runAz(exec, az, [
@@ -182,12 +157,10 @@ function resetRunCommandExtension(exec, az, worker, sleep, now) {
     throw new Error(`Azure RunCommandLinux VM extension did not delete through the control plane: ${remaining.join(", ")}`)
   }
   sleep(GUEST_AGENT_SETTLE_MS)
+  return true
 }
 
 function restartGuestAgentOverSsh(exec, az, worker) {
-  // The CLI extension is installed in the ephemeral release runner only.  The
-  // remote command is deliberately limited to the canonical worker's Azure
-  // guest agent; it neither changes application code nor grants any authority.
   runRawAz(exec, az, ["extension", "add", "--name", "ssh", "--yes", "--only-show-errors"], RESTART_TIMEOUT_MS)
   runRawAz(exec, az, [
     "ssh", "vm",
@@ -202,11 +175,138 @@ function restartGuestAgentOverSsh(exec, az, worker) {
   ], RESTART_TIMEOUT_MS)
 }
 
+function showRunCommand(exec, az, worker, name) {
+  try {
+    return azJson(exec, az, [
+      "vm", "run-command", "show",
+      "--resource-group", worker.resourceGroup,
+      "--vm-name", worker.resourceName,
+      "--run-command-name", name,
+      "--instance-view",
+    ])
+  } catch (error) {
+    if (NOT_FOUND.test(diagnostic(error))) return null
+    throw error
+  }
+}
+
+function probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now) {
+  const name = `finnor-probe-${expectedCommitSha.slice(0, 12)}`
+  const marker = `FINNOR_AZURE_TRANSPORT_OK ${expectedCommitSha}`
+
+  issueDeletes(exec, az, worker, [name])
+  const preexisting = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+  if (preexisting.includes(name)) throw new Error(`Azure transport probe could not clear prior ${name}`)
+
+  runAz(exec, az, [
+    "vm", "run-command", "create",
+    "--resource-group", worker.resourceGroup,
+    "--vm-name", worker.resourceName,
+    "--location", worker.location,
+    "--run-command-name", name,
+    "--async-execution", "false",
+    "--no-wait",
+    "--timeout-in-seconds", String(PROBE_GUEST_TIMEOUT_SECONDS),
+    "--script", `printf '%s\\n' '${marker}'`,
+  ])
+
+  const deadline = now() + PROBE_TIMEOUT_MS
+  let last = "command not visible"
+  while (now() < deadline) {
+    const result = showRunCommand(exec, az, worker, name)
+    if (!result) {
+      sleep(POLL_INTERVAL_MS)
+      continue
+    }
+    const view = result.instanceView ?? result.properties?.instanceView
+    const provisioningState = result.provisioningState ?? result.properties?.provisioningState
+    const executionState = view?.executionState
+    const exitCode = Number(view?.exitCode)
+    const output = typeof view?.output === "string" ? view.output : ""
+    const error = typeof view?.error === "string" ? view.error : ""
+    last = `provisioning=${provisioningState ?? "unknown"}, execution=${executionState ?? "unknown"}, exit=${Number.isFinite(exitCode) ? exitCode : "missing"}`
+
+    if (executionState === "Succeeded") {
+      if (exitCode !== 0 || !output.includes(marker)) {
+        throw new Error(`Azure transport probe returned an invalid terminal result (${last}):\n${error || output || "no output"}`)
+      }
+      issueDeletes(exec, az, worker, [name])
+      const remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+      if (remaining.includes(name)) throw new Error(`Azure transport probe succeeded but ${name} could not be cleaned up`)
+      return
+    }
+    if (TERMINAL_FAILURE_STATES.has(executionState) || TERMINAL_FAILURE_STATES.has(provisioningState)) {
+      throw new Error(`Azure transport probe failed (${last}):\n${error || output || "no output"}`)
+    }
+    sleep(POLL_INTERVAL_MS)
+  }
+  throw new Error(`Azure transport probe did not reach terminal success within ${PROBE_TIMEOUT_MS / 1000}s (${last})`)
+}
+
+function cleanupOwnedCommands(exec, az, worker, timeoutMs, sleep, now) {
+  const names = ownedCommands(exec, az, worker)
+  issueDeletes(exec, az, worker, names)
+  return waitForNoOwnedCommands(exec, az, worker, timeoutMs, sleep, now)
+}
+
+function recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now) {
+  let extensionReset = false
+  let usedSsh = false
+  let extensionError = null
+
+  try {
+    extensionReset = resetRunCommandExtension(exec, az, worker, sleep, now)
+  } catch (error) {
+    extensionError = error
+  }
+
+  waitForWorkerReady(exec, az, worker, sleep, now)
+  let remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+
+  if (remaining.length || extensionError) {
+    try {
+      restartGuestAgentOverSsh(exec, az, worker)
+      usedSsh = true
+      sleep(GUEST_AGENT_SETTLE_MS)
+      waitForWorkerReady(exec, az, worker, sleep, now)
+      remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+    } catch (sshError) {
+      const prefix = extensionError ? `RunCommand extension reset failed (${diagnostic(extensionError)}); ` : ""
+      throw new Error(`${prefix}guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
+    }
+  }
+
+  if (remaining.length) {
+    throw new Error(`Azure RunCommand transport recovery left FINNOR-owned resources: ${remaining.join(", ")}`)
+  }
+
+  try {
+    probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+  } catch (probeError) {
+    if (usedSsh) throw probeError
+    try {
+      restartGuestAgentOverSsh(exec, az, worker)
+      usedSsh = true
+      sleep(GUEST_AGENT_SETTLE_MS)
+      waitForWorkerReady(exec, az, worker, sleep, now)
+      remaining = cleanupOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
+      if (remaining.length) throw new Error(`stale FINNOR RunCommands remain after SSH recovery: ${remaining.join(", ")}`)
+      probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    } catch (sshError) {
+      throw new Error(`Azure RunCommand transport remained unhealthy after control-plane recovery (${diagnostic(probeError)}); SSH fallback failed:\n${diagnostic(sshError)}`, { cause: sshError })
+    }
+  }
+
+  return usedSsh
+    ? "SSH_AGENT_RESTART_AND_CLEANUP"
+    : extensionReset
+      ? "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP"
+      : "TRANSPORT_PROBE_RECOVERY"
+}
+
 export async function recoverAzureRunCommandTransport({ worker, expectedCommitSha, az = process.env.AZURE_CLI || "az" }, {
   exec = execFileSync,
-  fetchImpl = globalThis.fetch,
   sleep = defaultSleep,
-  sleepAsync = (ms) => new Promise((resolveDelay) => setTimeout(resolveDelay, ms)),
   now = Date.now,
 } = {}) {
   if (!/^[0-9a-f]{40}$/.test(expectedCommitSha)) throw new Error("transport recovery requires the exact lowercase release SHA")
@@ -223,83 +323,33 @@ export async function recoverAzureRunCommandTransport({ worker, expectedCommitSh
     adminUsername: vm?.osProfile?.adminUsername,
   }, ["resourceId", "vmId", "location", "adminUsername"])
 
-  const initial = ownedCommands(exec, az, worker)
-  if (!initial.length) {
-    const state = workerState(exec, az, worker)
-    if (state.power !== "VM running" || !state.agentReady) {
-      throw new Error(`Azure worker is not ready and has no FINNOR-owned stale RunCommand to justify recovery (power=${state.power ?? "unknown"}, agentReady=${state.agentReady})`)
-    }
-    return { ok: true, commitSha: expectedCommitSha, action: "NONE", staleCommands: [], priorReleaseSha: null }
-  }
-
-  issueDeletes(exec, az, worker, initial)
-  let remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
-  if (!remaining.length) {
-    return { ok: true, commitSha: expectedCommitSha, action: "CLEANUP_ONLY", staleCommands: initial, priorReleaseSha: null }
-  }
-
-  let action = "RESTART_AND_CLEANUP"
-  try {
-    runAz(exec, az, ["vm", "restart", "--ids", worker.resourceId], RESTART_TIMEOUT_MS)
-  } catch (error) {
-    const detail = diagnostic(error)
-    if (!RESTART_AUTHORIZATION_DENIED.test(detail)) throw error
-
-    // The production identity is intentionally denied VM restart. Recover the
-    // wedged RunCommand handler through the VM-extension control plane before
-    // falling back to network-dependent SSH.
-    try {
-      resetRunCommandExtension(exec, az, worker, sleep, now)
-      remaining = ownedCommands(exec, az, worker)
-      issueDeletes(exec, az, worker, remaining)
-      remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-      if (!remaining.length) {
-        waitForWorkerReady(exec, az, worker, sleep, now)
-        const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
-        return {
-          ok: true,
-          commitSha: expectedCommitSha,
-          action: "RUNCOMMAND_EXTENSION_CONTROL_PLANE_RESET_AND_CLEANUP",
-          staleCommands: initial,
-          priorReleaseSha,
-        }
-      }
-    } catch (extensionError) {
-      // Preserve the older SSH fallback only as a last resort. Its failure is
-      // reported together with the control-plane extension diagnostic below.
-      try {
-        restartGuestAgentOverSsh(exec, az, worker)
-      } catch (sshError) {
-        throw new Error(
-          `Azure VM restart is unauthorized; RunCommand extension control-plane reset failed (${diagnostic(extensionError)}); guest-agent SSH recovery also failed:\n${diagnostic(sshError)}`,
-          { cause: sshError },
-        )
-      }
-      action = "SSH_AGENT_RESTART_AND_CLEANUP"
-      remaining = []
-    }
-
-    if (remaining.length) {
-      try {
-        restartGuestAgentOverSsh(exec, az, worker)
-      } catch (sshError) {
-        throw new Error(`Azure VM restart is unauthorized; RunCommand extension control-plane reset did not clear ${remaining.join(", ")}; guest-agent SSH recovery failed:\n${diagnostic(sshError)}`, { cause: sshError })
-      }
-      action = "SSH_AGENT_RESTART_AND_CLEANUP"
-    }
-  }
-  if (action === "SSH_AGENT_RESTART_AND_CLEANUP") sleep(GUEST_AGENT_SETTLE_MS)
   waitForWorkerReady(exec, az, worker, sleep, now)
-  const priorReleaseSha = await waitForWorkerHealth(fetchImpl, worker, sleepAsync, now)
+  const initial = ownedCommands(exec, az, worker)
+  let action = "NONE"
 
-  remaining = ownedCommands(exec, az, worker)
-  issueDeletes(exec, az, worker, remaining)
-  remaining = waitForNoOwnedCommands(exec, az, worker, FINAL_CLEANUP_MS, sleep, now)
-  if (remaining.length) {
-    throw new Error(`Azure RunCommand transport recovery left FINNOR-owned resources after restart: ${remaining.join(", ")}`)
+  if (initial.length) {
+    issueDeletes(exec, az, worker, initial)
+    const remaining = waitForNoOwnedCommands(exec, az, worker, INITIAL_CLEANUP_MS, sleep, now)
+    if (!remaining.length) action = "CLEANUP_ONLY"
+    else action = recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now)
   }
 
-  return { ok: true, commitSha: expectedCommitSha, action, staleCommands: initial, priorReleaseSha }
+  if (action === "NONE" || action === "CLEANUP_ONLY") {
+    try {
+      probeRunCommandTransport(exec, az, worker, expectedCommitSha, sleep, now)
+    } catch {
+      action = recoverAndProbe(exec, az, worker, expectedCommitSha, sleep, now)
+    }
+  }
+
+  return {
+    ok: true,
+    commitSha: expectedCommitSha,
+    action,
+    staleCommands: initial,
+    priorReleaseSha: null,
+    transportProbe: "PASS",
+  }
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
