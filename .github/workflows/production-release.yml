@@ -198,9 +198,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     environment: production
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: finnor
+          POSTGRES_PASSWORD: finnor
+          POSTGRES_DB: finnor
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U finnor" --health-interval 5s
+          --health-timeout 5s --health-retries 10
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      AWS_ROLE_ARN: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+      AWS_ROLE_ARN: ${{ vars.AWS_GITHUB_ACTIONS_ROLE_ARN || 'arn:aws:iam::601804670058:role/finnor-github-actions-deploy' }}
       AWS_REGION: us-east-1
       FINNOR_RELEASE_SOURCE: github-actions
       CI: "true"
@@ -311,10 +322,33 @@ jobs:
           }
           trap cleanup EXIT
           docker build --file finnor-os/Dockerfile.worker --tag "$image" finnor-os
-          container_id="$(docker run --detach --publish 18090:8090 --entrypoint npx "$image" tsx -e "import {createSseGateway} from './apps/worker/src/sse/gateway.ts'; createSseGateway().listen(8090, '0.0.0.0')")"
+          for attempt in $(seq 1 30); do
+            pg_isready --host 127.0.0.1 --port 5432 --username finnor --dbname finnor && break
+            sleep 2
+          done
+          pg_isready --host 127.0.0.1 --port 5432 --username finnor --dbname finnor
+          container_id="$(docker run --detach --network host \
+            --env NODE_ENV=test \
+            --env FINNOR_ENVIRONMENT=production \
+            --env FINNOR_RELEASE_SOURCE=github-actions \
+            --env FINNOR_COMMIT_SHA="$FINNOR_COMMIT_SHA" \
+            --env FINNOR_BUILD_ID="$FINNOR_BUILD_ID" \
+            --env FINNOR_VERSION="$FINNOR_VERSION" \
+            --env FINNOR_CORE_CERTIFICATION_ID=container-smoke \
+            --env FINNOR_WORKER_DEPLOYMENT_ID=ecs:container-smoke \
+            --env FINNOR_WORKER_CAPABILITIES=jobs,orchestration,computer,event-wake,connection-health,realtime,sse \
+            --env SECRETS_PROVIDER=env \
+            --env DATABASE_URL=postgres://finnor:finnor@127.0.0.1:5432/finnor \
+            --env POSTGRES_URL_NON_POOLING=postgres://finnor:finnor@127.0.0.1:5432/finnor \
+            --env SUPABASE_URL=https://kpxrnonhnhexutvdywbh.supabase.co \
+            --env JARVIS_SSE_ALLOWED_ORIGINS=https://finnorai.com \
+            --env WORKER_CONCURRENCY=2 \
+            --env WORKER_INTERACTIVE_RESERVED_CONCURRENCY=1 \
+            --env FINNOR_DB_POOL_MAX=4 \
+            "$image")"
           ready=0
           for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error http://127.0.0.1:18090/healthz | node -e 'const fs=require("node:fs"); const body=JSON.parse(fs.readFileSync(0,"utf8")); if(body.ok!==true || body.realtime!==true || !body.capabilities?.includes("orchestration") || !body.capabilities?.includes("sse")) process.exit(1)'; then
+            if curl --fail --silent --show-error http://127.0.0.1:8090/healthz | node -e 'const fs=require("node:fs"); const body=JSON.parse(fs.readFileSync(0,"utf8")); if(body.ok!==true || body.realtime!==true || body.release?.commitSha!==process.env.FINNOR_COMMIT_SHA || body.release?.buildId!==process.env.FINNOR_BUILD_ID || body.release?.version!==process.env.FINNOR_VERSION || !body.capabilities?.includes("orchestration") || !body.capabilities?.includes("sse")) process.exit(1)'; then
               ready=1
               break
             fi
@@ -325,7 +359,9 @@ jobs:
             echo "::error::worker container smoke test did not expose /healthz"
             exit 1
           fi
-          docker stop "$container_id" >/dev/null
+          docker stop --time 30 "$container_id" >/dev/null
+          exit_code="$(docker inspect --format '{{.State.ExitCode}}' "$container_id")"
+          test "$exit_code" = "0" || { docker logs "$container_id" || true; echo "::error::worker did not exit cleanly after SIGTERM (exit=$exit_code)"; exit 1; }
           container_id=""
           registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.${AWS_REGION}.amazonaws.com"
           aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$registry"
