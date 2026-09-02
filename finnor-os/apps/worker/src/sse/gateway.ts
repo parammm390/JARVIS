@@ -179,7 +179,7 @@ export function createSseGateway(): http.Server {
         "x-finnor-environment": release.environment,
         "x-finnor-version": release.version,
       });
-      // Health is the deployment contract consumed by the Azure release guard.
+      // Health is the deployment contract consumed by the AWS release guard.
       // Keep the explicit realtime capability here so a worker that only serves
       // the job loop cannot be mistaken for a ready SSE gateway.
       res.end(JSON.stringify({ ok: true, realtime: true, capabilities, release }));

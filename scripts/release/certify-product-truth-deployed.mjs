@@ -21,6 +21,7 @@ if (!token) throw new Error("PRODUCT_TRUTH_AUTH_BEARER is required for deployed 
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
 const frontendUrl = contract.topology.frontend.productionUrl
 const apiUrl = contract.topology.api.productionUrl
+const worker = contract.topology.worker
 const workerUrl = contract.topology.worker.sseGatewayUrl
 const expectedSha = gitRelease.head
 const commonHeaders = {
@@ -609,8 +610,15 @@ async function restartWorkerGateway() {
   if (process.env.PRODUCT_TRUTH_RUN_WORKER_RESTART !== "1") throw new Error("PRODUCT_TRUTH_RUN_WORKER_RESTART=1 is required for worker-restart certification")
   const { execFile } = await import("node:child_process")
   await new Promise((resolvePromise, reject) => {
-    execFile("az", ["vm", "restart", "--ids", contract.topology.worker.resourceId, "--only-show-errors"], { timeout: 120_000 }, (error, stdout, stderr) => {
-      if (error) reject(new Error(`Azure worker restart failed: ${String(stderr || stdout).slice(0, 400)}`))
+    execFile("aws", [
+      "ecs", "update-service",
+      "--cluster", worker.clusterName,
+      "--service", worker.serviceName,
+      "--force-new-deployment",
+      "--region", worker.region,
+      "--no-cli-pager",
+    ], { timeout: 120_000, env: { ...process.env, AWS_PAGER: "" } }, (error, stdout, stderr) => {
+      if (error) reject(new Error(`ECS worker restart failed: ${String(stderr || stdout).slice(0, 400)}`))
       else resolve(stdout)
     })
   })
