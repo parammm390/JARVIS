@@ -39,6 +39,12 @@ function workerUnavailable(message: string): Error & { status: number; code: str
 
 /** Fail closed before accepting business Work that needs the worker fleet. */
 export async function requireWorkerFleetReady(): Promise<void> {
+  // Integration tests exercise the in-process orchestrator without starting a
+  // worker container. Keep that fixture-only path available, while production
+  // (including CI's production release profile) remains fail-closed on the
+  // exact ECS heartbeat contract below.
+  if (process.env.NODE_ENV === "test" && process.env.FINNOR_ENVIRONMENT !== "production") return;
+
   let readiness: WorkerFleetReadiness;
   try {
     readiness = await readWorkerFleetReadiness();
