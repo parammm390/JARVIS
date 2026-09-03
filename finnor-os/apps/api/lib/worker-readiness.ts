@@ -17,6 +17,9 @@ export async function readWorkerFleetReadiness(): Promise<WorkerFleetReadiness> 
          WHERE service='worker'
            AND migration_head=$1
            AND ($2::text IS NULL OR release_sha=$2)
+           AND deployment_id LIKE 'ecs:%'
+           AND environment='production'
+           AND capabilities @> ARRAY['jobs','orchestration','realtime','sse']::text[]
            AND last_beat_at>now()-interval '90 seconds') AS healthy_workers`,
     [CURRENT_MIGRATION_HEAD, process.env.FINNOR_COMMIT_SHA?.trim() || null],
   );

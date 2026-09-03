@@ -45,7 +45,7 @@ try {
              migration_head,deployment_id,capabilities,environment,
              extract(epoch FROM (now()-last_beat_at))::int AS age_seconds
         FROM finnor_os.service_release_heartbeats
-       WHERE service='worker'
+       WHERE service='worker' AND deployment_id LIKE 'ecs:%'
        ORDER BY last_beat_at DESC
        LIMIT 1
     `)
@@ -79,13 +79,10 @@ try {
   await client.end()
 }
 
-// deploy-azure-worker already proves the exact checkout/current symlink, systemd
-// unit, release environment, loopback health and TLS before returning success.
-// runManagedAzureCommand is intentionally not invoked again here after promotion:
-// doing so adds no independent release truth and turns the same Azure transport
-// into a post-mutation failure point. Post-deploy parity instead uses two
-// independent runtime signals: the durable worker heartbeat and public HTTPS
-// gateway health contract.
+// The AWS deployer already proves the exact immutable image, ECS task revision,
+// ALB target health, and public HTTPS health contract before returning success.
+// Post-promotion parity uses two independent runtime signals: the durable worker
+// heartbeat and the public HTTPS gateway health contract.
 const worker = contract.topology.worker
 const gatewayResponse = await fetch(`${worker.sseGatewayUrl}/healthz`, {
   headers: { accept: "application/json", "cache-control": "no-cache" },
