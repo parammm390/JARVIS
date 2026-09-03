@@ -312,6 +312,21 @@ jobs:
           echo "FINNOR_CORE_CERTIFICATION_FILE=${artifacts[0]}" >> "$GITHUB_ENV"
           echo "FINNOR_CORE_CERTIFICATION_ID=${core_id}" >> "$GITHUB_ENV"
 
+      - name: Pull protected production database configuration
+        run: |
+          VERCEL_ORG_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.organizationId")"
+          VERCEL_PROJECT_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.projectId")"
+          export VERCEL_ORG_ID VERCEL_PROJECT_ID
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+        working-directory: finnor-os/apps/api
+
+      - name: Validate Product Truth auth chain before expensive mutation
+        run: |
+          set -euo pipefail
+          node scripts/release/refresh-product-truth-auth.mjs \
+            --production-env finnor-os/apps/api/.vercel/.env.production.local \
+            --validate-only
+
       - name: Build, smoke-test, and push exact worker image to ECR
         run: |
           set -euo pipefail
@@ -372,14 +387,6 @@ jobs:
           test "$digest" != ""
           echo "FINNOR_ECR_IMAGE_DIGEST=$digest" >> "$GITHUB_ENV"
           echo "FINNOR_ECR_IMAGE_URI=$registry/finnor-worker@$digest" >> "$GITHUB_ENV"
-
-      - name: Pull protected production database configuration
-        run: |
-          VERCEL_ORG_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.organizationId")"
-          VERCEL_PROJECT_ID="$(node -p "require('../../../infra/deployment/production.contract.json').topology.api.projectId")"
-          export VERCEL_ORG_ID VERCEL_PROJECT_ID
-          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
-        working-directory: finnor-os/apps/api
 
       - name: Preflight every AWS, Vercel, and database production target
         run: |
@@ -450,28 +457,25 @@ jobs:
       - name: Install deployed browser certification runtime
         run: npx playwright install --with-deps chromium
 
-      - name: Refresh deployed Product Truth authentication
-        run: |
-          set -euo pipefail
-          auth_file="$RUNNER_TEMP/product-truth-auth.json"
-          node scripts/release/refresh-product-truth-auth.mjs \
-            --production-env finnor-os/apps/api/.vercel/.env.production.local \
-            --output-file "$auth_file"
-          primary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).primary' "$auth_file")"
-          secondary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).secondary' "$auth_file")"
-          test -n "$primary"
-          test -n "$secondary"
-          echo "::add-mask::$primary"
-          echo "::add-mask::$secondary"
-          printf 'PRODUCT_TRUTH_AUTH_BEARER=%s\n' "$primary" >> "$GITHUB_ENV"
-          printf 'PRODUCT_TRUTH_OTHER_AUTH_BEARER=%s\n' "$secondary" >> "$GITHUB_ENV"
-          rm -f "$auth_file"
-
       - name: Certify deployed Human Black-Box behavior twice
         run: |
-          set -o pipefail
+          set -euo pipefail
           for run in 1 2; do
-            PRODUCT_TRUTH_CERTIFICATION_RUN="$run" node scripts/release/certify-product-truth-deployed.mjs \
+            auth_file="$RUNNER_TEMP/product-truth-auth-run-$run.json"
+            node scripts/release/refresh-product-truth-auth.mjs \
+              --production-env finnor-os/apps/api/.vercel/.env.production.local \
+              --output-file "$auth_file"
+            primary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).primary' "$auth_file")"
+            secondary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).secondary' "$auth_file")"
+            test -n "$primary"
+            test -n "$secondary"
+            echo "::add-mask::$primary"
+            echo "::add-mask::$secondary"
+            export PRODUCT_TRUTH_AUTH_BEARER="$primary"
+            export PRODUCT_TRUTH_OTHER_AUTH_BEARER="$secondary"
+            rm -f "$auth_file"
+            NODE_OPTIONS="--require=$GITHUB_WORKSPACE/.github/scripts/certification-aws-hardening.cjs ${NODE_OPTIONS:-}" \
+              PRODUCT_TRUTH_CERTIFICATION_RUN="$run" node scripts/release/certify-product-truth-deployed.mjs \
               | tee "$RUNNER_TEMP/human-black-box-run-$run.json"
           done
           node scripts/release/verify-consecutive-human-certifications.mjs \
