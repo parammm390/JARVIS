@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import test from "node:test"
 import {
   assertAlbTargetsHealthy,
@@ -92,10 +94,15 @@ test("active release path has no Azure or static worker AWS credential seam", ()
 
 test("the post-deploy Product Truth tail is preflighted before spend and has no release-time Secrets Manager dependency", () => {
   const workflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
-  const refresh = readFileSync(new URL("./refresh-product-truth-auth.mjs", import.meta.url), "utf8")
-  const restartHardening = readFileSync(new URL("../../.github/scripts/certification-aws-hardening.cjs", import.meta.url), "utf8")
+  const refreshUrl = new URL("./refresh-product-truth-auth.mjs", import.meta.url)
+  const restartUrl = new URL("../../.github/scripts/certification-aws-hardening.cjs", import.meta.url)
+  const refresh = readFileSync(refreshUrl, "utf8")
+  const restartHardening = readFileSync(restartUrl, "utf8")
   const cfn = readFileSync(new URL("../../infra/aws/finnor-production.yaml", import.meta.url), "utf8")
   const githubRole = cfn.slice(cfn.indexOf("  GitHubActionsRole:"), cfn.indexOf("  AlbSecurityGroup:"))
+
+  execFileSync(process.execPath, ["--check", fileURLToPath(refreshUrl)], { stdio: "pipe" })
+  execFileSync(process.execPath, ["--check", fileURLToPath(restartUrl)], { stdio: "pipe" })
 
   assert.match(refresh, /SUPABASE_SERVICE_ROLE_KEY\?\.trim\(\)/)
   assert.match(refresh, /protected production env is missing Supabase admin configuration/)
