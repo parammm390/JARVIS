@@ -450,6 +450,23 @@ jobs:
       - name: Install deployed browser certification runtime
         run: npx playwright install --with-deps chromium
 
+      - name: Refresh deployed Product Truth authentication
+        run: |
+          set -euo pipefail
+          auth_file="$RUNNER_TEMP/product-truth-auth.json"
+          node scripts/release/refresh-product-truth-auth.mjs \
+            --production-env finnor-os/apps/api/.vercel/.env.production.local \
+            --output-file "$auth_file"
+          primary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).primary' "$auth_file")"
+          secondary="$(node -p 'JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8")).secondary' "$auth_file")"
+          test -n "$primary"
+          test -n "$secondary"
+          echo "::add-mask::$primary"
+          echo "::add-mask::$secondary"
+          printf 'PRODUCT_TRUTH_AUTH_BEARER=%s\n' "$primary" >> "$GITHUB_ENV"
+          printf 'PRODUCT_TRUTH_OTHER_AUTH_BEARER=%s\n' "$secondary" >> "$GITHUB_ENV"
+          rm -f "$auth_file"
+
       - name: Certify deployed Human Black-Box behavior twice
         run: |
           set -o pipefail

@@ -32,13 +32,8 @@ async function resolveManagedSecret(name) {
   try { mapping = JSON.parse(process.env.FINNOR_SECRET_IDS || "{}") } catch { throw new Error("FINNOR_SECRET_IDS is not valid JSON") }
   const secretId = mapping?.[name]
   if (!secretId) return process.env[name]
-  if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) throw new Error("managed-secret environment is missing AWS credentials")
   const client = new SecretsManagerClient({
     region: process.env.AWS_REGION || process.env.AWS_BEDROCK_REGION || "us-east-1",
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    },
   })
   const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }))
   const raw = response.SecretString ?? (response.SecretBinary ? Buffer.from(response.SecretBinary).toString("utf8") : "")
