@@ -427,10 +427,11 @@ jobs:
         working-directory: finnor-os
 
       - name: Deploy and verify AWS ECS worker and embedded orchestrator
-        run: node scripts/release/deploy-aws-worker.mjs \
-          --preflight-evidence "$FINNOR_PREFLIGHT_EVIDENCE" \
-          --database-env finnor-os/apps/api/.vercel/.env.production.local \
-          --image-digest "$FINNOR_ECR_IMAGE_DIGEST"
+        run: |
+          node scripts/release/deploy-aws-worker.mjs \
+            --preflight-evidence "$FINNOR_PREFLIGHT_EVIDENCE" \
+            --database-env finnor-os/apps/api/.vercel/.env.production.local \
+            --image-digest "$FINNOR_ECR_IMAGE_DIGEST"
 
       - name: Promote verified frontend artifact
         run: node scripts/release/deploy-production.mjs frontend --promote-only --deployment-url "${{ steps.frontend.outputs.url }}"
