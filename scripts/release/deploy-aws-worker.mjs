@@ -123,11 +123,6 @@ const taskDefinitionInput = {
       },
     },
   }],
-  tags: [
-    { key: "service", value: "finnor-worker" },
-    { key: "environment", value: "production" },
-    { key: "releaseSha", value: expected.commitSha },
-  ],
 }
 const taskEnvironment = Object.fromEntries(taskDefinitionInput.containerDefinitions[0].environment.map((entry) => [entry.name, entry.value]))
 if ("AWS_ACCESS_KEY_ID" in taskEnvironment || "AWS_SECRET_ACCESS_KEY" in taskEnvironment) throw new Error("refusing to register a task definition with static AWS credentials")
@@ -268,7 +263,7 @@ try {
     const streams = awsJson("logs", ["describe-log-streams", "--log-group-name", worker.logGroupName, "--order-by", "LastEventTime", "--descending", "--max-items", "3"]).logStreams ?? []
     diagnostics.cloudWatchLogs = []
     for (const stream of streams.slice(0, 3)) {
-      const events = awsJson("logs", ["get-log-events", "--log-group-name", worker.logGroupName, "--log-stream-name", stream.logStreamName, "--limit", "20", "--start-from-head", "false"]).events ?? []
+      const events = awsJson("logs", ["get-log-events", "--log-group-name", worker.logGroupName, "--log-stream-name", stream.logStreamName, "--limit", "20", "--no-start-from-head"]).events ?? []
       diagnostics.cloudWatchLogs.push({ stream: stream.logStreamName, events: events.map((event) => String(event.message ?? "").replace(/(authorization|token|secret|password|api[_-]?key|postgres(?:ql)?:\/\/)[^\s"']+/gi, "$1=<redacted>")) })
     }
   } catch (diagnosticError) {
