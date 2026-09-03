@@ -776,9 +776,17 @@ export function AdaptiveWorkspaceShell({
       data-inspector-state={inspectorOpen ? "open" : "closed"}
       data-active-workspace={projection?.kind ?? "ready"}
       data-thread-document
+      data-jarvis-action-spine-document
       data-thread-restored={threadRestored ? "true" : "false"}
       data-jarvis-restored-event-count={threadRestored ? restoredTraceEventCount : undefined}
       data-jarvis-instruction-id={thread?.instructionId ?? undefined}
+      data-jarvis-work-id={thread?.workId ?? undefined}
+      data-jarvis-objective-loop-id={thread?.objectiveLoopId ?? undefined}
+      data-jarvis-execution-model={thread?.executionModel ?? undefined}
+      data-jarvis-assistant-semantic-kind={thread?.assistantSemanticKind ?? undefined}
+      data-jarvis-objective-state={thread?.objectiveProjection?.state ?? undefined}
+      data-jarvis-instruction-state={thread?.machine.instructionState ?? undefined}
+      data-jarvis-work-posture={thread?.workPosture?.status ?? undefined}
       data-source={fixtureLabel ? "fixture.adaptiveWorkspace" : undefined}
       data-experience-scene={scene}
       data-experience-detail={configuredScene.detail}

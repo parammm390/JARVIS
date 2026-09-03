@@ -1,10 +1,10 @@
 name: security
 on:
   pull_request:
-    paths: ["package.json", "package-lock.json", "finnor-os/**", ".github/workflows/security.yml"]
+    paths: ["package.json", "package-lock.json", "src/**", "scripts/**", "finnor-os/**", ".github/workflows/**"]
   push:
     branches: [main]
-    paths: ["package.json", "package-lock.json", "finnor-os/**", ".github/workflows/security.yml"]
+    paths: ["package.json", "package-lock.json", "src/**", "scripts/**", "finnor-os/**", ".github/workflows/**"]
 permissions:
   actions: read
   contents: read

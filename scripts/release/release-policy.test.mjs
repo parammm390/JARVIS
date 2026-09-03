@@ -150,6 +150,28 @@ test("API readiness cannot be satisfied by a non-ECS or capability-incomplete wo
   assert.match(readiness, /capabilities\s+@>\s+ARRAY\['jobs','orchestration','realtime','sse'\]::text\[\]/)
 })
 
+test("every production JARVIS thread renderer exposes the exact canonical Work projection contract", () => {
+  const renderers = [
+    new URL("../../src/components/jarvis/bridge/Thread.tsx", import.meta.url),
+    new URL("../../src/components/jarvis/workspaces/AdaptiveWorkspaceShell.tsx", import.meta.url),
+  ]
+  const requiredBindings = [
+    /data-thread-document/,
+    /data-jarvis-instruction-id=\{thread\??\./,
+    /data-jarvis-work-id=\{thread\??\./,
+    /data-jarvis-objective-loop-id=\{thread\??\./,
+    /data-jarvis-execution-model=\{thread\??\./,
+    /data-jarvis-assistant-semantic-kind=\{thread\??\./,
+    /data-jarvis-objective-state=\{thread\??\./,
+    /data-jarvis-instruction-state=\{thread\??\./,
+    /data-jarvis-work-posture=\{thread\??\./,
+  ]
+  for (const renderer of renderers) {
+    const source = readFileSync(renderer, "utf8")
+    for (const binding of requiredBindings) assert.match(source, binding, `${renderer.pathname} is missing ${binding}`)
+  }
+})
+
 test("runtime parity requires jobs, orchestration, realtime, SSE, and exact migration", () => {
   const observed = {
     frontend: { ...expected, service: "finnor-frontend", traceable: true },
