@@ -1,5 +1,7 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
 import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import test from "node:test"
 import {
   assertAlbTargetsHealthy,
@@ -88,6 +90,51 @@ test("active release path has no Azure or static worker AWS credential seam", ()
   assert.match(workflow, /docker build/)
   assert.match(workflow, /docker push/)
   assert.doesNotMatch(worker, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/)
+})
+
+test("the post-deploy Product Truth tail is preflighted before spend and has no release-time Secrets Manager dependency", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
+  const refreshUrl = new URL("./refresh-product-truth-auth.mjs", import.meta.url)
+  const restartUrl = new URL("../../.github/scripts/certification-aws-hardening.cjs", import.meta.url)
+  const refresh = readFileSync(refreshUrl, "utf8")
+  const restartHardening = readFileSync(restartUrl, "utf8")
+  const cfn = readFileSync(new URL("../../infra/aws/finnor-production.yaml", import.meta.url), "utf8")
+  const githubRole = cfn.slice(cfn.indexOf("  GitHubActionsRole:"), cfn.indexOf("  AlbSecurityGroup:"))
+
+  execFileSync(process.execPath, ["--check", fileURLToPath(refreshUrl)], { stdio: "pipe" })
+  execFileSync(process.execPath, ["--check", fileURLToPath(restartUrl)], { stdio: "pipe" })
+
+  assert.match(refresh, /SUPABASE_SERVICE_ROLE_KEY\?\.trim\(\)/)
+  assert.match(refresh, /protected production env is missing Supabase admin configuration/)
+  assert.match(refresh, /--validate-only/)
+  assert.doesNotMatch(refresh, /SecretsManagerClient|GetSecretValueCommand|secretsmanager/)
+
+  const authPreflight = workflow.indexOf("Validate Product Truth auth chain before expensive mutation")
+  const imageBuild = workflow.indexOf("Build, smoke-test, and push exact worker image to ECR")
+  assert.ok(authPreflight > 0 && authPreflight < imageBuild)
+  assert.match(workflow, /refresh-product-truth-auth\.mjs[\s\S]*--validate-only/)
+
+  const certificationBlock = workflow.slice(workflow.indexOf("Certify deployed Human Black-Box behavior twice"), workflow.indexOf("Preserve Human Black-Box certification evidence"))
+  assert.match(certificationBlock, /for run in 1 2/)
+  assert.match(certificationBlock, /refresh-product-truth-auth\.mjs/)
+  assert.match(certificationBlock, /export PRODUCT_TRUTH_AUTH_BEARER/)
+  assert.match(certificationBlock, /export PRODUCT_TRUTH_OTHER_AUTH_BEARER/)
+  assert.match(certificationBlock, /certification-aws-hardening\.cjs/)
+
+  assert.match(restartHardening, /ACTIONS_ID_TOKEN_REQUEST_URL/)
+  assert.match(restartHardening, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/)
+  assert.match(restartHardening, /AWS_ROLE_ARN/)
+  assert.match(restartHardening, /audience["']?,\s*["']sts\.amazonaws\.com/)
+  assert.match(restartHardening, /assume-role-with-web-identity/)
+  const credentialRefresh = restartHardening.indexOf("await refreshAwsOidcCredentials(region)")
+  const preRestartTasks = restartHardening.indexOf("const beforeTasks = await listRunningTasks")
+  assert.ok(credentialRefresh > 0 && credentialRefresh < preRestartTasks)
+  assert.match(restartHardening, /--force-new-deployment/)
+  assert.match(restartHardening, /deployments\?\.length === 1/)
+  assert.match(restartHardening, /runningTasks\.every\(\(arn\) => !beforeTasks\.includes\(arn\)\)/)
+  assert.match(githubRole, /ecs:UpdateService/)
+  assert.match(githubRole, /ecs:ListTasks/)
+  assert.match(githubRole, /ecs:DescribeServices/)
 })
 
 test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {
