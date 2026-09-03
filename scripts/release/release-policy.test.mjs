@@ -90,6 +90,38 @@ test("active release path has no Azure or static worker AWS credential seam", ()
   assert.doesNotMatch(worker, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/)
 })
 
+test("the post-deploy Product Truth tail is preflighted before spend and has no release-time Secrets Manager dependency", () => {
+  const workflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
+  const refresh = readFileSync(new URL("./refresh-product-truth-auth.mjs", import.meta.url), "utf8")
+  const restartHardening = readFileSync(new URL("../../.github/scripts/certification-aws-hardening.cjs", import.meta.url), "utf8")
+  const cfn = readFileSync(new URL("../../infra/aws/finnor-production.yaml", import.meta.url), "utf8")
+  const githubRole = cfn.slice(cfn.indexOf("  GitHubActionsRole:"), cfn.indexOf("  AlbSecurityGroup:"))
+
+  assert.match(refresh, /SUPABASE_SERVICE_ROLE_KEY\?\.trim\(\)/)
+  assert.match(refresh, /protected production env is missing Supabase admin configuration/)
+  assert.match(refresh, /--validate-only/)
+  assert.doesNotMatch(refresh, /SecretsManagerClient|GetSecretValueCommand|secretsmanager/)
+
+  const authPreflight = workflow.indexOf("Validate Product Truth auth chain before expensive mutation")
+  const imageBuild = workflow.indexOf("Build, smoke-test, and push exact worker image to ECR")
+  assert.ok(authPreflight > 0 && authPreflight < imageBuild)
+  assert.match(workflow, /refresh-product-truth-auth\.mjs[\s\S]*--validate-only/)
+
+  const certificationBlock = workflow.slice(workflow.indexOf("Certify deployed Human Black-Box behavior twice"), workflow.indexOf("Preserve Human Black-Box certification evidence"))
+  assert.match(certificationBlock, /for run in 1 2/)
+  assert.match(certificationBlock, /refresh-product-truth-auth\.mjs/)
+  assert.match(certificationBlock, /export PRODUCT_TRUTH_AUTH_BEARER/)
+  assert.match(certificationBlock, /export PRODUCT_TRUTH_OTHER_AUTH_BEARER/)
+  assert.match(certificationBlock, /certification-aws-hardening\.cjs/)
+
+  assert.match(restartHardening, /--force-new-deployment/)
+  assert.match(restartHardening, /deployments\?\.length === 1/)
+  assert.match(restartHardening, /runningTasks\.every\(\(arn\) => !beforeTasks\.includes\(arn\)\)/)
+  assert.match(githubRole, /ecs:UpdateService/)
+  assert.match(githubRole, /ecs:ListTasks/)
+  assert.match(githubRole, /ecs:DescribeServices/)
+})
+
 test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {
   const cfn = readFileSync(new URL("../../infra/aws/finnor-production.yaml", import.meta.url), "utf8")
   assert.equal((cfn.match(/aws:SourceArn: !Sub 'arn:\${AWS::Partition}:ecs:\${AWS::Region}:\${AWS::AccountId}:\*'/g) ?? []).length, 2)
