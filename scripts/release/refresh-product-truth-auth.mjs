@@ -1,13 +1,10 @@
 import { randomBytes } from "node:crypto"
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 
 const requireFromOs = createRequire(new URL("../../finnor-os/package.json", import.meta.url))
 const { Client: PgClient } = requireFromOs("pg")
-const { GetSecretValueCommand, SecretsManagerClient } = requireFromOs("@aws-sdk/client-secrets-manager")
-const productionContract = JSON.parse(readFileSync(new URL("../../infra/deployment/production.contract.json", import.meta.url), "utf8"))
-const contractSecretMap = productionContract?.topology?.worker?.secretMap ?? {}
 
 function arg(name) {
   const prefix = `--${name}=`
@@ -26,30 +23,6 @@ function decodeJwt(value, label) {
     throw new Error(`${label} JWT is missing sub/email identity claims`)
   }
   return claims
-}
-
-async function resolveManagedSecret(name) {
-  if (process.env.SECRETS_PROVIDER !== "aws-secrets-manager") return process.env[name]
-
-  // Release-time resolution is anchored to the canonical production contract.
-  // Vercel may serialize FINNOR_SECRET_IDS for transport, so it is deliberately
-  // not a source of truth for this production certification utility.
-  const secretId = typeof contractSecretMap[name] === "string" ? contractSecretMap[name].trim() : ""
-  if (!secretId) throw new Error(`canonical production contract has no secret mapping for ${name}`)
-
-  const client = new SecretsManagerClient({
-    region: productionContract?.topology?.worker?.region || process.env.AWS_REGION || process.env.AWS_BEDROCK_REGION || "us-east-1",
-  })
-  const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }))
-  const raw = response.SecretString ?? (response.SecretBinary ? Buffer.from(response.SecretBinary).toString("utf8") : "")
-  if (!raw) throw new Error(`managed secret for ${name} had no value`)
-  try {
-    const parsed = JSON.parse(raw)
-    if (typeof parsed?.[name] === "string") return parsed[name]
-  } catch {
-    // Single-value Secrets Manager payloads are valid.
-  }
-  return raw
 }
 
 async function verifyInternalProbeTenants(primaryEmail, secondaryEmail) {
@@ -96,13 +69,17 @@ async function authRequest(baseUrl, serviceKey, path, init = {}) {
   })
 }
 
-async function refreshPrincipal(baseUrl, serviceKey, staleToken, label) {
+async function verifyPrincipal(baseUrl, serviceKey, staleToken, label) {
   const stale = decodeJwt(staleToken, label)
   const lookup = await authRequest(baseUrl, serviceKey, `/auth/v1/admin/users/${encodeURIComponent(stale.sub)}`)
   const user = await lookup.json().catch(() => null)
   if (!lookup.ok) throw new Error(`${label} Supabase admin lookup failed: HTTP ${lookup.status}`)
   if (String(user?.email || "").toLowerCase() !== stale.email.toLowerCase()) throw new Error(`${label} Supabase user identity does not match the bearer claims`)
+  return stale
+}
 
+async function refreshPrincipal(baseUrl, serviceKey, staleToken, label) {
+  const stale = await verifyPrincipal(baseUrl, serviceKey, staleToken, label)
   const password = randomBytes(36).toString("base64url")
   const update = await authRequest(baseUrl, serviceKey, `/auth/v1/admin/users/${encodeURIComponent(stale.sub)}`, {
     method: "PUT",
@@ -128,9 +105,10 @@ async function refreshPrincipal(baseUrl, serviceKey, staleToken, label) {
 
 const productionEnv = resolve(arg("production-env") || "finnor-os/apps/api/.vercel/.env.production.local")
 const outputFile = arg("output-file")
-if (!outputFile) throw new Error("Usage: node scripts/release/refresh-product-truth-auth.mjs --production-env <path> --output-file <path>")
+const validateOnly = process.argv.includes("--validate-only")
+if (!validateOnly && !outputFile) throw new Error("Usage: node scripts/release/refresh-product-truth-auth.mjs --production-env <path> --output-file <path> [--validate-only]")
 if (!existsSync(productionEnv)) throw new Error(`production environment file not found: ${productionEnv}`)
-if (existsSync(outputFile)) throw new Error("refusing to overwrite Product Truth auth output")
+if (outputFile && existsSync(outputFile)) throw new Error("refusing to overwrite Product Truth auth output")
 process.loadEnvFile(productionEnv)
 
 const primaryBearer = process.env.PRODUCT_TRUTH_AUTH_BEARER?.trim()
@@ -143,15 +121,26 @@ if (primaryClaims.sub === secondaryClaims.sub || primaryClaims.email.toLowerCase
 }
 
 await verifyInternalProbeTenants(primaryClaims.email, secondaryClaims.email)
-const supabaseUrl = process.env.SUPABASE_URL
-const serviceKey = await resolveManagedSecret("SUPABASE_SERVICE_ROLE_KEY")
-if (!supabaseUrl || !serviceKey) throw new Error("production Supabase admin configuration is unavailable")
+const supabaseUrl = process.env.SUPABASE_URL?.trim()
+// This release-time helper deliberately consumes the decrypted protected Vercel
+// production env that the release job already pulls. Runtime workers continue to
+// use AWS Secrets Manager; certification must not require extra IAM permissions.
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+if (!supabaseUrl || !serviceKey) throw new Error("protected production env is missing Supabase admin configuration")
 
-const [primary, secondary] = await Promise.all([
-  refreshPrincipal(supabaseUrl, serviceKey, primaryBearer, "tenant A"),
-  refreshPrincipal(supabaseUrl, serviceKey, secondaryBearer, "tenant B"),
-])
+if (validateOnly) {
+  await Promise.all([
+    verifyPrincipal(supabaseUrl, serviceKey, primaryBearer, "tenant A"),
+    verifyPrincipal(supabaseUrl, serviceKey, secondaryBearer, "tenant B"),
+  ])
+  console.log(JSON.stringify({ ok: true, validated: 2, source: "protected-production-env" }, null, 2))
+} else {
+  const [primary, secondary] = await Promise.all([
+    refreshPrincipal(supabaseUrl, serviceKey, primaryBearer, "tenant A"),
+    refreshPrincipal(supabaseUrl, serviceKey, secondaryBearer, "tenant B"),
+  ])
 
-writeFileSync(outputFile, `${JSON.stringify({ primary: primary.token, secondary: secondary.token })}\n`, { mode: 0o600 })
-chmodSync(outputFile, 0o600)
-console.log(JSON.stringify({ ok: true, refreshed: 2, expiresAt: Math.min(primary.expiresAt, secondary.expiresAt) }, null, 2))
+  writeFileSync(outputFile, `${JSON.stringify({ primary: primary.token, secondary: secondary.token })}\n`, { mode: 0o600 })
+  chmodSync(outputFile, 0o600)
+  console.log(JSON.stringify({ ok: true, refreshed: 2, expiresAt: Math.min(primary.expiresAt, secondary.expiresAt), source: "protected-production-env" }, null, 2))
+}
