@@ -33,6 +33,7 @@ const manifest = JSON.parse(readFileSync(join(osRoot, "architecture/p6/final-lin
 export const P6_LINEAGE = Object.freeze(manifest.lineage);
 
 const FINAL_COMPOSITION_PATHS = new Set([
+  ".github/scripts/certification-aws-hardening.cjs",
   ".github/workflows/ci.yml",
   ".github/workflows/production-release.yml",
   "JARVIS-CREDENTIALS-LEDGER.md",
