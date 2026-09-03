@@ -36,6 +36,7 @@ const FINAL_COMPOSITION_PATHS = new Set([
   ".github/scripts/certification-aws-hardening.cjs",
   ".github/workflows/ci.yml",
   ".github/workflows/production-release.yml",
+  ".github/workflows/release-tail-preflight.yml",
   "JARVIS-CREDENTIALS-LEDGER.md",
   "docs/release/generated/deployment-inventory.md",
   "docs/release/generated/environment-contract.md",
