@@ -183,7 +183,10 @@ const productTruthEnvArgs = appName === "api" && productTruthCertificationKey
     ]
   : []
 const deployArgs = [
-  "deploy", "--prebuilt", ...(stageOnly ? [] : ["--prod"]), "--yes",
+  // The prepared output is a production-targeted Build Output API artifact.
+  // Stage it as a production deployment while suppressing domain assignment;
+  // the release job promotes the verified deployment only after AWS parity.
+  "deploy", "--prebuilt", ...(stageOnly ? ["--prod", "--skip-domain"] : ["--prod"]), "--yes",
   "--meta", `finnorCommitSha=${commitSha}`,
   "--meta", `finnorBuildId=${buildId}`,
   "--meta", `finnorVersion=${version}`,
