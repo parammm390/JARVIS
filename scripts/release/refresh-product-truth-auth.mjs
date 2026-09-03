@@ -1,11 +1,13 @@
 import { randomBytes } from "node:crypto"
-import { chmodSync, existsSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { resolve } from "node:path"
 
 const requireFromOs = createRequire(new URL("../../finnor-os/package.json", import.meta.url))
 const { Client: PgClient } = requireFromOs("pg")
 const { GetSecretValueCommand, SecretsManagerClient } = requireFromOs("@aws-sdk/client-secrets-manager")
+const productionContract = JSON.parse(readFileSync(new URL("../../infra/deployment/production.contract.json", import.meta.url), "utf8"))
+const contractSecretMap = productionContract?.topology?.worker?.secretMap ?? {}
 
 function arg(name) {
   const prefix = `--${name}=`
@@ -28,12 +30,15 @@ function decodeJwt(value, label) {
 
 async function resolveManagedSecret(name) {
   if (process.env.SECRETS_PROVIDER !== "aws-secrets-manager") return process.env[name]
-  let mapping
-  try { mapping = JSON.parse(process.env.FINNOR_SECRET_IDS || "{}") } catch { throw new Error("FINNOR_SECRET_IDS is not valid JSON") }
-  const secretId = mapping?.[name]
-  if (!secretId) return process.env[name]
+
+  // Release-time resolution is anchored to the canonical production contract.
+  // Vercel may serialize FINNOR_SECRET_IDS for transport, so it is deliberately
+  // not a source of truth for this production certification utility.
+  const secretId = typeof contractSecretMap[name] === "string" ? contractSecretMap[name].trim() : ""
+  if (!secretId) throw new Error(`canonical production contract has no secret mapping for ${name}`)
+
   const client = new SecretsManagerClient({
-    region: process.env.AWS_REGION || process.env.AWS_BEDROCK_REGION || "us-east-1",
+    region: productionContract?.topology?.worker?.region || process.env.AWS_REGION || process.env.AWS_BEDROCK_REGION || "us-east-1",
   })
   const response = await client.send(new GetSecretValueCommand({ SecretId: secretId }))
   const raw = response.SecretString ?? (response.SecretBinary ? Buffer.from(response.SecretBinary).toString("utf8") : "")
