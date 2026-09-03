@@ -50,6 +50,7 @@ const FINAL_COMPOSITION_PATHS = new Set([
   "scripts/release/certify-product-truth-deployed.mjs",
   "scripts/release/configure-azure-sse-ingress.mjs",
   "scripts/release/configure-vercel-realtime.mjs",
+  "scripts/release/deploy-production.mjs",
   "scripts/release/deploy-aws-worker.mjs",
   "scripts/release/deploy-azure-worker.mjs",
   "scripts/release/release-policy.test.mjs",
