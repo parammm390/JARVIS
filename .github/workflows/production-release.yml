@@ -396,6 +396,11 @@ jobs:
             --output-file "$RUNNER_TEMP/production-preflight.json"
           echo "FINNOR_PREFLIGHT_EVIDENCE=$RUNNER_TEMP/production-preflight.json" >> "$GITHUB_ENV"
 
+      - name: Capture rollback state before the first production mutation
+        run: |
+          node scripts/release/capture-production-state.mjs --output-file "$RUNNER_TEMP/production-rollback-state.json"
+          echo "FINNOR_ROLLBACK_STATE=$RUNNER_TEMP/production-rollback-state.json" >> "$GITHUB_ENV"
+
       - name: Bind canonical realtime gateway into Vercel production
         run: node scripts/release/configure-vercel-realtime.mjs --apply
 
@@ -425,11 +430,6 @@ jobs:
 
       - name: Verify staged frontend artifact
         run: node scripts/release/verify-live-release.mjs "${{ steps.frontend.outputs.url }}" "$FINNOR_COMMIT_SHA" "$FINNOR_BUILD_ID" "$FINNOR_VERSION"
-
-      - name: Capture rollback state before the first production mutation
-        run: |
-          node scripts/release/capture-production-state.mjs --output-file "$RUNNER_TEMP/production-rollback-state.json"
-          echo "FINNOR_ROLLBACK_STATE=$RUNNER_TEMP/production-rollback-state.json" >> "$GITHUB_ENV"
 
       - name: Migrate production database
         run: npm run release:migrate:production -- apps/api/.vercel/.env.production.local

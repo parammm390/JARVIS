@@ -140,10 +140,12 @@ test("the release certifies staged artifacts before promotion and smoke-tests pr
   assert.match(githubRole, /ecs:DescribeServices/)
 
   const stagedAt = workflow.indexOf("Certify the staged production-equivalent environment twice")
+  const captureAt = workflow.indexOf("Capture rollback state before the first production mutation")
+  const realtimeConfigAt = workflow.indexOf("configure-vercel-realtime.mjs --apply")
   const promoteAt = workflow.indexOf("Promote certified frontend artifact")
   const smokeAt = workflow.indexOf("Run bounded five-minute production smoke")
   const rollbackAt = workflow.indexOf("Automatic rollback after any post-mutation gate failure")
-  assert.ok(stagedAt < promoteAt && promoteAt < smokeAt && smokeAt < rollbackAt)
+  assert.ok(captureAt > 0 && captureAt < realtimeConfigAt && stagedAt < promoteAt && promoteAt < smokeAt && smokeAt < rollbackAt)
   const smokeBlock = workflow.slice(smokeAt, rollbackAt)
   assert.match(smokeBlock, /PRODUCT_TRUTH_CERTIFICATION_MODE=smoke/)
   assert.match(smokeBlock, /timeout 300s/)
