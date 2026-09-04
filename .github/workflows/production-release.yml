@@ -518,7 +518,7 @@ jobs:
             | tee "$RUNNER_TEMP/production-smoke.json"
 
       - name: Automatic rollback after any post-mutation gate failure
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         run: node scripts/release/rollback-production.mjs --state-file "${FINNOR_ROLLBACK_STATE:-$RUNNER_TEMP/production-rollback-state.json}"
 
       - name: Preserve staged certification and production smoke evidence

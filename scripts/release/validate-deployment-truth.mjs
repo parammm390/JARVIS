@@ -129,6 +129,7 @@ if (smokeTimeoutAt < smokeAt || smokeTimeoutAt > rollbackAt) fail("production sm
 const stagedBlock = workflow.slice(stagedCertificationAt, promoteFrontendAt)
 if (!/PRODUCT_TRUTH_FRONTEND_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_API_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=full/.test(stagedBlock) || !/for run in 1 2; do/.test(stagedBlock)) fail("staged certification is not bound to both staged artifacts and two full runs")
 if (!/timeout 45m env/.test(stagedBlock)) fail("staged certification lacks a bounded per-run timeout")
+if (!/failure\(\) \|\| cancelled\(\)/.test(workflow)) fail("post-mutation rollback does not run on cancellation")
 const smokeBlock = workflow.slice(smokeAt, rollbackAt)
 if (/for run in 1 2; do/.test(smokeBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=smoke/.test(smokeBlock)) fail("production smoke must be a single bounded smoke run, not the full matrix")
 if (workflow.includes("Certify deployed Human Black-Box behavior twice")) fail("production workflow still contains the retired post-promotion Human Black-Box gate")

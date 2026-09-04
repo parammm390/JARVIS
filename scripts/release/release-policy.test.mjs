@@ -153,6 +153,7 @@ test("the release certifies staged artifacts before promotion and smoke-tests pr
   assert.doesNotMatch(smokeBlock, /for run in 1 2/)
   assert.match(workflow, /capture-production-state\.mjs/)
   assert.match(workflow, /rollback-production\.mjs/)
+  assert.match(workflow, /failure\(\) \|\| cancelled\(\)/)
 })
 
 test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {
