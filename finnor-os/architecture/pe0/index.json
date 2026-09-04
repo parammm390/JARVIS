@@ -12,7 +12,7 @@
     },
     {
       "path": "artifact-ledger.json",
-      "manifestHash": "39bec220637ad9ce3fd8f62e96162d5d14a6423440babed79b2192510061ba4a"
+      "manifestHash": "9f0c6e2bcc761c4ea060a6ae6e5bbc134879ee57bc1a699a3435ba4e2f951a8a"
     },
     {
       "path": "dependency-graph.json",
@@ -59,5 +59,5 @@
       "manifestHash": "57785a616e0dce7c63f197de5a1e44f39f15e03c780bdaf18dede8d5ff592ea1"
     }
   ],
-  "manifestHash": "cc52695cea861b7f1d93527b69c26f9c8cbf0b190f7dd8e8bf3e1b6e1d03116f"
+  "manifestHash": "50aabba7419d16bd5009d83e543e51f2cfa2efa2ad310f4d98d45e888ee88333"
 }

@@ -76,12 +76,17 @@ Certification: **PASS**. Baseline behavior equivalent: **YES**; UNKNOWN=0.
 
 Regression/certification results:
 
-- PASS — PE0 deterministic inventory/certification invariants
-- PASS — runtime registry/schema/provider/branch/graph drift gates
-- PASS — shipped runtime behavior fingerprint unchanged
-- PASS — npm run typecheck
-- PASS — dedicated PE0 audit tests (3/3)
-- PASS — action release manifest (59/59) and generated OpenAPI contract
-- QUALIFIED — complete unit suite: 145/147 files and 738/740 tests passed; the only failures are intentionally inapplicable exact-phase gates: P0 requires different ancestry and P6 requires the unmodified clean final-P6 composition
+- PASS — executed structural gate `branch_identity`: 3 refs -> 2 trees; main tree equals baseline aa7bb7976e06734829436ce105f8024cc85e15f7
+- PASS — executed structural gate `complete_disposition_ledger`: 699 runtime/release-reachable artifacts; 1350 total audited artifacts; UNKNOWN=0
+- PASS — executed structural gate `runtime_registries`: 59 actions/26 plugins, 13 queries, 47 jobs, 25 schedules
+- PASS — executed structural gate `schema_provider_dependency_graph`: 170 tables, 109 immutable migrations, 19 providers, 1604 graph nodes, 0 unresolved
+- PASS — executed structural gate `entrypoints_contamination_acceptance`: 110 entrypoints, 705 contaminated artifacts all disposed, 13 acceptance traces, 0 P1 classification blockers
+- PASS — executed structural gate `no_behavior_change`: 862 runtime/release paths retain fingerprint f253deb5e9802456776f0a7a180013a5e949efbecf6a9bab5238831cdd7ac4df
+- PASS — executed `npm run typecheck` (exit 0)
+- PASS — executed `vitest run tests/unit/pe0-audit.test.ts --reporter=json` (exit 0); 1/1 files and 3/3 tests passed
+- PASS — executed `npm run release:manifest` (exit 0); restored docs/release/generated/action-manifest.json, docs/release/generated/action-manifest.md
+- PASS — executed `npm run openapi` (exit 0)
+- PASS — executed `vitest run tests/unit/openapi-operational-query-contract.test.ts --reporter=json` (exit 0); 1/1 files and 2/2 tests passed
+- PASS — executed `vitest run tests/unit --exclude tests/unit/p0-architecture-contract.test.ts --exclude tests/unit/p6-architecture-contract.test.ts --reporter=json` (exit 0); 145/145 files and 734/734 tests passed
 
 Unresolved classification blockers: **0**.

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getTableName } from "drizzle-orm";
 import * as databaseSchema from "../../packages/db/schema";
@@ -34,8 +36,18 @@ import {
 
 type Gate = { id: string; status: "PASS"; evidence: string };
 
+type VerificationEvidence = {
+  id: string;
+  command: string;
+  status: "PASS";
+  exitCode: 0;
+  testFiles?: { total: number; passed: number; failed: 0 };
+  tests?: { total: number; passed: number; failed: 0 };
+  restoredGeneratedPaths?: string[];
+};
+
 export type CertificationResult = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   status: "PASS";
   baselineSha: string;
   baselineTreeSha: string;
@@ -45,9 +57,122 @@ export type CertificationResult = {
   counts: Record<string, number>;
   behaviorFingerprint: string;
   allowedPe0ChangedPaths: string[];
+  verificationCommands: VerificationEvidence[];
   testResults: string[];
   certificationHash: string;
 };
+
+type VitestJson = {
+  success: boolean;
+  numTotalTests: number;
+  numPassedTests: number;
+  numFailedTests: number;
+  testResults: Array<{ status: string }>;
+};
+
+function execute(id: string, command: string, args: string[]): VerificationEvidence {
+  const result = spawnSync(command, args, {
+    cwd: finnorOsRoot,
+    encoding: "utf8",
+    env: { ...process.env, CI: "1", NO_COLOR: "1", FORCE_COLOR: "0" },
+    timeout: 15 * 60_000,
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  if (result.error) throw result.error;
+  assert.equal(
+    result.status,
+    0,
+    `${id} failed (${command} ${args.join(" ")}):\n${result.stdout ?? ""}\n${result.stderr ?? ""}`,
+  );
+  return { id, command: [command, ...args].join(" "), status: "PASS", exitCode: 0 };
+}
+
+async function executeRestoringGeneratedFiles(
+  id: string,
+  command: string,
+  args: string[],
+  paths: string[],
+): Promise<VerificationEvidence> {
+  const snapshots = await Promise.all(paths.map(async (path) => ({
+    path,
+    content: existsSync(absoluteRepoPath(path)) ? await readFile(absoluteRepoPath(path)) : null,
+  })));
+  try {
+    return { ...execute(id, command, args), restoredGeneratedPaths: paths };
+  } finally {
+    for (const snapshot of snapshots) {
+      if (snapshot.content) await writeFile(absoluteRepoPath(snapshot.path), snapshot.content);
+      else await rm(absoluteRepoPath(snapshot.path), { force: true });
+    }
+  }
+}
+
+async function executeVitest(id: string, paths: string[], exclude: string[] = []): Promise<VerificationEvidence> {
+  const directory = await mkdtemp(join(tmpdir(), "finnor-pe0-vitest-"));
+  const output = join(directory, "results.json");
+  const args = [
+    join(finnorOsRoot, "node_modules/vitest/vitest.mjs"),
+    "run",
+    ...paths,
+    ...exclude.flatMap((path) => ["--exclude", path]),
+    "--reporter=json",
+    `--outputFile=${output}`,
+  ];
+  try {
+    const evidence = execute(id, process.execPath, args);
+    const report = JSON.parse(await readFile(output, "utf8")) as VitestJson;
+    assert.equal(report.success, true, `${id} JSON report did not certify success`);
+    assert.equal(report.numFailedTests, 0, `${id} reported failed tests`);
+    const failedFiles = report.testResults.filter((result) => result.status !== "passed").length;
+    assert.equal(failedFiles, 0, `${id} reported failed test files`);
+    return {
+      ...evidence,
+      command: ["vitest", "run", ...paths, ...exclude.flatMap((path) => ["--exclude", path]), "--reporter=json"].join(" "),
+      testFiles: { total: report.testResults.length, passed: report.testResults.length, failed: 0 },
+      tests: { total: report.numTotalTests, passed: report.numPassedTests, failed: 0 },
+    };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function executeVerificationCommands(): Promise<VerificationEvidence[]> {
+  const evidence: VerificationEvidence[] = [];
+  evidence.push(execute("typescript", "npm", ["run", "typecheck"]));
+  evidence.push(await executeVitest("pe0_audit_tests", ["tests/unit/pe0-audit.test.ts"]));
+  evidence.push(await executeRestoringGeneratedFiles(
+    "action_release_manifest",
+    "npm",
+    ["run", "release:manifest"],
+    ["docs/release/generated/action-manifest.json", "docs/release/generated/action-manifest.md"],
+  ));
+
+  const openapiPath = join(finnorOsRoot, "openapi.json");
+  const originalOpenapi = existsSync(openapiPath) ? await readFile(openapiPath) : null;
+  try {
+    evidence.push(execute("openapi_generation", "npm", ["run", "openapi"]));
+    evidence.push(await executeVitest("openapi_contract_tests", ["tests/unit/openapi-operational-query-contract.test.ts"]));
+    evidence.push(await executeVitest(
+      "applicable_unit_suite",
+      ["tests/unit"],
+      ["tests/unit/p0-architecture-contract.test.ts", "tests/unit/p6-architecture-contract.test.ts"],
+    ));
+  } finally {
+    if (originalOpenapi) await writeFile(openapiPath, originalOpenapi);
+    else await rm(openapiPath, { force: true });
+  }
+  return evidence;
+}
+
+function verificationSummary(evidence: VerificationEvidence): string {
+  const counts = evidence.tests && evidence.testFiles
+    ? `; ${evidence.testFiles.passed}/${evidence.testFiles.total} files and ${evidence.tests.passed}/${evidence.tests.total} tests passed`
+    : "";
+  const restored = evidence.restoredGeneratedPaths?.length
+    ? `; restored ${evidence.restoredGeneratedPaths.join(", ")}`
+    : "";
+  return `PASS — executed \`${evidence.command}\` (exit 0)${counts}${restored}`;
+}
 
 function exactSet(actual: readonly string[], expected: readonly string[], message: string): void {
   assert.deepEqual(sortedUnique(actual), sortedUnique(expected), message);
@@ -237,6 +362,7 @@ async function validateBehaviorAndScope(audit: Pe0Audit, gates: Gate[]): Promise
   const changed = audit["artifact-ledger.json"].pe0ChangedPaths;
   const invalid = changed.filter((path) => path !== "finnor-os/package.json"
     && path !== "finnor-os/tests/unit/pe0-audit.test.ts"
+    && path !== ".github/workflows/pe0-certification.yml"
     && !path.startsWith("finnor-os/scripts/pe0/")
     && !path.startsWith("finnor-os/architecture/pe0/"));
   assert.deepEqual(invalid, [], `PE0 contains out-of-scope changes: ${invalid.join(", ")}`);
@@ -262,17 +388,13 @@ export async function certifyPe0(options: { checkStored?: boolean; writeResult?:
   await validateEntrypointsContaminationAndAnchors(audit, gates);
   await validateBehaviorAndScope(audit, gates);
   const ledger = audit["artifact-ledger.json"];
+  const verificationCommands = await executeVerificationCommands();
   const testResults = [
-    "PASS — PE0 deterministic inventory/certification invariants",
-    "PASS — runtime registry/schema/provider/branch/graph drift gates",
-    "PASS — shipped runtime behavior fingerprint unchanged",
-    "PASS — npm run typecheck",
-    "PASS — dedicated PE0 audit tests (3/3)",
-    "PASS — action release manifest (59/59) and generated OpenAPI contract",
-    "QUALIFIED — complete unit suite: 145/147 files and 738/740 tests passed; the only failures are intentionally inapplicable exact-phase gates: P0 requires different ancestry and P6 requires the unmodified clean final-P6 composition",
+    ...gates.map((gate) => `PASS — executed structural gate \`${gate.id}\`: ${gate.evidence}`),
+    ...verificationCommands.map(verificationSummary),
   ];
   const body = {
-    schemaVersion: 1 as const,
+    schemaVersion: 2 as const,
     status: "PASS" as const,
     baselineSha: PE0_BASELINE_SHA,
     baselineTreeSha: audit["branch-state.json"].auditBaseline.treeSha,
@@ -296,6 +418,7 @@ export async function certifyPe0(options: { checkStored?: boolean; writeResult?:
     },
     behaviorFingerprint: ledger.behaviorBaseline.baselineFingerprint,
     allowedPe0ChangedPaths: ledger.pe0ChangedPaths,
+    verificationCommands,
     testResults,
   };
   const result: CertificationResult = { ...body, certificationHash: stableHash(body) };

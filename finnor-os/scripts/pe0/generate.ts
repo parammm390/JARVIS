@@ -1218,6 +1218,7 @@ function buildArtifacts(input: {
 
 function behaviorScope(path: string): boolean {
   if (path === "finnor-os/package.json") return false;
+  if (path === ".github/workflows/pe0-certification.yml") return false;
   if (path.startsWith("finnor-os/scripts/pe0/") || path.startsWith("finnor-os/architecture/pe0/") || /pe0-audit\.test\.ts$/.test(path)) return false;
   return path.startsWith("finnor-os/apps/")
     || path.startsWith("finnor-os/packages/")

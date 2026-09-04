@@ -1,0 +1,59 @@
+name: pe0-certification
+
+on:
+  push:
+    branches:
+      - codex/pe0-backend-forensics
+    paths:
+      - "finnor-os/architecture/pe0/**"
+      - "finnor-os/scripts/pe0/**"
+      - "finnor-os/tests/unit/pe0-audit.test.ts"
+      - "finnor-os/package.json"
+      - ".github/workflows/pe0-certification.yml"
+  pull_request:
+    paths:
+      - "finnor-os/architecture/pe0/**"
+      - "finnor-os/scripts/pe0/**"
+      - "finnor-os/tests/unit/pe0-audit.test.ts"
+      - "finnor-os/package.json"
+      - ".github/workflows/pe0-certification.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pe0-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: finnor-os
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch audited branch refs
+        working-directory: .
+        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: finnor-os/package-lock.json
+      - run: npm ci
+      - run: npm run pe0:certify
+      - name: Verify checked-in certification evidence
+        run: git diff --exit-code -- architecture/pe0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pe0-certification-evidence
+          path: |
+            finnor-os/architecture/pe0/certification-result.json
+            finnor-os/architecture/pe0/implementation-report.md
+          if-no-files-found: error
+          retention-days: 30

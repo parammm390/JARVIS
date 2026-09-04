@@ -228,6 +228,7 @@ export function isTextAuditCandidate(path: string): boolean {
     path.startsWith("finnor-os/scripts/pe0/")
     || path.startsWith("finnor-os/architecture/pe0/")
     || path === "finnor-os/tests/unit/pe0-audit.test.ts"
+    || path === ".github/workflows/pe0-certification.yml"
   ) return false;
   const extension = extname(path).toLowerCase();
   const supported = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".sql", ".json", ".yaml", ".yml", ".md", ".sh", ".toml"]);

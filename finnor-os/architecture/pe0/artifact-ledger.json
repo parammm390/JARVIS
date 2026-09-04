@@ -65,6 +65,7 @@
     "behaviorEquivalent": true
   },
   "pe0ChangedPaths": [
+    ".github/workflows/pe0-certification.yml",
     "finnor-os/architecture/pe0/acceptance-traces.json",
     "finnor-os/architecture/pe0/action-execution-map.json",
     "finnor-os/architecture/pe0/artifact-ledger.json",
@@ -424708,5 +424709,5 @@
       "contentHash": "1b2e92b3e3ef3d2fe92009bcc87e20a6f7a5525fed66a5e8c83154ee60554ae8"
     }
   ],
-  "manifestHash": "39bec220637ad9ce3fd8f62e96162d5d14a6423440babed79b2192510061ba4a"
+  "manifestHash": "9f0c6e2bcc761c4ea060a6ae6e5bbc134879ee57bc1a699a3435ba4e2f951a8a"
 }

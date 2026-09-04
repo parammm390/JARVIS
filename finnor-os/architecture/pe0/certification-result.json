@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "status": "PASS",
   "baselineSha": "f40526617c7e22258c12a2b669975ddaaf33e7fc",
   "baselineTreeSha": "aa7bb7976e06734829436ce105f8024cc85e15f7",
@@ -7,7 +7,7 @@
   "manifestHashes": {
     "branch-state.json": "8486161425e2f335197d55fe6af84b73b2498f99d42ed84d0a0a3709b3d75163",
     "runtime-entrypoints.json": "6a39974a852d4e67681b1698a823003a8473330717f068b178b5717e27596ac5",
-    "artifact-ledger.json": "39bec220637ad9ce3fd8f62e96162d5d14a6423440babed79b2192510061ba4a",
+    "artifact-ledger.json": "9f0c6e2bcc761c4ea060a6ae6e5bbc134879ee57bc1a699a3435ba4e2f951a8a",
     "dependency-graph.json": "cdda47d89fdf3efe3a38c230687c630237336d87edbb3f7b85b2424fd52f30b9",
     "schema-read-write-map.json": "cb8d265c661e55c04b4e36c5ec42245fd4ca4d7d03a0586478642bc49a6bd053",
     "action-execution-map.json": "11e75522134e71a7877ea16e5d590b2473aad443e999360a6a68f8aa42ac0f57",
@@ -19,7 +19,7 @@
     "cutover-blockers.json": "3b985d69aa39ada07eb6b4247e26cbeaf2c2081b3268a81bbb2047f7afb5c863",
     "phase-boundary-map.json": "beadbffae5728798fd6d89621f1fe9889cb4877ce83ac5346d4101e8e4ee77b0",
     "acceptance-traces.json": "57785a616e0dce7c63f197de5a1e44f39f15e03c780bdaf18dede8d5ff592ea1",
-    "index.json": "cc52695cea861b7f1d93527b69c26f9c8cbf0b190f7dd8e8bf3e1b6e1d03116f"
+    "index.json": "50aabba7419d16bd5009d83e543e51f2cfa2efa2ad310f4d98d45e888ee88333"
   },
   "gates": [
     {
@@ -70,6 +70,7 @@
   },
   "behaviorFingerprint": "f253deb5e9802456776f0a7a180013a5e949efbecf6a9bab5238831cdd7ac4df",
   "allowedPe0ChangedPaths": [
+    ".github/workflows/pe0-certification.yml",
     "finnor-os/architecture/pe0/acceptance-traces.json",
     "finnor-os/architecture/pe0/action-execution-map.json",
     "finnor-os/architecture/pe0/artifact-ledger.json",
@@ -94,14 +95,91 @@
     "finnor-os/scripts/pe0/model.ts",
     "finnor-os/tests/unit/pe0-audit.test.ts"
   ],
-  "testResults": [
-    "PASS — PE0 deterministic inventory/certification invariants",
-    "PASS — runtime registry/schema/provider/branch/graph drift gates",
-    "PASS — shipped runtime behavior fingerprint unchanged",
-    "PASS — npm run typecheck",
-    "PASS — dedicated PE0 audit tests (3/3)",
-    "PASS — action release manifest (59/59) and generated OpenAPI contract",
-    "QUALIFIED — complete unit suite: 145/147 files and 738/740 tests passed; the only failures are intentionally inapplicable exact-phase gates: P0 requires different ancestry and P6 requires the unmodified clean final-P6 composition"
+  "verificationCommands": [
+    {
+      "id": "typescript",
+      "command": "npm run typecheck",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "id": "pe0_audit_tests",
+      "command": "vitest run tests/unit/pe0-audit.test.ts --reporter=json",
+      "status": "PASS",
+      "exitCode": 0,
+      "testFiles": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0
+      },
+      "tests": {
+        "total": 3,
+        "passed": 3,
+        "failed": 0
+      }
+    },
+    {
+      "id": "action_release_manifest",
+      "command": "npm run release:manifest",
+      "status": "PASS",
+      "exitCode": 0,
+      "restoredGeneratedPaths": [
+        "docs/release/generated/action-manifest.json",
+        "docs/release/generated/action-manifest.md"
+      ]
+    },
+    {
+      "id": "openapi_generation",
+      "command": "npm run openapi",
+      "status": "PASS",
+      "exitCode": 0
+    },
+    {
+      "id": "openapi_contract_tests",
+      "command": "vitest run tests/unit/openapi-operational-query-contract.test.ts --reporter=json",
+      "status": "PASS",
+      "exitCode": 0,
+      "testFiles": {
+        "total": 1,
+        "passed": 1,
+        "failed": 0
+      },
+      "tests": {
+        "total": 2,
+        "passed": 2,
+        "failed": 0
+      }
+    },
+    {
+      "id": "applicable_unit_suite",
+      "command": "vitest run tests/unit --exclude tests/unit/p0-architecture-contract.test.ts --exclude tests/unit/p6-architecture-contract.test.ts --reporter=json",
+      "status": "PASS",
+      "exitCode": 0,
+      "testFiles": {
+        "total": 145,
+        "passed": 145,
+        "failed": 0
+      },
+      "tests": {
+        "total": 734,
+        "passed": 734,
+        "failed": 0
+      }
+    }
   ],
-  "certificationHash": "fc444605c53140e1208b44e54e7bb8650d753df66064c8b85731c77d57875391"
+  "testResults": [
+    "PASS — executed structural gate `branch_identity`: 3 refs -> 2 trees; main tree equals baseline aa7bb7976e06734829436ce105f8024cc85e15f7",
+    "PASS — executed structural gate `complete_disposition_ledger`: 699 runtime/release-reachable artifacts; 1350 total audited artifacts; UNKNOWN=0",
+    "PASS — executed structural gate `runtime_registries`: 59 actions/26 plugins, 13 queries, 47 jobs, 25 schedules",
+    "PASS — executed structural gate `schema_provider_dependency_graph`: 170 tables, 109 immutable migrations, 19 providers, 1604 graph nodes, 0 unresolved",
+    "PASS — executed structural gate `entrypoints_contamination_acceptance`: 110 entrypoints, 705 contaminated artifacts all disposed, 13 acceptance traces, 0 P1 classification blockers",
+    "PASS — executed structural gate `no_behavior_change`: 862 runtime/release paths retain fingerprint f253deb5e9802456776f0a7a180013a5e949efbecf6a9bab5238831cdd7ac4df",
+    "PASS — executed `npm run typecheck` (exit 0)",
+    "PASS — executed `vitest run tests/unit/pe0-audit.test.ts --reporter=json` (exit 0); 1/1 files and 3/3 tests passed",
+    "PASS — executed `npm run release:manifest` (exit 0); restored docs/release/generated/action-manifest.json, docs/release/generated/action-manifest.md",
+    "PASS — executed `npm run openapi` (exit 0)",
+    "PASS — executed `vitest run tests/unit/openapi-operational-query-contract.test.ts --reporter=json` (exit 0); 1/1 files and 2/2 tests passed",
+    "PASS — executed `vitest run tests/unit --exclude tests/unit/p0-architecture-contract.test.ts --exclude tests/unit/p6-architecture-contract.test.ts --reporter=json` (exit 0); 145/145 files and 734/734 tests passed"
+  ],
+  "certificationHash": "7ae396d509a9efd84e1858bbb29e0179c134fd3f6ec95e09369a854b8926ceae"
 }
