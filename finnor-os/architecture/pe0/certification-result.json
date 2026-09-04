@@ -1,0 +1,107 @@
+{
+  "schemaVersion": 1,
+  "status": "PASS",
+  "baselineSha": "f40526617c7e22258c12a2b669975ddaaf33e7fc",
+  "baselineTreeSha": "aa7bb7976e06734829436ce105f8024cc85e15f7",
+  "branchImplementationCount": 2,
+  "manifestHashes": {
+    "branch-state.json": "8486161425e2f335197d55fe6af84b73b2498f99d42ed84d0a0a3709b3d75163",
+    "runtime-entrypoints.json": "6a39974a852d4e67681b1698a823003a8473330717f068b178b5717e27596ac5",
+    "artifact-ledger.json": "39bec220637ad9ce3fd8f62e96162d5d14a6423440babed79b2192510061ba4a",
+    "dependency-graph.json": "cdda47d89fdf3efe3a38c230687c630237336d87edbb3f7b85b2424fd52f30b9",
+    "schema-read-write-map.json": "cb8d265c661e55c04b4e36c5ec42245fd4ca4d7d03a0586478642bc49a6bd053",
+    "action-execution-map.json": "11e75522134e71a7877ea16e5d590b2473aad443e999360a6a68f8aa42ac0f57",
+    "query-resolution-map.json": "689e51f8ef76ca9f9f209d11027e15a6a11223759da17025e30ff82f0b4fa02d",
+    "job-scheduler-map.json": "ee5d9dc8637ab20ab361752cee0377b618a71dcc5acf92704fb710d4e7017eb3",
+    "provider-truth-map.json": "64676cd76bf19536e8331d1bae8bfa2a7c3b9b97209e35202314a9d0235d0da0",
+    "source-import-boundary-map.json": "2e2a3399a7a9e5ecaa965bcf605d87c2a62deb6ecf66c5ef49841ba98bdf332a",
+    "water-contamination-map.json": "07207fc116e67b2e5e00cd7a2565b619854b3dd58d22a548d03a0bbfe1e7a244",
+    "cutover-blockers.json": "3b985d69aa39ada07eb6b4247e26cbeaf2c2081b3268a81bbb2047f7afb5c863",
+    "phase-boundary-map.json": "beadbffae5728798fd6d89621f1fe9889cb4877ce83ac5346d4101e8e4ee77b0",
+    "acceptance-traces.json": "57785a616e0dce7c63f197de5a1e44f39f15e03c780bdaf18dede8d5ff592ea1",
+    "index.json": "cc52695cea861b7f1d93527b69c26f9c8cbf0b190f7dd8e8bf3e1b6e1d03116f"
+  },
+  "gates": [
+    {
+      "id": "branch_identity",
+      "status": "PASS",
+      "evidence": "3 refs -> 2 trees; main tree equals baseline aa7bb7976e06734829436ce105f8024cc85e15f7"
+    },
+    {
+      "id": "complete_disposition_ledger",
+      "status": "PASS",
+      "evidence": "699 runtime/release-reachable artifacts; 1350 total audited artifacts; UNKNOWN=0"
+    },
+    {
+      "id": "runtime_registries",
+      "status": "PASS",
+      "evidence": "59 actions/26 plugins, 13 queries, 47 jobs, 25 schedules"
+    },
+    {
+      "id": "schema_provider_dependency_graph",
+      "status": "PASS",
+      "evidence": "170 tables, 109 immutable migrations, 19 providers, 1604 graph nodes, 0 unresolved"
+    },
+    {
+      "id": "entrypoints_contamination_acceptance",
+      "status": "PASS",
+      "evidence": "110 entrypoints, 705 contaminated artifacts all disposed, 13 acceptance traces, 0 P1 classification blockers"
+    },
+    {
+      "id": "no_behavior_change",
+      "status": "PASS",
+      "evidence": "862 runtime/release paths retain fingerprint f253deb5e9802456776f0a7a180013a5e949efbecf6a9bab5238831cdd7ac4df"
+    }
+  ],
+  "counts": {
+    "runtimeReachableArtifacts": 699,
+    "allAuditedArtifacts": 1350,
+    "unknown": 0,
+    "actions": 59,
+    "plugins": 26,
+    "queries": 13,
+    "jobs": 47,
+    "schedules": 25,
+    "tables": 170,
+    "migrations": 109,
+    "providers": 19,
+    "canonicalEntities": 40,
+    "businessTruthConcepts": 27
+  },
+  "behaviorFingerprint": "f253deb5e9802456776f0a7a180013a5e949efbecf6a9bab5238831cdd7ac4df",
+  "allowedPe0ChangedPaths": [
+    "finnor-os/architecture/pe0/acceptance-traces.json",
+    "finnor-os/architecture/pe0/action-execution-map.json",
+    "finnor-os/architecture/pe0/artifact-ledger.json",
+    "finnor-os/architecture/pe0/branch-state.json",
+    "finnor-os/architecture/pe0/certification-result.json",
+    "finnor-os/architecture/pe0/cutover-blockers.json",
+    "finnor-os/architecture/pe0/dependency-graph.json",
+    "finnor-os/architecture/pe0/implementation-report.md",
+    "finnor-os/architecture/pe0/index.json",
+    "finnor-os/architecture/pe0/job-scheduler-map.json",
+    "finnor-os/architecture/pe0/phase-boundary-map.json",
+    "finnor-os/architecture/pe0/provider-truth-map.json",
+    "finnor-os/architecture/pe0/query-resolution-map.json",
+    "finnor-os/architecture/pe0/runtime-entrypoints.json",
+    "finnor-os/architecture/pe0/schema-read-write-map.json",
+    "finnor-os/architecture/pe0/source-import-boundary-map.json",
+    "finnor-os/architecture/pe0/water-contamination-map.json",
+    "finnor-os/package.json",
+    "finnor-os/scripts/pe0/certify.ts",
+    "finnor-os/scripts/pe0/generate.ts",
+    "finnor-os/scripts/pe0/lib.ts",
+    "finnor-os/scripts/pe0/model.ts",
+    "finnor-os/tests/unit/pe0-audit.test.ts"
+  ],
+  "testResults": [
+    "PASS — PE0 deterministic inventory/certification invariants",
+    "PASS — runtime registry/schema/provider/branch/graph drift gates",
+    "PASS — shipped runtime behavior fingerprint unchanged",
+    "PASS — npm run typecheck",
+    "PASS — dedicated PE0 audit tests (3/3)",
+    "PASS — action release manifest (59/59) and generated OpenAPI contract",
+    "QUALIFIED — complete unit suite: 145/147 files and 738/740 tests passed; the only failures are intentionally inapplicable exact-phase gates: P0 requires different ancestry and P6 requires the unmodified clean final-P6 composition"
+  ],
+  "certificationHash": "fc444605c53140e1208b44e54e7bb8650d753df66064c8b85731c77d57875391"
+}

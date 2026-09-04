@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "unresolvedClassificationBlockers": [],
+  "orderedP1Inputs": [
+    {
+      "order": 1,
+      "id": "vertical_pack_contract",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/orchestration/src/plugin-registry.ts",
+        "finnor-os/packages/shared-types/src/company-graph.ts"
+      ],
+      "blocker": "There is no explicit Core ↔ VerticalPack contract and no vertical=none boot path.",
+      "requiredWork": "Define pack-owned action, query, entity, party, job, projection, source mapping, import writer, prompt and provisioning contributions.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 2,
+      "id": "canonical_entity_union",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/shared-types/src/company-graph.ts",
+        "finnor-os/packages/data-platform/src/business-truth-registry.ts",
+        "finnor-os/packages/operational-ir/src/resolution.ts",
+        "finnor-os/packages/policy-schema/src/index.ts"
+      ],
+      "blocker": "CANONICAL_ENTITY_TYPES and PARTY_TYPES mix Core, Water and reusable PE-facing parties and fan out into validation, policy, IR, Work context and read models.",
+      "requiredWork": "Split fixed Core identifiers from pack-contributed entity/party registries with explicit compatibility serialization.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 3,
+      "id": "mixed_database_contract",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/db/schema.ts",
+        "finnor-os/packages/db/index.ts",
+        "finnor-os/packages/db/migrations/0092_phase2_live_business_world.sql"
+      ],
+      "blocker": "One schema/barrel and trigger surface mixes Core and Water tables and Water projection channels.",
+      "requiredWork": "Create logical repository/schema ownership boundaries and additive forward migrations; never edit migrations 0000-0108.",
+      "dispositions": [
+        "CORE_EXTRACT",
+        "HISTORY_ONLY"
+      ]
+    },
+    {
+      "order": 4,
+      "id": "authority_resource_resolver",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/authority/src/index.ts",
+        "finnor-os/apps/api/lib/auth.ts"
+      ],
+      "blocker": "Generic authority evaluation hard-codes users.technician_id, technicians, work_orders, service_visits and households; authentication still carries legacy Water roles.",
+      "requiredWork": "Inject pack-owned resource assignment/scope resolution and separate authenticated employee identity from vertical role vocabulary.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 5,
+      "id": "action_plugin_registry",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/orchestration/src/plugin-registry.ts",
+        "finnor-os/scripts/release/action-hardening-spec.ts"
+      ],
+      "blocker": "All 59 actions and 26 plugins are registered in one startup catalog and release hardening fixes exact Water counts/names.",
+      "requiredWork": "Make action registration and hardening manifests compositional while keeping current Water pack active through cutover.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 6,
+      "id": "planner_cognition",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/orchestration/src/planner.ts",
+        "finnor-os/packages/orchestration/src/read-routing.ts",
+        "finnor-os/packages/orchestration/src/objective-loop.ts",
+        "finnor-os/packages/orchestration/src/operating-context.ts"
+      ],
+      "blocker": "Planner prompts, safe fallbacks, continuation logic and Objective context assume Water customers, scheduling, inventory, invoices and Water-test workflows.",
+      "requiredWork": "Move vocabulary, examples, safe fallbacks, query catalog and objective context into the active VerticalPack; prove vertical=none cannot emit a business action.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 7,
+      "id": "query_projection_registry",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/shared-types/src/operational-queries.ts",
+        "finnor-os/packages/read-models/src/operational-queries.ts",
+        "finnor-os/packages/projections/src/index.ts"
+      ],
+      "blocker": "The query union and projection registry combine Core Work/activity with Water customer/schedule/money/inventory/business-state reads.",
+      "requiredWork": "Split Core query execution/pagination from pack-owned query schemas, resolvers, projections and invalidation surfaces.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 8,
+      "id": "worker_job_scheduler_registry",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/apps/worker/src/index.ts",
+        "finnor-os/apps/worker/src/handlers/run-workflow-step.ts",
+        "finnor-os/apps/worker/src/handlers/business-operation.ts"
+      ],
+      "blocker": "The Core worker registers 47 handlers, 24 tenant schedules and Water workflow steps/bulk target logic in static monoliths.",
+      "requiredWork": "Keep queue/scheduler/lease machinery in Core; register Water handlers, scans and workflow steps through the active pack.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 9,
+      "id": "source_truth_mapping",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/tools/src/source-adapters.ts",
+        "finnor-os/packages/data-platform/src/source-truth.ts",
+        "finnor-os/apps/worker/src/handlers/sync-source.ts"
+      ],
+      "blocker": "Source-sync mechanics are coupled to GHL and QuickBooks scopes/order and Water canonical materialization.",
+      "requiredWork": "Separate checkpoint/lease/page/freshness engine from pack-owned provider scopes, normalization, relationship names and materializers.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 10,
+      "id": "import_writer_registry",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/import-engine/src/definition.ts",
+        "finnor-os/packages/import-engine/src/index.ts",
+        "finnor-os/packages/data-platform/src/import-writes.ts"
+      ],
+      "blocker": "Reusable parsing/batching/provenance calls a closed Water entity/field/relationship union and monolithic canonical writer.",
+      "requiredWork": "Introduce pack-provided import definitions, validators and canonical writers while retaining Core run/quarantine/idempotency.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 11,
+      "id": "p1_p6_boundaries",
+      "risk": "high",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/packages/operational-ir/src/effect-inference.ts",
+        "finnor-os/packages/epistemic-runtime/src/context-adapter.ts",
+        "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+        "finnor-os/packages/trace-compiler/src/adapters.ts"
+      ],
+      "blocker": "P1-P6 algorithms are mostly Core, but their runtime adapters import current Water query/resource/world/redaction contracts.",
+      "requiredWork": "Preserve algorithms; replace boundary imports with neutral Core ports and pack-owned resource sensitivity/query mappings.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 12,
+      "id": "reference_tenant_provisioning",
+      "risk": "high",
+      "owner": "P1/P6",
+      "paths": [
+        "finnor-os/scripts/client-factory.ts",
+        "finnor-os/packages/db/seed.ts",
+        "finnor-os/packages/orchestration/src/dealer-zero-replay.ts"
+      ],
+      "blocker": "Deterministic provisioning/replay machinery and Dealer Zero Water world are interleaved.",
+      "requiredWork": "Extract manifest/replay engine in P1; retain Dealer Zero as Water history until a later PE phase builds Deal Zero.",
+      "dispositions": [
+        "CORE_EXTRACT"
+      ]
+    },
+    {
+      "order": 13,
+      "id": "release_certification_coupling",
+      "risk": "critical",
+      "owner": "P1",
+      "paths": [
+        "finnor-os/scripts/release/action-hardening-spec.ts",
+        "finnor-os/scripts/release/run-action-contract-matrix.ts",
+        ".github/workflows/production-release.yml"
+      ],
+      "blocker": "Release tests and generated manifests assert exact Water actions, fixtures, schema head and journeys.",
+      "requiredWork": "Make gates consume the active pack manifest and certify unchanged Core invariants plus pack-specific contracts; preserve migration lineage.",
+      "dispositions": [
+        "CORE_EXTRACT",
+        "CORE_KEEP"
+      ]
+    }
+  ],
+  "p1StartCondition": "Implement only after this order and the per-artifact blockers in artifact-ledger.json are accepted; keep the Water pack active throughout extraction.",
+  "laterCutoverConstraints": [
+    "Do not edit migrations 0000-0108; use additive forward migrations.",
+    "Do not remove Water tables/actions/jobs until the active Water pack is isolated and compatibility reads are quarantined.",
+    "Do not rename Water entities into PE entities; introduce native PE responsibility in later phases.",
+    "Keep provider transports whose mapping disposition differs from transport disposition.",
+    "Regenerate pack-aware action/query/job/release manifests before any registry removal."
+  ],
+  "manifestHash": "3b985d69aa39ada07eb6b4247e26cbeaf2c2081b3268a81bbb2047f7afb5c863"
+}

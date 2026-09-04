@@ -1,0 +1,2236 @@
+{
+  "schemaVersion": 1,
+  "registry": {
+    "path": "finnor-os/apps/worker/src/index.ts",
+    "symbol": "createWorker",
+    "registeredCount": 47
+  },
+  "proactiveScheduler": {
+    "path": "finnor-os/apps/worker/src/index.ts",
+    "symbol": "PROACTIVE_SCANS",
+    "tenantRegistrationCount": 24
+  },
+  "globalScheduler": {
+    "path": "finnor-os/apps/worker/src/index.ts",
+    "symbol": "startGlobalScheduler",
+    "registrationCount": 1
+  },
+  "jobs": [
+    {
+      "jobType": "send_message",
+      "handlerSymbol": "sendMessage",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/send-message.ts",
+      "line": 56,
+      "disposition": "PE_REUSE",
+      "dispositionRule": "job.delivery",
+      "reason": "The job executes governed outbound communication and retains provider outcome evidence.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 56
+      },
+      "schedules": [],
+      "enqueuers": [
+        "e2e/jarvis-p4-verification-fixtures.spec.ts",
+        "finnor-os/packages/data-platform/src/business-truth-registry.ts",
+        "finnor-os/packages/domain-plugins/invoice-to-cash/index.ts",
+        "finnor-os/packages/domain-plugins/universal-actions/index.ts",
+        "finnor-os/packages/domain-plugins/universal-actions/runtime.ts",
+        "finnor-os/packages/operational-ir/fixtures/programs.ts",
+        "finnor-os/packages/operational-ir/src/adapters-lowerer.test.ts",
+        "finnor-os/packages/operational-ir/src/admissibility.ts",
+        "finnor-os/packages/operational-ir/src/effect-inference.ts",
+        "finnor-os/packages/operational-ir/src/p2-effects.test.ts",
+        "finnor-os/packages/operational-ir/src/p2-shadow.test.ts",
+        "finnor-os/packages/operational-ir/src/runtime-mapping.ts",
+        "finnor-os/packages/orchestration/src/compiler.ts",
+        "finnor-os/packages/orchestration/src/dealer-zero-preconditions.ts",
+        "finnor-os/packages/orchestration/src/interaction-targeting.ts",
+        "finnor-os/packages/orchestration/src/operational-ir-effect-resolution.ts",
+        "finnor-os/packages/shared-types/src/universal-actions.ts",
+        "finnor-os/packages/tools/src/capabilities/crm.ts",
+        "finnor-os/scripts/p0/generate-capability-inventory.ts",
+        "finnor-os/scripts/release/action-hardening-spec.ts",
+        "finnor-os/scripts/release/golden-business-suite.ts",
+        "finnor-os/scripts/seed-tenant-policies.ts",
+        "finnor-os/tests/integration/correlation-id.test.ts",
+        "finnor-os/tests/integration/payment-webhook-receipt.test.ts",
+        "finnor-os/tests/integration/universal-action-fabric.test.ts",
+        "finnor-os/tests/integration/vertical-workflows-phase4.test.ts",
+        "finnor-os/tests/unit/human-operating-compiler.test.ts",
+        "finnor-os/tests/unit/predicted-outcome.test.ts",
+        "finnor-os/tests/unit/universal-actions-contract.test.ts",
+        "src/components/jarvis/agents/agent-fleet.ts",
+        "src/components/jarvis/kernel/apply-trace-events.test.ts",
+        "src/components/jarvis/kernel/execution-presentation.test.ts",
+        "src/components/jarvis/kernel/selectors.test.ts",
+        "src/components/jarvis/lib/field-format.test.tsx",
+        "src/components/jarvis/lib/sandbox-detection.test.ts",
+        "src/components/jarvis/panels/WorkSurface.test.ts",
+        "src/components/jarvis/ui/renderers/backend-action-types.generated.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Asynchronous message delivery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "scheduled_reminder",
+      "handlerSymbol": "scheduledReminder",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scheduled-reminder.ts",
+      "line": 57,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.maintenance_reminder",
+      "reason": "The scheduled handler scans maintenance agreements and households.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 57
+      },
+      "schedules": [
+        {
+          "jobType": "scheduled_reminder",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 115
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "calls",
+        "domain_actions",
+        "domain_policies",
+        "households",
+        "invoices",
+        "maintenance_agreements"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [
+        "maintenance_agreement_lapsed",
+        "maintenance_agreement_renewed",
+        "maintenance_renewal_reminder_sent"
+      ],
+      "eventTypesEmitted": [
+        "maintenance_agreement_lapsed",
+        "maintenance_agreement_renewed",
+        "maintenance_renewal_reminder_sent"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/amc-renewal-sequence.test.ts",
+        "finnor-os/tests/integration/chaos-matrix.test.ts",
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "reconciliation",
+      "handlerSymbol": "reconciliation",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/reconciliation.ts",
+      "line": 58,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.reconciliation",
+      "reason": "The handler reconciles provider operation state and integration health independently of business ontology.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 58
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/webhooks/ghl/route.ts",
+        "finnor-os/packages/trace-compiler/fixtures/locked-corpus.ts",
+        "finnor-os/packages/trace-compiler/src/adapters.ts",
+        "finnor-os/scripts/p0/certify.ts",
+        "finnor-os/tests/unit/p0-locked-replay.test.ts"
+      ],
+      "tablesRead": [
+        "appointments",
+        "contacts",
+        "external_operations",
+        "integration_operations",
+        "messages",
+        "tenant_integrations"
+      ],
+      "tablesWritten": [
+        "tenant_integrations"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Unknown-outcome reconciliation",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/ghl-event-ingestion.test.ts"
+      ]
+    },
+    {
+      "jobType": "process_instruction",
+      "handlerSymbol": "processInstruction",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/process-instruction.ts",
+      "line": 59,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.instruction",
+      "reason": "The handler resumes the canonical instruction/Work intake path.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 59
+      },
+      "schedules": [],
+      "enqueuers": [],
+      "tablesRead": [
+        "calls"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": true,
+      "reusableMechanism": "Durable instruction processing",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "voice_confirm_request",
+      "handlerSymbol": "voiceConfirmRequest",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/voice-confirm-request.ts",
+      "line": 60,
+      "disposition": "PE_REUSE",
+      "dispositionRule": "job.voice",
+      "reason": "The job delivers an approval confirmation request through the reusable voice channel.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 60
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/orchestration/src/executor.ts",
+        "finnor-os/packages/orchestration/src/graph/nodes.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "users"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Voice approval request",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "voice_notify_failure",
+      "handlerSymbol": "voiceNotifyFailure",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/voice-notify-failure.ts",
+      "line": 61,
+      "disposition": "PE_REUSE",
+      "dispositionRule": "job.voice",
+      "reason": "The job delivers a governed failure notification through the reusable voice channel.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 61
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/scan-approval-expiry.ts",
+        "finnor-os/apps/worker/src/handlers/scan-watchdog.ts",
+        "finnor-os/apps/worker/src/handlers/scheduled-reminder.ts",
+        "finnor-os/packages/orchestration/src/executor.ts",
+        "finnor-os/packages/orchestration/src/graph/nodes.ts",
+        "finnor-os/tests/integration/chaos-matrix.test.ts"
+      ],
+      "tablesRead": [
+        "tenants"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Voice failure notification",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "scan_cold_leads",
+      "handlerSymbol": "scanColdLeads",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-cold-leads.ts",
+      "line": 62,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.lead_scan",
+      "reason": "The scan selects stale Water leads and drafts Water follow-up findings.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 62
+      },
+      "schedules": [
+        {
+          "jobType": "scan_cold_leads",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 116
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts",
+        "finnor-os/apps/worker/src/handlers/scan-cold-leads.ts"
+      ],
+      "tablesRead": [
+        "domain_policies"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_low_inventory",
+      "handlerSymbol": "scanLowInventory",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-low-inventory.ts",
+      "line": 63,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.inventory_scan",
+      "reason": "The scan reads installer inventory thresholds and drafts reorder findings.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 63
+      },
+      "schedules": [
+        {
+          "jobType": "scan_low_inventory",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 117
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts",
+        "finnor-os/apps/worker/src/handlers/scan-low-inventory.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "domain_policies",
+        "inventory_items"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/dealer-zero-detection-loops.test.ts",
+        "finnor-os/tests/integration/loop-closure.test.ts",
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_service_due",
+      "handlerSymbol": "scanServiceDue",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-service-due.ts",
+      "line": 64,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.service_scan",
+      "reason": "The scan reads household equipment and service-visit cadence.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 64
+      },
+      "schedules": [
+        {
+          "jobType": "scan_service_due",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 118
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts",
+        "finnor-os/apps/worker/src/handlers/scan-service-due.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "domain_policies",
+        "equipment",
+        "households",
+        "service_visits"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/dealer-zero-detection-loops.test.ts",
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_data_quality",
+      "handlerSymbol": "scanDataQuality",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-data-quality.ts",
+      "line": 65,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.mixed_data_quality",
+      "reason": "The finding lifecycle is reusable, but the current rule set directly queries households, leads, work orders, technicians, equipment and appointments.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 65
+      },
+      "schedules": [
+        {
+          "jobType": "scan_data_quality",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 119
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "appointments",
+        "business_events",
+        "contact_methods",
+        "contacts",
+        "data_quality_findings",
+        "domain_policies",
+        "equipment",
+        "households",
+        "leads",
+        "opportunities",
+        "scan_findings",
+        "work_orders"
+      ],
+      "tablesWritten": [
+        "data_quality_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Idempotent data-quality finding lifecycle",
+      "extractionBlockers": [
+        "Rule selectors are embedded in one handler instead of a VerticalPack"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/canonical-data-import.test.ts",
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "run_workflow_step",
+      "handlerSymbol": "runWorkflowStep",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-workflow-step.ts",
+      "line": 66,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.mixed_workflow_steps",
+      "reason": "The lease/idempotency/evidence executor is Core, while STEP_HANDLERS embeds Water appointment, stock, invoice, proposal and contact capability mappings.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 66
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/workflow-runtime/src/commands.ts",
+        "finnor-os/packages/workflow-runtime/src/steps.ts",
+        "finnor-os/tests/integration/scan-watchdog.test.ts"
+      ],
+      "tablesRead": [
+        "business_effects",
+        "calls",
+        "commands",
+        "documents",
+        "domain_actions",
+        "integration_operations",
+        "jobs",
+        "payments",
+        "reconciliation_cases",
+        "tenant_integrations",
+        "workflow_runs",
+        "workflow_steps"
+      ],
+      "tablesWritten": [
+        "business_effects",
+        "domain_actions",
+        "integration_operations",
+        "workflow_steps"
+      ],
+      "eventTypesConsumed": [
+        "commit_started"
+      ],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Durable step claim, provider idempotency, observation and compensation",
+      "extractionBlockers": [
+        "STEP_HANDLERS and internal handlers need pack registration"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/agentic-objective-loop.test.ts",
+        "finnor-os/tests/integration/business-effect-kernel.test.ts",
+        "finnor-os/tests/integration/chaos-matrix.test.ts",
+        "finnor-os/tests/integration/dealer-zero-detection-loops.test.ts",
+        "finnor-os/tests/integration/dealer-zero-e2e.test.ts",
+        "finnor-os/tests/integration/full-flow.test.ts",
+        "finnor-os/tests/integration/helpers/durable-action.ts",
+        "finnor-os/tests/integration/jarvis-hardening-contract.test.ts",
+        "finnor-os/tests/integration/langgraph-workflow-actions.test.ts",
+        "finnor-os/tests/integration/native-business-layer.test.ts",
+        "finnor-os/tests/integration/outcome-pack-autonomy.test.ts",
+        "finnor-os/tests/integration/outcome-pack-journeys.test.ts",
+        "finnor-os/tests/integration/planner-plan-dag.test.ts",
+        "finnor-os/tests/integration/quotation-prediction-receipt.test.ts",
+        "finnor-os/tests/integration/receipt-policy-and-approver.test.ts",
+        "finnor-os/tests/integration/sandbox-complete-flow.test.ts",
+        "finnor-os/tests/integration/simulator-seven-day.test.ts",
+        "finnor-os/tests/integration/simulator-tick.test.ts",
+        "finnor-os/tests/integration/single-action-runtime-bridge.test.ts",
+        "finnor-os/tests/integration/vertical-workflows-phase4.test.ts",
+        "finnor-os/tests/integration/whole-system-integration.test.ts"
+      ]
+    },
+    {
+      "jobType": "relay_outbox_events",
+      "handlerSymbol": "relayOutboxEventsHandler",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/relay-outbox-events.ts",
+      "line": 67,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.outbox",
+      "reason": "The handler dispatches durable outbox events with idempotency and no Water selector.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 67
+      },
+      "schedules": [
+        {
+          "jobType": "relay_outbox_events",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 120
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "outbox_events"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Transactional outbox delivery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "scan_appointment_no_shows",
+      "handlerSymbol": "scanAppointmentNoShows",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-appointment-no-shows.ts",
+      "line": 68,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.appointment_scan",
+      "reason": "The scan mutates missed Water appointments after a grace period.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 68
+      },
+      "schedules": [
+        {
+          "jobType": "scan_appointment_no_shows",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 121
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "appointments"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [
+        "appointment_no_show"
+      ],
+      "eventTypesEmitted": [
+        "appointment_no_show"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "owner_digest",
+      "handlerSymbol": "ownerDigest",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/owner-digest.ts",
+      "line": 69,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.owner_digest",
+      "reason": "Digest delivery is reusable, but its summary and recipient assumptions aggregate Water scans, cash and visit forecasts and the legacy owner role.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 69
+      },
+      "schedules": [
+        {
+          "jobType": "owner_digest",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 155
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts",
+        "finnor-os/apps/worker/src/handlers/owner-digest.ts"
+      ],
+      "tablesRead": [
+        "calls",
+        "domain_actions",
+        "invoices",
+        "leads",
+        "llm_calls",
+        "proposals",
+        "quotes",
+        "scan_findings",
+        "tenants",
+        "users"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Bounded human digest delivery",
+      "extractionBlockers": [
+        "Digest content and recipient policy need pack ownership"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/scan-handlers.test.ts"
+      ]
+    },
+    {
+      "jobType": "quickbooks_sync",
+      "handlerSymbol": "quickbooksSync",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/quickbooks-sync.ts",
+      "line": 70,
+      "disposition": "PE_REPLACE",
+      "dispositionRule": "job.quickbooks_water_sync",
+      "reason": "The job syncs household-linked Water invoices through QuickBooks; the transport is retained separately.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 70
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/domain-plugins/accounting/index.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "households",
+        "invoices"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "QuickBooks transport and idempotent provider operation",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "critic_review",
+      "handlerSymbol": "criticReview",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/critic-review.ts",
+      "line": 71,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.critic",
+      "reason": "The critic reviews planner actions against the durable instruction without a Water data selector.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 71
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/actions/pending/route.ts",
+        "finnor-os/apps/worker/src/handlers/critic-review.ts",
+        "finnor-os/packages/orchestration/src/index.ts",
+        "finnor-os/packages/orchestration/src/learning.ts",
+        "finnor-os/tests/integration/actions-pending-cockpit-fields.test.ts",
+        "finnor-os/tests/integration/critic-review.test.ts"
+      ],
+      "tablesRead": [
+        "domain_actions"
+      ],
+      "tablesWritten": [
+        "domain_actions"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Post-plan semantic review",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/critic-review.test.ts"
+      ]
+    },
+    {
+      "jobType": "learning_digest",
+      "handlerSymbol": "learningDigest",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/learning-digest.ts",
+      "line": 72,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.learning",
+      "reason": "The statistics/finding mechanism is generic, but action-type observations currently aggregate the monolithic Water action catalog.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 72
+      },
+      "schedules": [
+        {
+          "jobType": "learning_digest",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 146
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts",
+        "finnor-os/apps/worker/src/handlers/learning-digest.ts",
+        "finnor-os/tests/integration/learning-digest.test.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "domain_policies",
+        "scan_findings"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Action outcome learning digest",
+      "extractionBlockers": [
+        "Action catalog ownership must be pack-aware"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/learning-digest.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_approval_expiry",
+      "handlerSymbol": "scanApprovalExpiry",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-approval-expiry.ts",
+      "line": 73,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.approval",
+      "reason": "The handler expires governed approvals by policy timeout and resumes Work safely.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 73
+      },
+      "schedules": [
+        {
+          "jobType": "scan_approval_expiry",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 124
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "domain_actions",
+        "domain_policies",
+        "domain_policy_revisions"
+      ],
+      "tablesWritten": [
+        "domain_actions"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Approval timeout lifecycle",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/chaos-matrix.test.ts"
+      ]
+    },
+    {
+      "jobType": "simulator_tick",
+      "handlerSymbol": "simulatorTick",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/simulator-tick.ts",
+      "line": 74,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.dealer_zero",
+      "reason": "The deterministic simulator mechanism is valuable, but the tick reads Water households, agreements, technicians and invoices.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 74
+      },
+      "schedules": [
+        {
+          "jobType": "simulator_tick",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 151
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "equipment",
+        "households",
+        "invoices",
+        "maintenance_agreements",
+        "service_visits",
+        "technicians",
+        "tenant_settings",
+        "workflow_steps"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [
+        "simulated_service_visit_completed",
+        "simulated_service_visit_no_show"
+      ],
+      "eventTypesEmitted": [
+        "simulated_service_visit_completed",
+        "simulated_service_visit_no_show"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Deterministic time-compressed reference-world tick",
+      "extractionBlockers": [
+        "Simulator plan/events and seed world need pack ownership"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/simulator-seven-day.test.ts",
+        "finnor-os/tests/integration/simulator-tick.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_reliability_alerts",
+      "handlerSymbol": "scanReliabilityAlerts",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-reliability-alerts.ts",
+      "line": 75,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.reliability",
+      "reason": "The scan evaluates workflow/provider reliability rather than Water business rules.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 75
+      },
+      "schedules": [
+        {
+          "jobType": "scan_reliability_alerts",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 127
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "business_events",
+        "calls",
+        "provider_circuit_state"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [
+        "anomaly_detected",
+        "rolling_z_score"
+      ],
+      "eventTypesEmitted": [
+        "anomaly_detected",
+        "rolling_z_score"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Reliability alerting",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/reliability-alerts.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_integration_health",
+      "handlerSymbol": "scanIntegrationHealth",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-integration-health.ts",
+      "line": 76,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.integration_health",
+      "reason": "The scan evaluates tenant integrations and reconciliation backlog without interpreting business entities.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 76
+      },
+      "schedules": [
+        {
+          "jobType": "scan_integration_health",
+          "scope": "tenant",
+          "intervalHours": 0.16666666666666666,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 132
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "calls",
+        "reconciliation_cases",
+        "tenant_integrations"
+      ],
+      "tablesWritten": [
+        "tenant_integrations"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Integration health monitor",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/scan-integration-health.test.ts",
+        "finnor-os/tests/integration/tenant-credential-isolation.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_watchdog",
+      "handlerSymbol": "scanWatchdog",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-watchdog.ts",
+      "line": 77,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.watchdog",
+      "reason": "The watchdog finds stuck workflows/actions and missing receipts independent of vertical.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 77
+      },
+      "schedules": [
+        {
+          "jobType": "scan_watchdog",
+          "scope": "tenant",
+          "intervalHours": 0.16666666666666666,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 141
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "action_log",
+        "commands",
+        "decision_receipts",
+        "domain_actions",
+        "domain_policies",
+        "domain_policy_revisions",
+        "jobs",
+        "workflow_runs",
+        "workflow_steps"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Execution watchdog",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/scan-watchdog.test.ts"
+      ]
+    },
+    {
+      "jobType": "scan_dlq_triage",
+      "handlerSymbol": "scanDlqTriage",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-dlq-triage.ts",
+      "line": 78,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.dlq",
+      "reason": "The handler classifies dead-letter recovery without Water selectors.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 78
+      },
+      "schedules": [
+        {
+          "jobType": "scan_dlq_triage",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 145
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "dead_letters"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "DLQ triage",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "backup_db",
+      "handlerSymbol": "backupDb",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/backup-db.ts",
+      "line": 79,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.backup",
+      "reason": "The handler backs up the canonical Postgres database as infrastructure.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 79
+      },
+      "schedules": [
+        {
+          "jobType": "backup_db",
+          "scope": "global",
+          "intervalHours": 6,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 198
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "worker_heartbeat"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "global",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Database backup",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "daily_scorecard",
+      "handlerSymbol": "dailyScorecard",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/daily-scorecard.ts",
+      "line": 80,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.scorecard",
+      "reason": "The scorecard records workflow, receipt, reconciliation and LLM reliability metrics only.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 80
+      },
+      "schedules": [
+        {
+          "jobType": "daily_scorecard",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 162
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [
+        "calls",
+        "llm_calls"
+      ],
+      "tablesWritten": [
+        "readiness_log"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Daily runtime reliability scorecard",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/readiness-and-failure-injections.test.ts"
+      ]
+    },
+    {
+      "jobType": "project_read_models",
+      "handlerSymbol": "projectReadModels",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/project-read-models.ts",
+      "line": 81,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.projections",
+      "reason": "Projection refresh mechanics are reusable, but the registered views aggregate Water proposals/customers/schedule/money/inventory.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 81
+      },
+      "schedules": [
+        {
+          "jobType": "project_read_models",
+          "scope": "tenant",
+          "intervalHours": 1,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 167
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "proposals"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Debounced and periodic projection refresh",
+      "extractionBlockers": [
+        "Projection registry needs VerticalPack ownership"
+      ],
+      "tests": []
+    },
+    {
+      "jobType": "repair_plan_after_terminal_failure",
+      "handlerSymbol": "repairPlanAfterTerminalFailure",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/repair-plan-after-terminal-failure.ts",
+      "line": 82,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.repair",
+      "reason": "The handler invokes the neutral Work repair planner after a terminal step failure.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 82
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/workflow-runtime/src/steps.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Durable repair planning",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/unit/interactive-runtime-deadline-closure.test.ts"
+      ]
+    },
+    {
+      "jobType": "suggest_daily_routes",
+      "handlerSymbol": "suggestDailyRoutes",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/suggest-daily-routes.ts",
+      "line": 83,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.route_scan",
+      "reason": "The job drafts technician route suggestions from dispatch profiles.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 83
+      },
+      "schedules": [
+        {
+          "jobType": "suggest_daily_routes",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 156
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/suggest-daily-routes.ts"
+      ],
+      "tablesRead": [
+        "technicians"
+      ],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "send_push_notification",
+      "handlerSymbol": "sendPushNotification",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/send-push-notification.ts",
+      "line": 84,
+      "disposition": "PE_REUSE",
+      "dispositionRule": "job.push",
+      "reason": "Push notification delivery is valid for PE team members.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 84
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/scan-reliability-alerts.ts",
+        "finnor-os/apps/worker/src/handlers/scan-watchdog.ts",
+        "finnor-os/packages/orchestration/src/executor.ts",
+        "finnor-os/packages/orchestration/src/graph/nodes.ts"
+      ],
+      "tablesRead": [
+        "push_subscriptions"
+      ],
+      "tablesWritten": [
+        "push_subscriptions"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Push delivery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "scan_ewma_reorder",
+      "handlerSymbol": "scanEwmaReorder",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-ewma-reorder.ts",
+      "line": 85,
+      "disposition": "WATER_RETIRE",
+      "dispositionRule": "job.inventory_scan",
+      "reason": "The scan forecasts Water inventory consumption and reorder need.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 85
+      },
+      "schedules": [
+        {
+          "jobType": "scan_ewma_reorder",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 157
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/scan-ewma-reorder.ts"
+      ],
+      "tablesRead": [
+        "business_events",
+        "domain_actions",
+        "domain_policies",
+        "inventory_items"
+      ],
+      "tablesWritten": [
+        "scan_findings"
+      ],
+      "eventTypesConsumed": [
+        "inventory_item",
+        "stock_used_on_visit"
+      ],
+      "eventTypesEmitted": [
+        "inventory_item",
+        "stock_used_on_visit"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": null,
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/ewma-reorder.test.ts"
+      ]
+    },
+    {
+      "jobType": "purge_retention",
+      "handlerSymbol": "purgeRetention",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/purge-retention.ts",
+      "line": 86,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.retention",
+      "reason": "The handler applies tenant data-retention policy to runtime evidence.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 86
+      },
+      "schedules": [
+        {
+          "jobType": "purge_retention",
+          "scope": "tenant",
+          "intervalHours": 24,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 158
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "inbox_events",
+        "jobs",
+        "llm_calls",
+        "messages",
+        "tenant_retention_policies",
+        "work_wake_claims"
+      ],
+      "tablesWritten": [
+        "calls",
+        "computer_artifacts",
+        "jobs",
+        "llm_calls",
+        "messages"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Retention enforcement",
+      "extractionBlockers": [],
+      "tests": [
+        "finnor-os/tests/integration/computer-execution-fabric.test.ts",
+        "finnor-os/tests/integration/data-retention.test.ts"
+      ]
+    },
+    {
+      "jobType": "send_resend_email",
+      "handlerSymbol": "sendResendEmailJob",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/send-resend-email.ts",
+      "line": 87,
+      "disposition": "PE_REUSE",
+      "dispositionRule": "job.email",
+      "reason": "Resend-backed email delivery is directly reusable for PE.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 87
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/tools/src/builtin-tools.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Email delivery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "dispatch_business_operation",
+      "handlerSymbol": "dispatchBusinessOperation",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/business-operation.ts",
+      "line": 88,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.customer_batch",
+      "reason": "The dispatcher/lease machinery is generic but the operation model and downstream safety check are a household win-back campaign.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 88
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/business-operation.ts",
+        "finnor-os/packages/db/index.ts"
+      ],
+      "tablesRead": [
+        "business_effects",
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "communications_log",
+        "domain_actions",
+        "households",
+        "sandbox_outbox",
+        "works"
+      ],
+      "tablesWritten": [
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "decision_receipts",
+        "domain_actions",
+        "jobs"
+      ],
+      "eventTypesConsumed": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "eventTypesEmitted": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Durable bulk-operation dispatcher",
+      "extractionBlockers": [
+        "Target resolver and consent policy are hard-coded to households"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/durable-business-operation.test.ts",
+        "finnor-os/tests/integration/sandbox-complete-flow.test.ts",
+        "finnor-os/tests/integration/whole-system-integration.test.ts"
+      ]
+    },
+    {
+      "jobType": "execute_business_operation_target",
+      "handlerSymbol": "executeBusinessOperationTarget",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/business-operation.ts",
+      "line": 89,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.customer_batch",
+      "reason": "Per-target claim/retry/receipt mechanics are reusable, but execution resolves household marketing consent and phone state.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 89
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/business-operation.ts"
+      ],
+      "tablesRead": [
+        "business_effects",
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "communications_log",
+        "domain_actions",
+        "households",
+        "sandbox_outbox",
+        "works"
+      ],
+      "tablesWritten": [
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "decision_receipts",
+        "domain_actions",
+        "jobs"
+      ],
+      "eventTypesConsumed": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "eventTypesEmitted": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Per-target idempotent execution and reconciliation",
+      "extractionBlockers": [
+        "Vertical target adapter required"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/durable-business-operation.test.ts",
+        "finnor-os/tests/integration/sandbox-complete-flow.test.ts",
+        "finnor-os/tests/integration/whole-system-integration.test.ts"
+      ]
+    },
+    {
+      "jobType": "execute_business_operation_call_batch",
+      "handlerSymbol": "executeBusinessOperationCallBatch",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/business-operation.ts",
+      "line": 90,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.customer_batch",
+      "reason": "Call batching and rate caps are reusable, but targets are frozen Water households.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 90
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/business-operation.ts"
+      ],
+      "tablesRead": [
+        "business_effects",
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "communications_log",
+        "domain_actions",
+        "households",
+        "sandbox_outbox",
+        "works"
+      ],
+      "tablesWritten": [
+        "business_operation_events",
+        "business_operation_targets",
+        "business_operations",
+        "decision_receipts",
+        "domain_actions",
+        "jobs"
+      ],
+      "eventTypesConsumed": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "eventTypesEmitted": [
+        "authority_revalidation_failed",
+        "call_batch_queued",
+        "calling_cap_deferred",
+        "operation_cancelled_by_work",
+        "target_jobs_queued",
+        "winback_call_emulated",
+        "winback_call_provider_queued",
+        "winback_sms_emulated",
+        "winback_sms_provider_accepted"
+      ],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Rate-bounded call batching",
+      "extractionBlockers": [
+        "Vertical target adapter required"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/durable-business-operation.test.ts",
+        "finnor-os/tests/integration/sandbox-complete-flow.test.ts",
+        "finnor-os/tests/integration/whole-system-integration.test.ts"
+      ]
+    },
+    {
+      "jobType": "run_objective_iteration",
+      "handlerSymbol": "runObjectiveIteration",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-objective-iteration.ts",
+      "line": 91,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.objective_boundary",
+      "reason": "The job host is neutral, but constructing the default orchestrator injects the Water plugin/query/planner catalog into every objective iteration.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 91
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/db/event-fabric.ts",
+        "finnor-os/packages/orchestration/src/objective-loop.ts",
+        "finnor-os/tests/integration/agentic-objective-loop.test.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": true,
+      "reusableMechanism": "Durable objective iteration",
+      "extractionBlockers": [
+        "Orchestrator must accept an explicit VerticalPack, including vertical=none"
+      ],
+      "tests": []
+    },
+    {
+      "jobType": "recover_objectives",
+      "handlerSymbol": "recoverObjectives",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-objective-iteration.ts",
+      "line": 92,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.objective_recovery",
+      "reason": "The handler recovers runnable objective loops from durable lifecycle state.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 92
+      },
+      "schedules": [
+        {
+          "jobType": "recover_objectives",
+          "scope": "tenant",
+          "intervalHours": 0.16666666666666666,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 113
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": true,
+      "reusableMechanism": "Objective recovery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "run_client_factory",
+      "handlerSymbol": "runClientFactoryJob",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-client-factory.ts",
+      "line": 93,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.provisioning",
+      "reason": "The durable factory runner is reusable, while the manifest/policy/vocabulary/reference-tenant stages currently provision Water defaults.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 93
+      },
+      "schedules": [],
+      "enqueuers": [],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Convergent staged client provisioning",
+      "extractionBlockers": [
+        "Client manifest needs VerticalPack-owned defaults"
+      ],
+      "tests": []
+    },
+    {
+      "jobType": "run_computer_task",
+      "handlerSymbol": "runComputerTask",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-computer-task.ts",
+      "line": 94,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.computer",
+      "reason": "The handler executes a governed computer run through the Core broker/effect boundary.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 94
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/computer/src/repository.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Computer execution",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "recover_computer_tasks",
+      "handlerSymbol": "recoverComputerTasks",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/run-computer-task.ts",
+      "line": 95,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.computer_recovery",
+      "reason": "The handler recovers leased computer runs without vertical selectors.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 95
+      },
+      "schedules": [
+        {
+          "jobType": "recover_computer_tasks",
+          "scope": "tenant",
+          "intervalHours": 0.16666666666666666,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 114
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Computer recovery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "process_work_event_wait_deadline",
+      "handlerSymbol": "processWorkEventWaitDeadlineHandler",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/process-work-event-wait-deadline.ts",
+      "line": 96,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.event_wait",
+      "reason": "The handler advances a durable Work event-wait timeout.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 96
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/db/event-fabric.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": true,
+      "reusableMechanism": "Durable wait deadline",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "scan_connection_health",
+      "handlerSymbol": "scanConnectionHealth",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/scan-connection-health.ts",
+      "line": 97,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.connection_health",
+      "reason": "The handler checks governed application/auth connections independently of business entities.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 97
+      },
+      "schedules": [
+        {
+          "jobType": "scan_connection_health",
+          "scope": "tenant",
+          "intervalHours": 0.25,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 133
+        }
+      ],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/vitals/route.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Connection health and recovery",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "release_probe",
+      "handlerSymbol": "releaseProbe",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/release-probe.ts",
+      "line": 98,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.release",
+      "reason": "The handler reports worker release identity/capability for production verification.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 98
+      },
+      "schedules": [],
+      "enqueuers": [],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Release provenance probe",
+      "extractionBlockers": [],
+      "tests": []
+    },
+    {
+      "jobType": "sync_sources",
+      "handlerSymbol": "syncSources",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/sync-source.ts",
+      "line": 99,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.source_sync",
+      "reason": "Lease/checkpoint fan-out is Core, but provider defaults and scope ordering select GHL contacts, QuickBooks customer/invoice/payment and Vapi calls.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 99
+      },
+      "schedules": [
+        {
+          "jobType": "sync_sources",
+          "scope": "tenant",
+          "intervalHours": 0.25,
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "line": 136
+        }
+      ],
+      "enqueuers": [],
+      "tablesRead": [
+        "application_accounts",
+        "auth_profiles",
+        "calls",
+        "contacts",
+        "invoices",
+        "jobs",
+        "payments",
+        "tenant_integrations"
+      ],
+      "tablesWritten": [
+        "integration_sync_checkpoints",
+        "tenant_integrations"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Checkpointed per-source fan-out",
+      "extractionBlockers": [
+        "Provider scopes/order need VerticalPack ownership"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/ghl-event-ingestion.test.ts",
+        "finnor-os/tests/integration/source-sync-worker.test.ts"
+      ]
+    },
+    {
+      "jobType": "sync_source",
+      "handlerSymbol": "syncSource",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/sync-source.ts",
+      "line": 100,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.source_sync",
+      "reason": "Pagination, leases, retry and freshness are Core, while normalized records materialize Water canonical entities through the shared writer.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 100
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/worker/src/handlers/sync-source.ts"
+      ],
+      "tablesRead": [
+        "application_accounts",
+        "auth_profiles",
+        "calls",
+        "contacts",
+        "invoices",
+        "jobs",
+        "payments",
+        "tenant_integrations"
+      ],
+      "tablesWritten": [
+        "integration_sync_checkpoints",
+        "tenant_integrations"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "Checkpointed pagination, leases, retry, freshness and reconciliation",
+      "extractionBlockers": [
+        "Adapter normalization and canonical materializer need separate ports"
+      ],
+      "tests": [
+        "finnor-os/tests/integration/ghl-event-ingestion.test.ts",
+        "finnor-os/tests/integration/source-sync-worker.test.ts"
+      ]
+    },
+    {
+      "jobType": "observe_external_effect",
+      "handlerSymbol": "observeExternalEffectHandler",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/observe-external-effect.ts",
+      "line": 101,
+      "disposition": "CORE_EXTRACT",
+      "dispositionRule": "job.external_observation",
+      "reason": "Observation scheduling and evidence are Core, but the observer hard-codes contact, appointment, invoice and payment read-back shapes.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 101
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/apps/api/app/api/webhooks/vapi/route.ts",
+        "finnor-os/apps/worker/src/handlers/observe-external-effect.ts",
+        "finnor-os/apps/worker/src/handlers/reconciliation.ts",
+        "finnor-os/packages/tools/src/registry.ts",
+        "finnor-os/packages/workflow-runtime/src/capability.ts"
+      ],
+      "tablesRead": [
+        "business_effects",
+        "external_operations",
+        "integration_operations",
+        "tenant_integrations",
+        "workflow_steps"
+      ],
+      "tablesWritten": [
+        "external_operations",
+        "integration_operations"
+      ],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": false,
+      "reusableMechanism": "External-effect read-back and verification",
+      "extractionBlockers": [
+        "Observation contract registry needs VerticalPack/provider ownership"
+      ],
+      "tests": []
+    },
+    {
+      "jobType": "reconcile_interactive_work",
+      "handlerSymbol": "reconcileInteractiveWork",
+      "handlerPath": "finnor-os/apps/worker/src/handlers/reconcile-interactive-work.ts",
+      "line": 102,
+      "disposition": "CORE_KEEP",
+      "dispositionRule": "job.interactive_reconciliation",
+      "reason": "The handler repairs interactive Work lifecycle state without Water selectors.",
+      "registry": {
+        "path": "finnor-os/apps/worker/src/index.ts",
+        "symbol": "createWorker",
+        "line": 102
+      },
+      "schedules": [],
+      "enqueuers": [
+        "finnor-os/packages/db/index.ts"
+      ],
+      "tablesRead": [],
+      "tablesWritten": [],
+      "eventTypesConsumed": [],
+      "eventTypesEmitted": [],
+      "retryAndDlq": "JobQueue claims durable jobs with attempt/max-attempt state, retry_at and dead-letter terminal handling.",
+      "tenantScope": "trusted job payload tenantId plus tenant-scoped repositories",
+      "workObjectiveCoupling": true,
+      "reusableMechanism": "Interactive Work reconciliation",
+      "extractionBlockers": [],
+      "tests": []
+    }
+  ],
+  "schedulerRegistrations": [
+    {
+      "jobType": "recover_objectives",
+      "scope": "tenant",
+      "intervalHours": 0.16666666666666666,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 113
+    },
+    {
+      "jobType": "recover_computer_tasks",
+      "scope": "tenant",
+      "intervalHours": 0.16666666666666666,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 114
+    },
+    {
+      "jobType": "scheduled_reminder",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 115
+    },
+    {
+      "jobType": "scan_cold_leads",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 116
+    },
+    {
+      "jobType": "scan_low_inventory",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 117
+    },
+    {
+      "jobType": "scan_service_due",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 118
+    },
+    {
+      "jobType": "scan_data_quality",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 119
+    },
+    {
+      "jobType": "relay_outbox_events",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 120
+    },
+    {
+      "jobType": "scan_appointment_no_shows",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 121
+    },
+    {
+      "jobType": "scan_approval_expiry",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 124
+    },
+    {
+      "jobType": "scan_reliability_alerts",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 127
+    },
+    {
+      "jobType": "scan_integration_health",
+      "scope": "tenant",
+      "intervalHours": 0.16666666666666666,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 132
+    },
+    {
+      "jobType": "scan_connection_health",
+      "scope": "tenant",
+      "intervalHours": 0.25,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 133
+    },
+    {
+      "jobType": "sync_sources",
+      "scope": "tenant",
+      "intervalHours": 0.25,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 136
+    },
+    {
+      "jobType": "scan_watchdog",
+      "scope": "tenant",
+      "intervalHours": 0.16666666666666666,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 141
+    },
+    {
+      "jobType": "scan_dlq_triage",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 145
+    },
+    {
+      "jobType": "learning_digest",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 146
+    },
+    {
+      "jobType": "simulator_tick",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 151
+    },
+    {
+      "jobType": "owner_digest",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 155
+    },
+    {
+      "jobType": "suggest_daily_routes",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 156
+    },
+    {
+      "jobType": "scan_ewma_reorder",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 157
+    },
+    {
+      "jobType": "purge_retention",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 158
+    },
+    {
+      "jobType": "daily_scorecard",
+      "scope": "tenant",
+      "intervalHours": 24,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 162
+    },
+    {
+      "jobType": "project_read_models",
+      "scope": "tenant",
+      "intervalHours": 1,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 167
+    },
+    {
+      "jobType": "backup_db",
+      "scope": "global",
+      "intervalHours": 6,
+      "path": "finnor-os/apps/worker/src/index.ts",
+      "line": 198
+    }
+  ],
+  "dispositions": {
+    "PE_REUSE": 5,
+    "WATER_RETIRE": 7,
+    "CORE_KEEP": 20,
+    "CORE_EXTRACT": 14,
+    "PE_REPLACE": 1
+  },
+  "manifestHash": "ee5d9dc8637ab20ab361752cee0377b618a71dcc5acf92704fb710d4e7017eb3"
+}

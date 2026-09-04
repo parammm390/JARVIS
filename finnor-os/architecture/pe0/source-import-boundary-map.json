@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "sourceSync": {
+    "engineDisposition": "CORE_EXTRACT",
+    "enginePaths": [
+      "finnor-os/apps/worker/src/handlers/sync-source.ts",
+      "finnor-os/packages/data-platform/src/source-truth.ts"
+    ],
+    "adapterRegistry": "finnor-os/packages/tools/src/source-adapters.ts",
+    "defaultScopes": {
+      "ghl": {
+        "initial": [
+          "contacts"
+        ],
+        "incremental": [
+          "contacts"
+        ]
+      },
+      "quickbooks": {
+        "initial": [
+          "customers",
+          "invoices",
+          "payments"
+        ],
+        "incremental": [
+          "accounting_changes"
+        ]
+      },
+      "stripe": {
+        "initial": [],
+        "incremental": []
+      },
+      "vapi": {
+        "initial": [
+          "calls"
+        ],
+        "incremental": [
+          "calls"
+        ]
+      }
+    },
+    "waterMappings": [
+      "GHL contact -> customer/household",
+      "GHL appointment -> appointment + household",
+      "QuickBooks Customer -> customer/household",
+      "QuickBooks Invoice.CustomerRef -> invoice.householdId",
+      "QuickBooks Payment.LinkedTxn -> payment.invoiceId",
+      "Stripe checkout session -> Water invoice/payment observation"
+    ]
+  },
+  "importEngine": {
+    "mechanismDisposition": "CORE_EXTRACT",
+    "parserDisposition": "CORE_KEEP",
+    "reusableMechanisms": [
+      "CSV/JSON/JSONL parsing",
+      "bounded batching",
+      "declarative field mapping",
+      "normalization",
+      "update modes",
+      "idempotency",
+      "provenance",
+      "ambiguity/quarantine"
+    ],
+    "definitionPath": "finnor-os/packages/import-engine/src/definition.ts",
+    "supportedEntityCount": 12,
+    "supportedEntities": [
+      "customer",
+      "lead",
+      "appointment",
+      "service_visit",
+      "equipment",
+      "work_order",
+      "quote",
+      "proposal",
+      "invoice",
+      "payment",
+      "inventory_item",
+      "technician"
+    ],
+    "canonicalWriterPath": "finnor-os/packages/data-platform/src/import-writes.ts",
+    "writerDisposition": "CORE_EXTRACT",
+    "verticalDependencies": [
+      "closed Water entity enum",
+      "Water fields",
+      "householdId/technicianId/quoteId/invoiceId relationships",
+      "monolithic writeCanonicalImportRow switch"
+    ],
+    "requiredP1Boundary": "VerticalPack contributes entity definitions, validation, relationship resolution and canonical writers; Core retains parsing/run/idempotency/provenance/quarantine."
+  },
+  "manifestHash": "2e2a3399a7a9e5ecaa965bcf605d87c2a62deb6ecf66c5ef49841ba98bdf332a"
+}

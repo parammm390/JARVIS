@@ -1,0 +1,2234 @@
+{
+  "schemaVersion": 1,
+  "algorithmMutationAllowedInPe0": false,
+  "phases": [
+    {
+      "phase": "P1",
+      "package": "@finnor/operational-ir",
+      "coreAlgorithms": [
+        "canonical serialization",
+        "IR graph/schema primitives",
+        "lowering framework"
+      ],
+      "extractBoundaries": [
+        "effect-inference Water resource catalog",
+        "OperationalQueryRequest adapters",
+        "CANONICAL_ENTITY_TYPES resolution",
+        "DomainAction/BusinessEffect runtime mappings"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/architecture/p1/operational-ir-contract.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/p2-handoff.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/audit/pre-change-reference-inventory.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/p2-locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/p2-programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "service_visit"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/README.md",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/scripts/run-p2-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/adapters-lowerer.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "service_visit"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/adapters.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/admissibility.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/canonical.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/canonical.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-composition.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-inference.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "technician",
+            "service_visit",
+            "inventory",
+            "work_order",
+            "appointment",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "quote_proposal"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effects.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/graph.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/information-flow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/lowerer.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-effects.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-shadow.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "quote_proposal"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/resolution.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/runtime-mapping.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/schema.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/semantic-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/static-lowerer.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/validation.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/validation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer",
+            "household",
+            "customer",
+            "dispatch",
+            "inventory",
+            "appointment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-resolution.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "lead_pipeline",
+            "installation"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/candidate-generation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/cost-model.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies-rewrites.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/extraction.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/models-receipt.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/rewrites.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/budget.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/evaluation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/immutable.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/predicates.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/property.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/replay-semantic.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/test-support.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/wait.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p1/certify.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/scripts/p2/certify.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/scripts/p3/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/integration/p2-effect-resolution.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p1-architecture-contract.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p2-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p5-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    },
+    {
+      "phase": "P2",
+      "package": "@finnor/operational-ir",
+      "coreAlgorithms": [
+        "static admissibility",
+        "effect-set analysis",
+        "conflict/compensation checks"
+      ],
+      "extractBoundaries": [
+        "runtime BusinessEffect/ComputerAuthorizedEffect adapters",
+        "Water resource classifications inherited from effect-inference"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/architecture/p1/operational-ir-contract.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/p2-handoff.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/audit/p2-pre-change-reference-inventory.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/audit/pre-change-reference-inventory.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/p2-locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/p2-programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "service_visit"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/README.md",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/scripts/run-p2-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/adapters-lowerer.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "service_visit"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/adapters.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/admissibility.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/canonical.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/canonical.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-composition.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-inference.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "technician",
+            "service_visit",
+            "inventory",
+            "work_order",
+            "appointment",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "quote_proposal"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/effects.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/graph.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/information-flow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/lowerer.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-effects.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/p2-shadow.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "quote_proposal"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/resolution.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/runtime-mapping.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/schema.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/semantic-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/static-lowerer.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/validation.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/validation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer",
+            "household",
+            "customer",
+            "dispatch",
+            "inventory",
+            "appointment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-resolution.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-effect-shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "lead_pipeline",
+            "installation"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operational-ir-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/candidate-generation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/cost-model.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies-rewrites.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/extraction.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/models-receipt.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/rewrites.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/budget.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/evaluation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/immutable.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/predicates.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/property.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/replay-semantic.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/test-support.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/wait.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p1/certify.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/scripts/p2/certify.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/scripts/p3/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/integration/p2-effect-resolution.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p1-architecture-contract.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p2-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p5-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    },
+    {
+      "phase": "P3",
+      "package": "@finnor/epistemic-runtime",
+      "coreAlgorithms": [
+        "proposition/evidence state",
+        "uncertainty lattice",
+        "acquisition policy",
+        "source precedence"
+      ],
+      "extractBoundaries": [
+        "OperatingContext adapter",
+        "CausalReplay trace adapter",
+        "invoice test-support propositions",
+        "orchestration shadow adapter"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/architecture/p3/epistemic-runtime-contract.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/belief-update.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/belief-update.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/context-adapter.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "water_domain",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/context-adapter.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/controller.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/controller.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/information-actions.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/information-actions.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/p2-handoff.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/p2-handoff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/property.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/scoring.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/shadow-trace-semantic.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/source-precedence.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/state.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/test-support.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/trace.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/uncertainty.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/epistemic-runtime-shadow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer",
+            "household",
+            "customer",
+            "dispatch",
+            "inventory",
+            "appointment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/epistemic.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p3/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p3-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p3-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    },
+    {
+      "phase": "P4",
+      "package": "@finnor/program-search",
+      "coreAlgorithms": [
+        "bounded search",
+        "frontier/dominance",
+        "program identity",
+        "budgeting"
+      ],
+      "extractBoundaries": [
+        "CausalReplay trace adapter",
+        "orchestration program-search shadow inputs"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer",
+            "household",
+            "customer",
+            "dispatch",
+            "inventory",
+            "appointment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/fixtures/programs.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/candidate-generation.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/candidate-generation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/cost-model.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies-rewrites.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/dependencies.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/epistemic.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/extraction.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/models-receipt.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/property.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/rewrites.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/search.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/simulation-evidence.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/simulation-evidence.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/solvers.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/trace.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/program-search/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p4/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p4-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dispatch",
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p4-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    },
+    {
+      "phase": "P5",
+      "package": "@finnor/speculative-runtime",
+      "coreAlgorithms": [
+        "immutable branches",
+        "interventions",
+        "world variables",
+        "comparison"
+      ],
+      "extractBoundaries": [
+        "BusinessWorldProjection snapshot adapter",
+        "read-model provenance",
+        "household/invoice test support",
+        "orchestration speculative shadow"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer",
+            "household",
+            "customer",
+            "dispatch",
+            "inventory",
+            "appointment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/program-search-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/speculative-runtime-shadow.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "household",
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.test.ts",
+          "disposition": "WATER_RETIRE",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/adapters.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/branches.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/budget.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/evaluation.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/identity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/immutable.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/interpreter.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/predicates.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/property.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/replay-semantic.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/replay.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/test-support.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/wait.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p5/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p5-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p5-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    },
+    {
+      "phase": "P6",
+      "package": "@finnor/trace-compiler",
+      "coreAlgorithms": [
+        "normalization",
+        "deterministic compilation",
+        "hashing",
+        "validation"
+      ],
+      "extractBoundaries": [
+        "Work/effect/query/read-model adapters",
+        "Water-specific redaction labels",
+        "runtime source ownership table"
+      ],
+      "currentArtifacts": [
+        {
+          "path": "finnor-os/architecture/p6/trace-compiler-contract.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/fixtures/locked-cases.json",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/fixtures/locked-corpus.ts",
+          "disposition": "HISTORY_ONLY",
+          "waterPatterns": [
+            "dealer",
+            "customer",
+            "inventory",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/package.json",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/scripts/run-locked-corpus.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/adapters.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/adapters.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/alignment-inference.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/alignment.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/anti-unification.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/canonical.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/compiler.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/contracts.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/contracts.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/dataflow.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/dataflow.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/immutable.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/import-boundary.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/index.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/inference.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "customer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/locked-corpus.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/normalization.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/normalize.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/privacy.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "dealer"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/property.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/redaction.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "household",
+            "customer",
+            "technician",
+            "quote_proposal",
+            "invoice_payment"
+          ]
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/semantic-diff.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/semantic-diff.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/support.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/validity.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/tsconfig.json",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p6/certify.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/scripts/p6/run-locked-replay.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        },
+        {
+          "path": "finnor-os/tests/unit/p6-architecture-contract.test.ts",
+          "disposition": "CORE_EXTRACT",
+          "waterPatterns": [
+            "inventory"
+          ]
+        },
+        {
+          "path": "finnor-os/tests/unit/p6-locked-replay.test.ts",
+          "disposition": "CORE_KEEP",
+          "waterPatterns": []
+        }
+      ]
+    }
+  ],
+  "manifestHash": "beadbffae5728798fd6d89621f1fe9889cb4877ce83ac5346d4101e8e4ee77b0"
+}

@@ -99,7 +99,9 @@
     "p6:certify": "tsx scripts/p6/certify.ts --run",
     "p0-p6:certify": "npm run p6:lineage && npm run p5:certify && npm run p6:certify",
     "release:certify": "tsx scripts/release/run-release-certification.ts",
-    "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts"
+    "release:certify:outcome": "tsx scripts/release/run-outcome-pack-certification.ts",
+    "pe0:inventory": "tsx scripts/pe0/generate.ts --pe0-write",
+    "pe0:certify": "tsx scripts/pe0/certify.ts --run"
   },
   "dependencies": {
     "@aws-sdk/client-secrets-manager": "^3.1086.0",

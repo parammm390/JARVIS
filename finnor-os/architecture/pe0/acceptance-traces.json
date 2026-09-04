@@ -1,0 +1,521 @@
+{
+  "schemaVersion": 1,
+  "traceCount": 13,
+  "traces": [
+    {
+      "id": "api_typed_query",
+      "acceptance": 2,
+      "kind": "api",
+      "path": [
+        {
+          "path": "finnor-os/apps/api/app/api/queries/route.ts",
+          "symbol": "POST",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/api/lib/auth.ts",
+          "symbol": "requireContext",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/api/lib/orchestrator.ts",
+          "symbol": "getOrchestrator",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "symbol": "handleOperationalQuery",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/read-models/src/operational-queries.ts",
+          "symbol": "executeOperationalQuery",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "workQueryExecutions",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/index.ts",
+          "symbol": "recordWorkResponse",
+          "ledgered": true
+        }
+      ],
+      "proof": "Authenticated tenant context reaches the canonical query executor and a durable Work/query receipt; query-specific Water tables are enumerated in query-resolution-map.json."
+    },
+    {
+      "id": "api_instruction_action",
+      "acceptance": 2,
+      "kind": "api",
+      "path": [
+        {
+          "path": "finnor-os/apps/api/app/api/actions/route.ts",
+          "symbol": "POST",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/api/lib/auth.ts",
+          "symbol": "requireContext",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/index.ts",
+          "symbol": "receiveWork",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/instruction-routing.ts",
+          "symbol": "classifyInstructionRoute",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "symbol": "handleInstructionResult",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/plugin-registry.ts",
+          "symbol": "createDefaultPluginRegistry",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/compiler.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/authority-runtime.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/durable-execution.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "The representative mutation path crosses auth, Work, route compilation, Water-contaminated catalog, effect/authority and durable execution."
+    },
+    {
+      "id": "string_registered_low_inventory",
+      "acceptance": 3,
+      "kind": "job",
+      "path": [
+        {
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "symbol": "PROACTIVE_SCANS(scan_low_inventory)",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/scheduler.ts",
+          "symbol": "scheduleTick",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/index.ts",
+          "symbol": "enqueueJob",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/queue.ts",
+          "symbol": "JobQueue.tick",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/index.ts",
+          "symbol": "createWorker.register(scan_low_inventory)",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/handlers/scan-low-inventory.ts",
+          "symbol": "scanLowInventory",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "inventoryItems",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "scanFindings",
+          "ledgered": true
+        }
+      ],
+      "proof": "The job is reached by string registration and scheduled data, not an import-only call graph; it reads inventory/policy/action rows and writes a finding."
+    },
+    {
+      "id": "durable_work_objective",
+      "acceptance": 4,
+      "kind": "work",
+      "path": [
+        {
+          "path": "finnor-os/packages/db/index.ts",
+          "symbol": "receiveWork",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "symbol": "handleInstructionResult",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/objective-loop.ts",
+          "symbol": "ObjectiveLoopRuntime",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "workObjectiveLoops",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/handlers/run-objective-iteration.ts",
+          "symbol": "runObjectiveIteration",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/plugin-registry.ts",
+          "symbol": "createDefaultPluginRegistry",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/runtime-bridge.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/workflow-runtime/src/receipts.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "Work lifecycle, iteration claims, authority and receipts are Core; default plugin/query/prompt injection is the exact Water boundary."
+    },
+    {
+      "id": "canonical_entity_fanout",
+      "acceptance": 5,
+      "kind": "contract",
+      "path": [
+        {
+          "path": "finnor-os/packages/shared-types/src/company-graph.ts",
+          "symbol": "CANONICAL_ENTITY_TYPES",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/policy-schema/src/index.ts",
+          "symbol": "CanonicalEntityRefSchema",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/operational-ir/src/resolution.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/domain-plugins/universal-actions/schemas.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/operating-context.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/read-models/src/index.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/scripts/generate-openapi.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/scripts/p0/certify.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "Removing household/technician changes validation, IR resolution, actions, context, graph queries, generated contracts and certification; database/trigger fan-out is in schema-read-write-map.json."
+    },
+    {
+      "id": "quickbooks_invoice_source",
+      "acceptance": 6,
+      "kind": "source",
+      "path": [
+        {
+          "path": "finnor-os/apps/worker/src/handlers/sync-source.ts",
+          "symbol": "DEFAULT_INITIAL_SCOPES",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/tools/src/source-adapters.ts",
+          "symbol": "quickBooksSourceAdapter",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/tools/src/quickbooks.ts",
+          "symbol": "readQuickBooksObject",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/tools/src/source-adapters.ts",
+          "symbol": "normalizeQboInvoice",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/data-platform/src/source-truth.ts",
+          "symbol": "materializeSourceRecord",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/data-platform/src/import-writes.ts",
+          "symbol": "writeCanonicalImportRow(invoice)",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "externalRefs",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/data-platform/src/events.ts",
+          "symbol": "recordBusinessEvent",
+          "ledgered": true
+        }
+      ],
+      "proof": "Checkpoint/pagination/lease/freshness is Core; CustomerRef->householdId and invoice/payment writes are PE_REPLACE Water mappings."
+    },
+    {
+      "id": "docusign_inside_proposal",
+      "acceptance": 7,
+      "kind": "provider",
+      "path": [
+        {
+          "path": "finnor-os/packages/domain-plugins/proposal-signature/index.ts",
+          "symbol": "request_proposal_signature",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/tools/src/capabilities/documents.ts",
+          "symbol": "requestSignatureContract",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/tools/src/docusign.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/worker/src/handlers/run-workflow-step.ts",
+          "symbol": "request_signature",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/apps/api/app/api/webhooks/esign/route.ts",
+          "symbol": "POST",
+          "ledgered": true
+        }
+      ],
+      "proof": "The Water proposal wrapper is PE_REPLACE while DocuSign execution/read-back is PE_REUSE and the step executor is CORE_EXTRACT."
+    },
+    {
+      "id": "planner_vertical_none",
+      "acceptance": 8,
+      "kind": "planner",
+      "path": [
+        {
+          "path": "finnor-os/packages/orchestration/src/plugin-registry.ts",
+          "symbol": "createDefaultPluginRegistry",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/planner.ts",
+          "symbol": "LLMPlanner",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/read-routing.ts",
+          "symbol": "clarificationContinuationAction",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/fast-read-lane.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/objective-loop.ts",
+          "symbol": "ObjectiveLoopRuntime",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/user-capability-registry.ts",
+          "symbol": "createUserCapabilityRegistry",
+          "ledgered": true
+        }
+      ],
+      "proof": "Core cannot plan with vertical=none: every default orchestrator constructs all 26 plugins; prompts/fallbacks reference Water action/query vocabulary and there is no empty-pack constructor."
+    },
+    {
+      "id": "migration_history",
+      "acceptance": 9,
+      "kind": "migration",
+      "path": [
+        {
+          "path": "finnor-os/packages/db/migrations/0000_init.sql",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/migrations/0108_operating_product_closure.sql",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/migrate.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/migration-head.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "All 109 numbered migrations are HISTORY_ONLY and immutable; schema.ts plus active readers/writers separately represents current ownership."
+    },
+    {
+      "id": "technician_authority",
+      "acceptance": 10,
+      "kind": "authority",
+      "path": [
+        {
+          "path": "finnor-os/packages/security/src/auth.ts",
+          "symbol": "resolveTenantFromBearerToken",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "users.technicianId",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/authority/src/index.ts",
+          "symbol": "loadAuthorities",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/authority/src/index.ts",
+          "symbol": "isAssigned",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "employeeRoleAssignments",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/db/schema.ts",
+          "symbol": "roleAuthorityGrants",
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/authority-runtime.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/orchestration/src/runtime-bridge.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "Auth and grant evaluation are Core; legacy role/technician mapping and assigned household/work-order resolution are CORE_EXTRACT."
+    },
+    {
+      "id": "p1_p6_boundaries",
+      "acceptance": 11,
+      "kind": "phase",
+      "path": [
+        {
+          "path": "finnor-os/packages/operational-ir/src/effect-inference.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/epistemic-runtime/src/context-adapter.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/program-search/src/trace.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/speculative-runtime/src/snapshot.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/adapters.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/trace-compiler/src/redaction.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "phase-boundary-map.json lists the preserved algorithms and every current Water/world/query boundary per phase."
+    },
+    {
+      "id": "unreachable_water_console",
+      "acceptance": 12,
+      "kind": "dead_code",
+      "path": [
+        {
+          "path": "finnor-os/apps/console/app/customers/page.tsx",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "infra/deployment/production.contract.json",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "The finnor-os console customer UI is absent from required production components and runtime roots; it is not counted as active backend contamination."
+    },
+    {
+      "id": "water_fixture_core_invariant",
+      "acceptance": 13,
+      "kind": "test",
+      "path": [
+        {
+          "path": "finnor-os/tests/integration/source-truth-loop.test.ts",
+          "symbol": null,
+          "ledgered": true
+        },
+        {
+          "path": "finnor-os/packages/data-platform/src/source-truth.ts",
+          "symbol": null,
+          "ledgered": true
+        }
+      ],
+      "proof": "GHL/customer fixtures prove tenant isolation, ordering, tombstones and reconciliation; the test is CORE_EXTRACT, so those invariants survive with neutral/PE fixtures."
+    }
+  ],
+  "manifestHash": "57785a616e0dce7c63f197de5a1e44f39f15e03c780bdaf18dede8d5ff592ea1"
+}

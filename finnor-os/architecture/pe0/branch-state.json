@@ -1,0 +1,679 @@
+{
+  "schemaVersion": 1,
+  "auditBaseline": {
+    "sha": "f40526617c7e22258c12a2b669975ddaaf33e7fc",
+    "timestamp": "2026-09-05T00:54:54+05:30",
+    "treeSha": "aa7bb7976e06734829436ce105f8024cc85e15f7",
+    "parents": [
+      "4e3a4ba0ce7c556020fc59fba837d4ca6c8b428f",
+      "1ddd9e9b940e73b98dc282ad101401a560e7da84"
+    ],
+    "subject": "Fix staged browser certification authentication and hangs (#68)",
+    "requiredByMandate": true
+  },
+  "productionSelectionEvidence": {
+    "canonicalBranch": "main",
+    "contract": "infra/deployment/production.contract.json",
+    "releaseTrigger": ".github/workflows/production-release.yml",
+    "requiredComponents": [
+      "frontend",
+      "api",
+      "worker"
+    ],
+    "orchestrator": "embedded-worker"
+  },
+  "uniqueImplementationCount": 2,
+  "implementationTrees": [
+    {
+      "treeSha": "aa7bb7976e06734829436ce105f8024cc85e15f7",
+      "branches": [
+        "main"
+      ]
+    },
+    {
+      "treeSha": "b5838611957d337f3a380f258cd7da06edf48a1e",
+      "branches": [
+        "codex/final-production-audit",
+        "codex/p3-p6-authoritative-cutover"
+      ]
+    }
+  ],
+  "branches": [
+    {
+      "name": "main",
+      "auditedRef": "refs/remotes/origin/main",
+      "sha": "4cc85c5534988f2b9f4b5938f0e4b6758985206c",
+      "timestamp": "2026-09-05T02:04:11+05:30",
+      "treeSha": "aa7bb7976e06734829436ce105f8024cc85e15f7",
+      "parents": [
+        "ad00e61028421abcc0e9cf3c1c7439c7c5d63ce6"
+      ],
+      "subject": "[skip ci] remove one-shot emergency promoter",
+      "relationshipToMain": {
+        "mainIsAncestor": true,
+        "branchIsAncestor": true,
+        "commitsOnlyOnMain": 0,
+        "commitsOnlyOnBranch": 0
+      },
+      "filesOnlyOnBranch": [],
+      "filesOnlyOnMain": [],
+      "filesModifiedRelativeToMain": [],
+      "deltaEntries": [],
+      "migrationsUniqueToBranch": [],
+      "runtimeCapabilitiesUniqueToBranch": [],
+      "certificationReleaseArtifactsDifferentFromMain": [],
+      "deltaDisposition": "CURRENT_PRODUCTION_SOURCE",
+      "deltaEvidence": "infra/deployment/production.contract.json selects origin/main and .github/workflows/production-release.yml triggers on main."
+    },
+    {
+      "name": "codex/final-production-audit",
+      "auditedRef": "refs/remotes/origin/codex/final-production-audit",
+      "sha": "d9806a7b6aa4f9c275c43c40809d6cf83726ab1b",
+      "timestamp": "2026-09-03T22:52:45+05:30",
+      "treeSha": "b5838611957d337f3a380f258cd7da06edf48a1e",
+      "parents": [
+        "45bb4ab8ebcc80f77e79d496f29ad9432b5000bc"
+      ],
+      "subject": "Expose canonical Work identity in adaptive workspace",
+      "relationshipToMain": {
+        "mainIsAncestor": false,
+        "branchIsAncestor": true,
+        "commitsOnlyOnMain": 24,
+        "commitsOnlyOnBranch": 0
+      },
+      "filesOnlyOnBranch": [],
+      "filesOnlyOnMain": [
+        "finnor-os/tests/unit/auth-rate-limit-policy.test.ts",
+        "scripts/release/capture-production-state.mjs",
+        "scripts/release/rollback-production.mjs"
+      ],
+      "filesModifiedRelativeToMain": [
+        {
+          "status": "M",
+          "path": ".github/workflows/production-release.yml"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/apps/api/lib/auth.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/crm/index.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/shared/db-helpers.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/conversation.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/index.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/instruction-routing.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/planner.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/scripts/p6/verify-descendant-lineage.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/integration/authz.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/conversation.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/instruction-routing-policy.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/certify-product-truth-deployed.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/deploy-production.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/release-policy.test.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/validate-deployment-truth.mjs"
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections-recovery.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections.tsx"
+        }
+      ],
+      "deltaEntries": [
+        {
+          "status": "M",
+          "path": ".github/workflows/production-release.yml",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/apps/api/lib/auth.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/crm/index.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/shared/db-helpers.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/conversation.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/instruction-routing.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/planner.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/scripts/p6/verify-descendant-lineage.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/integration/authz.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "finnor-os/tests/unit/auth-rate-limit-policy.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/conversation.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/instruction-routing-policy.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "scripts/release/capture-production-state.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/certify-product-truth-deployed.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/deploy-production.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/release-policy.test.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "scripts/release/rollback-production.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/validate-deployment-truth.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections-recovery.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections.tsx",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        }
+      ],
+      "migrationsUniqueToBranch": [],
+      "runtimeCapabilitiesUniqueToBranch": [],
+      "certificationReleaseArtifactsDifferentFromMain": [
+        ".github/workflows/production-release.yml",
+        "scripts/release/capture-production-state.mjs",
+        "scripts/release/certify-product-truth-deployed.mjs",
+        "scripts/release/deploy-production.mjs",
+        "scripts/release/release-policy.test.mjs",
+        "scripts/release/rollback-production.mjs",
+        "scripts/release/validate-deployment-truth.mjs"
+      ],
+      "deltaDisposition": "HISTORY_ONLY_SUPERSEDED",
+      "deltaEvidence": "The branch is an ancestor of main; its implementation tree lacks later authentication, rate-limit, deterministic-routing, rollback and production-release hardening present on main. Resurrecting it would regress those controls."
+    },
+    {
+      "name": "codex/p3-p6-authoritative-cutover",
+      "auditedRef": "refs/remotes/origin/codex/p3-p6-authoritative-cutover",
+      "sha": "28b2e1088c90c426032090791d72ac71e43d89af",
+      "timestamp": "2026-09-03T23:15:16+05:30",
+      "treeSha": "b5838611957d337f3a380f258cd7da06edf48a1e",
+      "parents": [
+        "45bb4ab8ebcc80f77e79d496f29ad9432b5000bc",
+        "d9806a7b6aa4f9c275c43c40809d6cf83726ab1b"
+      ],
+      "subject": "Merge pull request #62 from parammm390/codex/final-production-audit",
+      "relationshipToMain": {
+        "mainIsAncestor": false,
+        "branchIsAncestor": true,
+        "commitsOnlyOnMain": 23,
+        "commitsOnlyOnBranch": 0
+      },
+      "filesOnlyOnBranch": [],
+      "filesOnlyOnMain": [
+        "finnor-os/tests/unit/auth-rate-limit-policy.test.ts",
+        "scripts/release/capture-production-state.mjs",
+        "scripts/release/rollback-production.mjs"
+      ],
+      "filesModifiedRelativeToMain": [
+        {
+          "status": "M",
+          "path": ".github/workflows/production-release.yml"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/apps/api/lib/auth.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/crm/index.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/shared/db-helpers.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/conversation.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/index.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/instruction-routing.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/planner.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/scripts/p6/verify-descendant-lineage.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/integration/authz.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/conversation.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/instruction-routing-policy.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/certify-product-truth-deployed.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/deploy-production.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/release-policy.test.mjs"
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/validate-deployment-truth.mjs"
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections-recovery.test.ts"
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections.tsx"
+        }
+      ],
+      "deltaEntries": [
+        {
+          "status": "M",
+          "path": ".github/workflows/production-release.yml",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/apps/api/lib/auth.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/crm/index.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/domain-plugins/shared/db-helpers.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/conversation.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/index.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/instruction-routing.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/packages/orchestration/src/planner.ts",
+          "category": "runtime",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/scripts/p6/verify-descendant-lineage.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/integration/authz.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "finnor-os/tests/unit/auth-rate-limit-policy.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/conversation.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "finnor-os/tests/unit/instruction-routing-policy.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "scripts/release/capture-production-state.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/certify-product-truth-deployed.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/deploy-production.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/release-policy.test.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "D",
+          "path": "scripts/release/rollback-production.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": true,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "scripts/release/validate-deployment-truth.mjs",
+          "category": "certification-release",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/app/api/jarvis/[...path]/route.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections-recovery.test.ts",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        },
+        {
+          "status": "M",
+          "path": "src/components/jarvis/lib/business-projections.tsx",
+          "category": "supporting",
+          "disposition": "SUPERSEDED_BY_MAIN",
+          "dangerousToResurrect": false,
+          "evidence": "main contains the later production hardening; this historical file is not a missing capability and must not be cherry-picked in PE0."
+        }
+      ],
+      "migrationsUniqueToBranch": [],
+      "runtimeCapabilitiesUniqueToBranch": [],
+      "certificationReleaseArtifactsDifferentFromMain": [
+        ".github/workflows/production-release.yml",
+        "scripts/release/capture-production-state.mjs",
+        "scripts/release/certify-product-truth-deployed.mjs",
+        "scripts/release/deploy-production.mjs",
+        "scripts/release/release-policy.test.mjs",
+        "scripts/release/rollback-production.mjs",
+        "scripts/release/validate-deployment-truth.mjs"
+      ],
+      "deltaDisposition": "HISTORY_ONLY_SUPERSEDED",
+      "deltaEvidence": "The branch is an ancestor of main; its implementation tree lacks later authentication, rate-limit, deterministic-routing, rollback and production-release hardening present on main. Resurrecting it would regress those controls."
+    }
+  ],
+  "manifestHash": "8486161425e2f335197d55fe6af84b73b2498f99d42ed84d0a0a3709b3d75163"
+}
