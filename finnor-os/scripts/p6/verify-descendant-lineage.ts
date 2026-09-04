@@ -68,6 +68,8 @@ const FINAL_COMPOSITION_PATHS = new Set([
   "infra/deployment/production.contract.json",
   "src/components/jarvis/workspaces/AdaptiveWorkspaceShell.tsx",
   "src/components/jarvis/workspaces/presentation.test.ts",
+  "src/components/jarvis/lib/business-projections.tsx",
+  "src/components/jarvis/lib/business-projections-recovery.test.ts",
   "src/lib/jarvis/useLiveQuery.ts",
   "finnor-os/README.md",
   "finnor-os/architecture/p5/README.md",
