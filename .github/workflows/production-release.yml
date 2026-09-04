@@ -465,7 +465,8 @@ jobs:
             export PRODUCT_TRUTH_API_URL="${{ steps.api.outputs.url }}"
             export PRODUCT_TRUTH_WORKER_URL="https://realtime.finnorai.com"
             rm -f "$auth_file"
-            NODE_OPTIONS="--require=$GITHUB_WORKSPACE/.github/scripts/certification-aws-hardening.cjs ${NODE_OPTIONS:-}" \
+            timeout 20m env \
+              NODE_OPTIONS="--require=$GITHUB_WORKSPACE/.github/scripts/certification-aws-hardening.cjs ${NODE_OPTIONS:-}" \
               PRODUCT_TRUTH_CERTIFICATION_MODE=full \
               PRODUCT_TRUTH_CERTIFICATION_RUN="$run" \
               node scripts/release/certify-product-truth-deployed.mjs \
@@ -517,7 +518,7 @@ jobs:
             | tee "$RUNNER_TEMP/production-smoke.json"
 
       - name: Automatic rollback after any post-mutation gate failure
-        if: failure()
+        if: ${{ failure() || cancelled() }}
         run: node scripts/release/rollback-production.mjs --state-file "${FINNOR_ROLLBACK_STATE:-$RUNNER_TEMP/production-rollback-state.json}"
 
       - name: Preserve staged certification and production smoke evidence

@@ -119,6 +119,7 @@ test("the release certifies staged artifacts before promotion and smoke-tests pr
   assert.match(certificationBlock, /PRODUCT_TRUTH_CERTIFICATION_MODE=full/)
   assert.match(certificationBlock, /PRODUCT_TRUTH_FRONTEND_URL/)
   assert.match(certificationBlock, /PRODUCT_TRUTH_API_URL/)
+  assert.match(certificationBlock, /timeout 20m env/)
   assert.match(certificationBlock, /refresh-product-truth-auth\.mjs/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_AUTH_BEARER/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_OTHER_AUTH_BEARER/)
@@ -152,6 +153,7 @@ test("the release certifies staged artifacts before promotion and smoke-tests pr
   assert.doesNotMatch(smokeBlock, /for run in 1 2/)
   assert.match(workflow, /capture-production-state\.mjs/)
   assert.match(workflow, /rollback-production\.mjs/)
+  assert.match(workflow, /failure\(\) \|\| cancelled\(\)/)
 })
 
 test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {

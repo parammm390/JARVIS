@@ -192,6 +192,12 @@ function browserSession(value) {
 async function prepareBrowserPage(browser, { degradeRealtime = false, disconnectOnce = false, path = "/jarvis" } = {}) {
   const context = await browser.newContext()
   const page = await context.newPage()
+  // Staged Vercel deployments retain Deployment Protection.  HTTP probes and
+  // server-side relays already carry the automation bypass, but Playwright
+  // navigation/static/SSE requests are a separate client and must carry it as
+  // well.  Without this header every scenario burns its full selector timeout
+  // against the Vercel login page, making the matrix appear hung.
+  if (bypass) await page.setExtraHTTPHeaders({ "x-vercel-protection-bypass": bypass })
   const auth = browserSession(token)
   let disconnected = 0
   await page.addInitScript(({ storageKey, session }) => {
@@ -918,6 +924,26 @@ async function runProductionSmoke(browser) {
   return { startedAt: new Date(startedAt).toISOString(), durationMs: Date.now() - startedAt, journeys: results }
 }
 
+async function assertBrowserAccess(browser) {
+  const { context, page, input } = await prepareBrowserPage(browser)
+  try {
+    const url = page.url()
+    const visible = await input.isVisible().catch(() => false)
+    if (new URL(url).pathname !== "/jarvis" || !visible) {
+      throw new Error(`staged browser access resolved to ${url} without the canonical instruction rail`)
+    }
+    try {
+      await page.waitForFunction(() => window.__JARVIS_REALTIME_STATUS__?.status === "live", null, { timeout: 30_000 })
+    } catch {
+      const status = await page.evaluate(() => window.__JARVIS_REALTIME_STATUS__).catch(() => null)
+      throw new Error(`staged browser realtime did not become live: ${JSON.stringify(status)}`)
+    }
+    return { url, authenticated: true }
+  } finally {
+    await context.close()
+  }
+}
+
 const [{ body: frontendRelease }, { body: apiRelease }, { body: readiness }, { body: workerHealth }] = await Promise.all([
   fetchJson(`${frontendUrl}/api/release`),
   fetchJson(`${apiUrl}/api/release`),
@@ -934,8 +960,10 @@ if (workerHealth?.realtime !== true || !workerHealth?.capabilities?.includes("ss
 
 if (certificationMode === "smoke") {
   const browser = await chromium.launch({ headless: true })
+  let browserAccess
   let smoke
   try {
+    browserAccess = await assertBrowserAccess(browser)
     smoke = await runProductionSmoke(browser)
   } finally {
     await browser.close()
@@ -951,7 +979,7 @@ if (certificationMode === "smoke") {
       workerGateway: workerHealth.release,
       migrationHead: readiness.checks.migrations.detail,
     },
-    browser: smoke,
+    browser: { access: browserAccess, ...smoke },
     target: { frontendUrl, apiUrl, workerUrl },
   }, null, 2))
   process.exit(0)
@@ -987,6 +1015,8 @@ const browser = await chromium.launch({ headless: true })
 let goldenMatrix
 let humanOperabilityMatrix
 try {
+  const browserAccess = await assertBrowserAccess(browser)
+  console.error(JSON.stringify({ ok: true, browserAccess }, null, 2))
   goldenMatrix = await runGoldenBrowserMatrix(browser)
   humanOperabilityMatrix = await runHumanOperabilityMatrix(browser, goldenMatrix)
 } finally {
