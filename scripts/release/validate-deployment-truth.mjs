@@ -128,7 +128,7 @@ if (!(credentialGateAt < oidcAt && oidcAt < dockerPushAt && dockerPushAt < prefl
 if (smokeTimeoutAt < smokeAt || smokeTimeoutAt > rollbackAt) fail("production smoke is missing its five-minute timeout")
 const stagedBlock = workflow.slice(stagedCertificationAt, promoteFrontendAt)
 if (!/PRODUCT_TRUTH_FRONTEND_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_API_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=full/.test(stagedBlock) || !/for run in 1 2; do/.test(stagedBlock)) fail("staged certification is not bound to both staged artifacts and two full runs")
-if (!/timeout 45m env/.test(stagedBlock)) fail("staged certification lacks a bounded per-run timeout")
+if (!/timeout 20m env/.test(stagedBlock)) fail("staged certification lacks a bounded per-run timeout")
 if (!/failure\(\) \|\| cancelled\(\)/.test(workflow)) fail("post-mutation rollback does not run on cancellation")
 const smokeBlock = workflow.slice(smokeAt, rollbackAt)
 if (/for run in 1 2; do/.test(smokeBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=smoke/.test(smokeBlock)) fail("production smoke must be a single bounded smoke run, not the full matrix")

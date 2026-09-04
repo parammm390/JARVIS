@@ -119,7 +119,7 @@ test("the release certifies staged artifacts before promotion and smoke-tests pr
   assert.match(certificationBlock, /PRODUCT_TRUTH_CERTIFICATION_MODE=full/)
   assert.match(certificationBlock, /PRODUCT_TRUTH_FRONTEND_URL/)
   assert.match(certificationBlock, /PRODUCT_TRUTH_API_URL/)
-  assert.match(certificationBlock, /timeout 45m env/)
+  assert.match(certificationBlock, /timeout 20m env/)
   assert.match(certificationBlock, /refresh-product-truth-auth\.mjs/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_AUTH_BEARER/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_OTHER_AUTH_BEARER/)

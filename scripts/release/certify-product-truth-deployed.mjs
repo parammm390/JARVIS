@@ -932,6 +932,12 @@ async function assertBrowserAccess(browser) {
     if (new URL(url).pathname !== "/jarvis" || !visible) {
       throw new Error(`staged browser access resolved to ${url} without the canonical instruction rail`)
     }
+    try {
+      await page.waitForFunction(() => window.__JARVIS_REALTIME_STATUS__?.status === "live", null, { timeout: 30_000 })
+    } catch {
+      const status = await page.evaluate(() => window.__JARVIS_REALTIME_STATUS__).catch(() => null)
+      throw new Error(`staged browser realtime did not become live: ${JSON.stringify(status)}`)
+    }
     return { url, authenticated: true }
   } finally {
     await context.close()
@@ -954,8 +960,10 @@ if (workerHealth?.realtime !== true || !workerHealth?.capabilities?.includes("ss
 
 if (certificationMode === "smoke") {
   const browser = await chromium.launch({ headless: true })
+  let browserAccess
   let smoke
   try {
+    browserAccess = await assertBrowserAccess(browser)
     smoke = await runProductionSmoke(browser)
   } finally {
     await browser.close()
@@ -971,7 +979,7 @@ if (certificationMode === "smoke") {
       workerGateway: workerHealth.release,
       migrationHead: readiness.checks.migrations.detail,
     },
-    browser: smoke,
+    browser: { access: browserAccess, ...smoke },
     target: { frontendUrl, apiUrl, workerUrl },
   }, null, 2))
   process.exit(0)

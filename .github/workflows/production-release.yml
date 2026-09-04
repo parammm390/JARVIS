@@ -465,7 +465,7 @@ jobs:
             export PRODUCT_TRUTH_API_URL="${{ steps.api.outputs.url }}"
             export PRODUCT_TRUTH_WORKER_URL="https://realtime.finnorai.com"
             rm -f "$auth_file"
-            timeout 45m env \
+            timeout 20m env \
               NODE_OPTIONS="--require=$GITHUB_WORKSPACE/.github/scripts/certification-aws-hardening.cjs ${NODE_OPTIONS:-}" \
               PRODUCT_TRUTH_CERTIFICATION_MODE=full \
               PRODUCT_TRUTH_CERTIFICATION_RUN="$run" \
