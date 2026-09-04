@@ -6,7 +6,7 @@ import { and, eq, sql, or, ilike } from "drizzle-orm";
 
 export async function findHousehold(
   tenantId: string,
-  by: { householdId?: string; phone?: string; name?: string; address?: string },
+  by: { householdId?: string; phone?: string; email?: string; name?: string; address?: string },
 ): Promise<{ id: string; address: string; contactInfo: Record<string, unknown> } | null> {
   return withTenant(tenantId, async (db) => {
     if (by.householdId) {
@@ -15,6 +15,10 @@ export async function findHousehold(
     }
     if (by.phone) {
       const [row] = await db.select().from(households).where(and(eq(households.tenantId, tenantId), sql`${households.contactInfo} ->> 'phone' = ${by.phone}`));
+      if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
+    }
+    if (by.email) {
+      const [row] = await db.select().from(households).where(and(eq(households.tenantId, tenantId), sql`lower(${households.contactInfo} ->> 'email') = lower(${by.email})`));
       if (row) return { id: row.id, address: row.address, contactInfo: row.contactInfo as Record<string, unknown> };
     }
     // Voice/text instructions frequently name a customer ("the Petersons", "Marcus

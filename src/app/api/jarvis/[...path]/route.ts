@@ -231,6 +231,9 @@ async function doForward(
     method,
     headers: {
       ...(authorization ? { authorization } : {}),
+      ...(process.env.JARVIS_UPSTREAM_VERCEL_BYPASS_SECRET
+        ? { "x-vercel-protection-bypass": process.env.JARVIS_UPSTREAM_VERCEL_BYPASS_SECRET }
+        : {}),
       "content-type": "application/json",
     },
     cache: "no-store",

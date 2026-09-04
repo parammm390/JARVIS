@@ -12,14 +12,19 @@ const outputIndex = process.argv.indexOf("--output-file")
 const outputFile = outputIndex >= 0 ? process.argv[outputIndex + 1] : undefined
 const deploymentUrlIndex = process.argv.indexOf("--deployment-url")
 const promotionUrl = deploymentUrlIndex >= 0 ? process.argv[deploymentUrlIndex + 1] : undefined
+const upstreamApiUrlIndex = process.argv.indexOf("--upstream-api-url")
+const upstreamApiUrl = upstreamApiUrlIndex >= 0 ? process.argv[upstreamApiUrlIndex + 1] : undefined
 if (!["frontend", "api"].includes(appName)) {
-  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only|--stage-only|--promote-only --deployment-url <url>] [--output-file path]")
+  console.error("Usage: node scripts/release/deploy-production.mjs <frontend|api> [--prepare-only|--deploy-only|--stage-only|--promote-only --deployment-url <url>] [--upstream-api-url <https-url>] [--output-file path]")
   process.exit(2)
 }
 const modes = [prepareOnly, deployOnly, stageOnly, promoteOnly].filter(Boolean).length
 if (modes > 1) throw new Error("Release modes are mutually exclusive")
 if (promoteOnly && (!promotionUrl || !/^https:\/\//.test(promotionUrl))) {
   throw new Error("--promote-only requires --deployment-url <https-url>")
+}
+if (upstreamApiUrl !== undefined && (appName !== "frontend" || !/^https:\/\//.test(upstreamApiUrl))) {
+  throw new Error("--upstream-api-url is only valid for frontend and requires an https URL")
 }
 
 const repoRoot = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim()
@@ -80,6 +85,7 @@ function run(command, args, cwd, env) {
   const safeArgs = args.map((arg, index) => {
     if (args[index - 1] === "--token") return "<redacted>"
     if (typeof arg === "string" && arg.startsWith("PRODUCT_TRUTH_CERTIFICATION_KEY=")) return "PRODUCT_TRUTH_CERTIFICATION_KEY=<redacted>"
+    if (typeof arg === "string" && arg.startsWith("JARVIS_UPSTREAM_VERCEL_BYPASS_SECRET=")) return "JARVIS_UPSTREAM_VERCEL_BYPASS_SECRET=<redacted>"
     return arg
   })
   console.log(`$ ${command} ${safeArgs.join(" ")}`)
@@ -134,6 +140,7 @@ const env = {
   FINNOR_ENVIRONMENT: environment,
   FINNOR_RELEASE_SOURCE: source,
   FINNOR_CORE_CERTIFICATION_ID: coreCertification.certificationId,
+  ...(upstreamApiUrl ? { NEXT_PUBLIC_OS_API_URL: upstreamApiUrl } : {}),
 }
 
 const productionUrl = target.productionUrl
@@ -182,6 +189,15 @@ const productTruthEnvArgs = appName === "api" && productTruthCertificationKey
       "--env", `PRODUCT_TRUTH_CERTIFICATION_KEY=${productTruthCertificationKey}`,
     ]
   : []
+const upstreamApiEnvArgs = upstreamApiUrl
+  ? [
+      "--build-env", `NEXT_PUBLIC_OS_API_URL=${upstreamApiUrl}`,
+      "--env", `NEXT_PUBLIC_OS_API_URL=${upstreamApiUrl}`,
+      ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET
+        ? ["--env", `JARVIS_UPSTREAM_VERCEL_BYPASS_SECRET=${process.env.VERCEL_AUTOMATION_BYPASS_SECRET}`]
+        : []),
+    ]
+  : []
 const deployArgs = [
   // The prepared output is a production-targeted Build Output API artifact.
   // Stage it as a production deployment while suppressing domain assignment;
@@ -205,6 +221,7 @@ const deployArgs = [
   "--env", `FINNOR_ENVIRONMENT=${environment}`,
   "--env", `FINNOR_RELEASE_SOURCE=${source}`,
   "--env", `FINNOR_CORE_CERTIFICATION_ID=${coreCertification.certificationId}`,
+  ...upstreamApiEnvArgs,
   ...productTruthEnvArgs,
   ...tokenArgs,
 ]

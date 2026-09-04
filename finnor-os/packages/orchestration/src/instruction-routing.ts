@@ -32,6 +32,70 @@ const QUESTION_OBJECTIVE_LANGUAGE = [
   ...OBJECTIVE_SIGNALS.slice(1),
 ];
 
+/**
+ * A small, auditable compiler for the subset of ATOMIC_ACTION instructions whose
+ * complete payload is present in the instruction itself.  The route classifier
+ * deliberately remains broader (it can use a selected canonical entity), but a
+ * direct endpoint plus an explicit message/marker is safe to compile without an
+ * LLM.  Keeping this deterministic prevents planner sampling from turning the
+ * same one-effect request into an empty or multi-action Objective.
+ */
+export interface DeterministicAtomicCandidate {
+  action_type: string;
+  payload: Record<string, unknown>;
+}
+
+const DIRECT_EMAIL = /\b[^\s@]+@[^\s@]+\.[^\s@]+\b/gi;
+const DIRECT_PHONE = /\+\d{8,15}\b/g;
+
+function directTargetAfterTo(value: string): { target: string; channel: "email" | "sms"; tail: string } | null {
+  const candidates = [
+    ...[...value.matchAll(DIRECT_EMAIL)].map((match) => ({ target: match[0], channel: "email" as const, index: match.index ?? 0 })),
+    ...[...value.matchAll(DIRECT_PHONE)].map((match) => ({ target: match[0], channel: "sms" as const, index: match.index ?? 0 })),
+  ].sort((a, b) => a.index - b.index);
+  if (candidates.length !== 1) return null;
+  const candidate = candidates[0]!;
+  const before = value.slice(0, candidate.index).trim();
+  if (!/\b(?:to|for)\s*$/i.test(before)) return null;
+  const tail = value.slice(candidate.index + candidate.target.length).replace(/^\s*[:,-]?\s*/, "").trim();
+  if (!tail) return null;
+  return { target: candidate.target, channel: candidate.channel, tail };
+}
+
+/**
+ * Compile only unambiguous direct-target forms.  Returning null is intentional:
+ * context-bound/named targets and incomplete wording continue through the normal
+ * planner and its existing fail-closed typed-plan finalizer.
+ */
+export function compileDeterministicAtomicAction(instruction: string): DeterministicAtomicCandidate | null {
+  const value = instruction.replace(/\s+/g, " ").trim();
+  if (!strictAtomicCandidate(value)) return null;
+  const direct = directTargetAfterTo(value);
+  if (!direct) return null;
+
+  if (/^(?:please\s+)?(?:send|text|email|message)\b/i.test(value)) {
+    return {
+      action_type: "send_customer_message",
+      payload: direct.channel === "email"
+        ? { email: direct.target, channel: "email", message: direct.tail }
+        : { phone: direct.target, channel: "sms", message: direct.tail },
+    };
+  }
+
+  // “Update the CRM record ... with [marker/note]” is the canonical internal CRM
+  // write used by the Product Truth journey.  It is represented as an interaction
+  // log (never as an invented generic record mutation), and remains behind the
+  // normal typed action/authority boundary.
+  const crm = value.match(/^(?:please\s+)?update\s+(?:the\s+)?crm\s+(?:record|entry)\s+for\s+[^\s@]+@[^\s@]+\.[^\s@]+\s+(with|to)\s+(.+)$/i);
+  if (crm && direct.channel === "email") {
+    return {
+      action_type: "log_interaction",
+      payload: { email: direct.target, channel: "email", direction: "outbound", content: `${crm[1]} ${crm[2]}` },
+    };
+  }
+  return null;
+}
+
 const BUSINESS_QUESTION = /\b(?:business|company|customer|client|household|contact|lead|opportunit|quote|proposal|invoice|payment|money|cash|revenue|inventory|stock|sku|schedule|appointment|visit|work(?:\s+order)?|task|job|technician|employee|manager|team|supplier|vendor|agent|campaign|review|service|installation|maintenance|water|equipment|policy|approval|workflow|delegation)\b/i;
 
 function isLightweightInformationalQuestion(instruction: string, decision: OperationalQueryDecision): boolean {

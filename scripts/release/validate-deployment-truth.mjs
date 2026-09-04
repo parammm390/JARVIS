@@ -62,6 +62,8 @@ const activeFiles = [
   join(repoRoot, "scripts/release/verify-production-parity.mjs"),
   join(repoRoot, "scripts/release/deploy-production.mjs"),
   join(repoRoot, "scripts/release/certify-product-truth-deployed.mjs"),
+  join(repoRoot, "scripts/release/capture-production-state.mjs"),
+  join(repoRoot, "scripts/release/rollback-production.mjs"),
   join(repoRoot, "package.json"),
 ]
 const sourceExtensions = new Set([".js", ".mjs", ".ts", ".tsx", ".json", ".yml", ".yaml"])
@@ -90,10 +92,15 @@ for (const invariant of [
   "configure-vercel-realtime.mjs --apply",
   "deploy-production.mjs frontend --stage-only",
   "deploy-production.mjs api --stage-only",
+  "--upstream-api-url",
+  "capture-production-state.mjs",
   "release:migrate:production",
   "deploy-aws-worker.mjs",
   "verify-production-parity.mjs",
   "verify-consecutive-human-certifications.mjs",
+  "PRODUCT_TRUTH_CERTIFICATION_MODE=full",
+  "PRODUCT_TRUTH_CERTIFICATION_MODE=smoke",
+  "rollback-production.mjs",
 ]) if (!workflow.includes(invariant)) fail(`production workflow omits guarded AWS stage: ${invariant}`)
 if (/\b(?:prj_|team_)[A-Za-z0-9]+/.test(workflow)) fail("production workflow must resolve Vercel target IDs from the canonical contract")
 if (!workflow.includes("production.contract.json').topology.api") || !readFileSync(join(repoRoot, "scripts/release/deploy-production.mjs"), "utf8").includes("infra/deployment/production.contract.json")) fail("Vercel release stages must consume the canonical deployment contract")
@@ -104,14 +111,26 @@ const dockerPushAt = workflow.indexOf("docker push")
 const preflightAt = workflow.indexOf("preflight-production.mjs")
 const stageFrontendAt = workflow.indexOf("deploy-production.mjs frontend --stage-only")
 const stageApiAt = workflow.indexOf("deploy-production.mjs api --stage-only")
+const captureAt = workflow.indexOf("capture-production-state.mjs")
+const realtimeConfigAt = workflow.indexOf("configure-vercel-realtime.mjs --apply")
 const migrationAt = workflow.indexOf("release:migrate:production")
 const workerDeployAt = workflow.indexOf("deploy-aws-worker.mjs")
+const browserInstallAt = workflow.indexOf("Install deployed browser certification runtime")
+const stagedCertificationAt = workflow.indexOf("Certify the staged production-equivalent environment twice")
 const promoteFrontendAt = workflow.indexOf("deploy-production.mjs frontend --promote-only")
 const promoteApiAt = workflow.indexOf("deploy-production.mjs api --promote-only")
 const parityAt = workflow.indexOf("verify-production-parity.mjs")
-const humanAt = workflow.indexOf("for run in 1 2; do")
-if ([credentialGateAt, oidcAt, dockerPushAt, preflightAt, stageFrontendAt, stageApiAt, migrationAt, workerDeployAt, promoteFrontendAt, promoteApiAt, parityAt, humanAt].some((value) => value < 0)) fail("production workflow ordering markers are incomplete")
-if (!(credentialGateAt < oidcAt && oidcAt < dockerPushAt && dockerPushAt < preflightAt && preflightAt < stageFrontendAt && stageFrontendAt < stageApiAt && stageApiAt < migrationAt && migrationAt < workerDeployAt && workerDeployAt < promoteFrontendAt && promoteFrontendAt < promoteApiAt && promoteApiAt < parityAt && parityAt < humanAt)) fail("production workflow does not preserve the guarded AWS release order")
+const smokeAt = workflow.indexOf("Run bounded five-minute production smoke")
+const rollbackAt = workflow.indexOf("Automatic rollback after any post-mutation gate failure")
+const smokeTimeoutAt = workflow.indexOf("timeout 300s")
+if ([credentialGateAt, oidcAt, dockerPushAt, preflightAt, stageApiAt, stageFrontendAt, captureAt, migrationAt, workerDeployAt, browserInstallAt, stagedCertificationAt, promoteFrontendAt, promoteApiAt, parityAt, smokeAt, rollbackAt].some((value) => value < 0)) fail("production workflow ordering markers are incomplete")
+if (!(credentialGateAt < oidcAt && oidcAt < dockerPushAt && dockerPushAt < preflightAt && preflightAt < captureAt && captureAt < realtimeConfigAt && realtimeConfigAt < stageApiAt && stageApiAt < stageFrontendAt && stageFrontendAt < migrationAt && migrationAt < workerDeployAt && workerDeployAt < browserInstallAt && browserInstallAt < stagedCertificationAt && stagedCertificationAt < promoteFrontendAt && promoteFrontendAt < promoteApiAt && promoteApiAt < parityAt && parityAt < smokeAt && smokeAt < rollbackAt)) fail("production workflow does not preserve capture, build-once, pre-promotion certification, promotion, smoke, rollback order")
+if (smokeTimeoutAt < smokeAt || smokeTimeoutAt > rollbackAt) fail("production smoke is missing its five-minute timeout")
+const stagedBlock = workflow.slice(stagedCertificationAt, promoteFrontendAt)
+if (!/PRODUCT_TRUTH_FRONTEND_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_API_URL/.test(stagedBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=full/.test(stagedBlock) || !/for run in 1 2; do/.test(stagedBlock)) fail("staged certification is not bound to both staged artifacts and two full runs")
+const smokeBlock = workflow.slice(smokeAt, rollbackAt)
+if (/for run in 1 2; do/.test(smokeBlock) || !/PRODUCT_TRUTH_CERTIFICATION_MODE=smoke/.test(smokeBlock)) fail("production smoke must be a single bounded smoke run, not the full matrix")
+if (workflow.includes("Certify deployed Human Black-Box behavior twice")) fail("production workflow still contains the retired post-promotion Human Black-Box gate")
 const nextStepAt = workflow.indexOf("- name:", credentialGateAt + 8)
 const credentialGate = workflow.slice(credentialGateAt, nextStepAt < 0 ? workflow.length : nextStepAt)
 for (const credential of ["VERCEL_TOKEN", "AWS_ROLE_ARN", "PRODUCT_TRUTH_AUTH_BEARER", "PRODUCT_TRUTH_OTHER_AUTH_BEARER", "PRODUCT_TRUTH_CERTIFICATION_KEY"]) if (!credentialGate.includes(credential)) fail(`pre-mutation credential gate omits ${credential}`)

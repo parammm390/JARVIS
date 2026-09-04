@@ -23,6 +23,7 @@ import { clarificationContinuationAction, enforceExternalResearchRoute, enforceS
 import { resolveCompetitorResearch } from "./research-context";
 import { applyOperatingInteractionTargets } from "./interaction-targeting";
 import { createUserCapabilityRegistry, type UserCapabilityRegistry } from "./user-capability-registry";
+import { compileDeterministicAtomicAction, type InstructionRouteDecision } from "./instruction-routing";
 
 export { clarificationContinuationAction, enforceExternalResearchRoute, enforceSchedulingMutationRoute, safeReadFallbackForInstruction, schedulingClarificationFallbackForInstruction } from "./read-routing";
 
@@ -63,6 +64,9 @@ export interface PlannerOptions {
   deadlineAt?: number;
   deadlineMs?: number;
   operatingContext?: OperatingContext;
+  /** The intake boundary's already-computed execution model.  Atomic candidates
+   * with a complete direct payload may use the deterministic compiler below. */
+  instructionRoute?: Pick<InstructionRouteDecision, "route">;
 }
 
 const MAX_PLANNER_CONTEXT_CHARS = 24_000;
@@ -271,6 +275,9 @@ export class LLMPlanner implements Planner {
     const contextualResearch = opts.operatingContext
       ? resolveCompetitorResearch(planningInstruction, opts.operatingContext)
       : { route: "not_research" as const };
+    const deterministicAtomic = opts.instructionRoute?.route === "ATOMIC_ACTION"
+      ? compileDeterministicAtomicAction(planningInstruction)
+      : null;
     if (phase6Resolution?.status === "clarification_required") {
       raw = JSON.stringify({ actions: [{
         action_type: "clarification_request",
@@ -285,6 +292,8 @@ export class LLMPlanner implements Planner {
       raw = JSON.stringify({ actions: [continuationAction] });
     } else if (contextualResearch.route === "clarification" || contextualResearch.route === "resolved") {
       raw = JSON.stringify({ actions: [contextualResearch.action] });
+    } else if (deterministicAtomic) {
+      raw = JSON.stringify({ actions: [{ ...deterministicAtomic, reasoning: "Deterministic direct-target atomic compiler; no planner sampling required." }] });
     } else try {
       const provider = this.provider ?? this.routedProviders.get(channel) ?? resolveProviderForPurpose("planning", channel);
       if (!this.provider) this.routedProviders.set(channel, provider);
