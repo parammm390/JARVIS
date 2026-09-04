@@ -83,4 +83,10 @@ describe("objective-first instruction-routing policy", () => {
     expect(finalizeInstructionRoute(preliminary, [action({ compiledGraph: { kind: "workflow", commandType: "send_follow_up", requiresConfirmation: true, autoApprove: false } })]).route).toBe("OBJECTIVE");
     expect(finalizeInstructionRoute(preliminary, [action(), action({ id: "00000000-0000-4000-8000-000000000014" })]).route).toBe("OBJECTIVE");
   });
+
+  it("fails closed when an atomic candidate has no typed actions", () => {
+    const preliminary = classifyInstructionRoute({ instruction: "Email this exact message to +15550101010", fastReadDecision: planner });
+    expect(() => finalizeInstructionRoute(preliminary, [])).not.toThrow();
+    expect(finalizeInstructionRoute(preliminary, []).route).toBe("OBJECTIVE");
+  });
 });

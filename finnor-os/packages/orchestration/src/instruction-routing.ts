@@ -101,8 +101,8 @@ export function finalizeInstructionRoute(
   }
   if (preliminary.route !== "ATOMIC_ACTION") return preliminary;
   const action = actions[0];
-  const dependencyCount = Array.isArray((action as DomainAction & { dependsOn?: unknown[] }).dependsOn)
-    ? ((action as DomainAction & { dependsOn?: unknown[] }).dependsOn?.length ?? 0)
+  const dependencyCount = Array.isArray((action as (DomainAction & { dependsOn?: unknown[] }) | undefined)?.dependsOn)
+    ? ((action as (DomainAction & { dependsOn?: unknown[] }) | undefined)?.dependsOn?.length ?? 0)
     : 0;
   const atomic = actions.length === 1
     && Boolean(action)
