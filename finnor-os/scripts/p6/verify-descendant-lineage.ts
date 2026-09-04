@@ -65,6 +65,8 @@ const FINAL_COMPOSITION_PATHS = new Set([
   "scripts/release/validate-deployment-truth.mjs",
   "scripts/release/verify-p0-p4-lineage.mjs",
   "scripts/release/verify-production-parity.mjs",
+  "src/app/api/jarvis/[...path]/route.ts",
+  "src/app/api/jarvis/[...path]/route.test.ts",
   "infra/aws/finnor-production.yaml",
   "infra/deployment/production.contract.json",
   "src/components/jarvis/workspaces/AdaptiveWorkspaceShell.tsx",

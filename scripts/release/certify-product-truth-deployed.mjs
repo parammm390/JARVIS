@@ -334,7 +334,15 @@ async function fetchWorkCase(workId, headers = commonHeaders) {
     signal: AbortSignal.timeout(20_000),
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(`Work projection returned HTTP ${response.status}`)
+  if (!response.ok) {
+    const error = new Error(`Work projection returned HTTP ${response.status}`)
+    error.status = response.status
+    const retryAfterSeconds = Number(response.headers.get("retry-after"))
+    error.retryAfterMs = Number.isFinite(retryAfterSeconds)
+      ? Math.max(0, Math.ceil(retryAfterSeconds * 1_000))
+      : null
+    throw error
+  }
   return body && Array.isArray(body.data) ? body.data[0] ?? null : null
 }
 
@@ -342,7 +350,20 @@ async function waitForWorkCase(workId, timeoutMs = 45_000) {
   const deadline = Date.now() + timeoutMs
   let latest = null
   while (Date.now() < deadline) {
-    latest = await fetchWorkCase(workId).catch(() => null)
+    try {
+      latest = await fetchWorkCase(workId)
+    } catch (error) {
+      // A durable limiter response is temporary, and the proxy now preserves
+      // Retry-After. Honor that window instead of turning a single 429 into a
+      // 400ms request amplifier across every fresh certification context.
+      if (error?.status === 429) {
+        const remainingMs = Math.max(0, deadline - Date.now())
+        const retryMs = Math.min(remainingMs, Math.max(400, error.retryAfterMs ?? 1_000))
+        if (retryMs > 0) await new Promise((resolveDelay) => setTimeout(resolveDelay, retryMs))
+        continue
+      }
+      latest = null
+    }
     if (latest?.durableWork?.id === workId) return latest
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 400))
   }

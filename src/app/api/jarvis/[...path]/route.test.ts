@@ -157,6 +157,16 @@ describe("JARVIS proxy route contract", () => {
     await expect(response.json()).resolves.toEqual({ error: "Jarvis backend is unavailable" })
   })
 
+  it("preserves an upstream Retry-After so callers can honor the durable limiter window", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: "rate limited" }), {
+      status: 429,
+      headers: { "content-type": "application/json", "retry-after": "17" },
+    }))
+    const response = await GET(request("GET", "stats", { headers: AUTH }), params("stats"))
+    expect(response.status).toBe(429)
+    expect(response.headers.get("retry-after")).toBe("17")
+  })
+
   it("covers preference DELETEs through the same authenticated boundary", async () => {
     expect((await DELETE(request("DELETE", "user-prefs", { headers: AUTH }), params("user-prefs"))).status).toBe(200)
     expect((await DELETE(request("DELETE", "push-subscriptions", { headers: AUTH }), params("push-subscriptions"))).status).toBe(200)

@@ -62,7 +62,8 @@ export function authenticatedRateLimitPolicy(
  * separate bounded bucket for the same reason as authenticated projections:
  * the public proxy may not preserve the end-user IP, so an `ip:unknown` write
  * bucket must not be able to exhaust the read budget for every open workspace.
- * Mutating and invalid-token traffic stay on the historical 120/minute bucket.
+ * Mutating and invalid-token traffic on non-read methods stay on the historical
+ * 120/minute bucket; invalid read attempts remain bounded by the read bucket.
  */
 export function preAuthRateLimitPolicy(
   req: Pick<Request, "method">,
