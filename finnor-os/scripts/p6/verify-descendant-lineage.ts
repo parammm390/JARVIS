@@ -85,6 +85,8 @@ const FINAL_COMPOSITION_PATHS = new Set([
   "finnor-os/scripts/p5/certify.ts",
   "finnor-os/scripts/p6/certify.ts",
   "finnor-os/scripts/p6/verify-descendant-lineage.ts",
+  "finnor-os/packages/orchestration/src/conversation.ts",
+  "finnor-os/tests/unit/conversation.test.ts",
   "finnor-os/tests/unit/p0-architecture-contract.test.ts",
   "finnor-os/tests/unit/p5-architecture-contract.test.ts",
   "finnor-os/tests/unit/p6-architecture-contract.test.ts",
