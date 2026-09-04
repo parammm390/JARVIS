@@ -871,6 +871,7 @@ export class FinnorOrchestrator implements Orchestrator {
         deadlineAt: opts.deadlineAt,
         deadlineMs: opts.deadlineMs,
         operatingContext,
+        instructionRoute,
       });
     } catch (err) {
       const failure = workFailure(err, "Planning failed");

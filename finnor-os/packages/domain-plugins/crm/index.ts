@@ -34,6 +34,7 @@ export const UpdateLeadStatusSchema = z.object({
 export const LogInteractionSchema = z.object({
   householdId: opt(z.string().uuid()),
   phone: opt(z.string()),
+  email: opt(z.string().email()),
   channel: z.enum(["call", "sms", "email", "in_person"]).default("call"),
   direction: z.enum(["inbound", "outbound"]).default("inbound"),
   content: z.string().min(1).max(5000),
@@ -74,7 +75,7 @@ export const crmPlugin: DomainEnginePlugin = {
     const summaries: Record<string, string> = {
       create_lead: `Create a new lead: ${p.name} (${p.phone})${p.address ? ` at ${p.address}` : ""}.`,
       update_lead_status: `Move ${p.phone ?? p.householdId} to status "${String(p.status).replaceAll("_", " ")}".`,
-      log_interaction: `Log a ${p.direction} ${p.channel} interaction: "${String(p.content).slice(0, 120)}"`,
+      log_interaction: `Log a ${p.direction} ${p.channel} interaction for ${p.email ?? p.phone ?? p.householdId}: "${String(p.content).slice(0, 120)}"`,
       assign_lead_to_technician: `Assign the lead ${p.phone ?? p.householdId} to ${p.technicianName ?? p.technicianId} for follow-up.`,
     };
     return {
@@ -126,6 +127,7 @@ export const crmPlugin: DomainEnginePlugin = {
     const hh = await findHousehold(tenantId, {
       householdId: p.householdId ? String(p.householdId) : undefined,
       phone: p.phone ? String(p.phone) : undefined,
+      email: p.email ? String(p.email) : undefined,
     });
     if (!hh) return { status: "failure", output: {}, error: "No customer found with that phone or id. Create the lead first.", errorKind: "validation" };
 

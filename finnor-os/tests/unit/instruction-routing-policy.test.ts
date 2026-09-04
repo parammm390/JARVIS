@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DomainAction } from "@finnor/shared-types";
-import { classifyInstructionRoute, finalizeInstructionRoute } from "@finnor/orchestration";
+import { classifyInstructionRoute, compileDeterministicAtomicAction, finalizeInstructionRoute } from "@finnor/orchestration";
 
 const planner = { route: "planner", reason: "mutation_or_advice" } as const;
 const query = {
@@ -55,6 +55,36 @@ describe("objective-first instruction-routing policy", () => {
       route: "ATOMIC_ACTION",
       reasonCodes: ["strict_single_action_candidate", "one_independent_effect_set"],
     });
+  });
+
+  it("compiles direct email wording deterministically instead of sampling an empty plan", () => {
+    const candidate = compileDeterministicAtomicAction("Send this exact certification message to certification@example.invalid: Product Truth atomic email 3-abc");
+    expect(candidate).toEqual({
+      action_type: "send_customer_message",
+      payload: {
+        email: "certification@example.invalid",
+        channel: "email",
+        message: "Product Truth atomic email 3-abc",
+      },
+    });
+  });
+
+  it("compiles the bounded CRM marker wording as one internal interaction", () => {
+    const candidate = compileDeterministicAtomicAction("Update the CRM record for certification@example.invalid with marker 4-abc");
+    expect(candidate).toEqual({
+      action_type: "log_interaction",
+      payload: {
+        email: "certification@example.invalid",
+        channel: "email",
+        direction: "outbound",
+        content: "with marker 4-abc",
+      },
+    });
+  });
+
+  it("does not compile a continuation or a multi-target instruction", () => {
+    expect(compileDeterministicAtomicAction("Send this exact message to one@example.invalid and then call +15550101010")).toBeNull();
+    expect(compileDeterministicAtomicAction("Send this exact message to one@example.invalid and two@example.invalid")).toBeNull();
   });
 
   it("routes a consequential resolver ambiguity only to CLARIFY", () => {
