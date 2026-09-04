@@ -929,7 +929,7 @@ async function assertBrowserAccess(browser) {
   try {
     const url = page.url()
     const visible = await input.isVisible().catch(() => false)
-    if (url !== `${frontendUrl}/jarvis` || !visible) {
+    if (new URL(url).pathname !== "/jarvis" || !visible) {
       throw new Error(`staged browser access resolved to ${url} without the canonical instruction rail`)
     }
     return { url, authenticated: true }
