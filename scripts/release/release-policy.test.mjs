@@ -92,7 +92,7 @@ test("active release path has no Azure or static worker AWS credential seam", ()
   assert.doesNotMatch(worker, /AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY/)
 })
 
-test("the post-deploy Product Truth tail is preflighted before spend and has no release-time Secrets Manager dependency", () => {
+test("the release certifies staged artifacts before promotion and smoke-tests production once", () => {
   const workflow = readFileSync(new URL("../../.github/workflows/production-release.yml", import.meta.url), "utf8")
   const refreshUrl = new URL("./refresh-product-truth-auth.mjs", import.meta.url)
   const restartUrl = new URL("../../.github/scripts/certification-aws-hardening.cjs", import.meta.url)
@@ -114,8 +114,11 @@ test("the post-deploy Product Truth tail is preflighted before spend and has no 
   assert.ok(authPreflight > 0 && authPreflight < imageBuild)
   assert.match(workflow, /refresh-product-truth-auth\.mjs[\s\S]*--validate-only/)
 
-  const certificationBlock = workflow.slice(workflow.indexOf("Certify deployed Human Black-Box behavior twice"), workflow.indexOf("Preserve Human Black-Box certification evidence"))
+  const certificationBlock = workflow.slice(workflow.indexOf("Certify the staged production-equivalent environment twice"), workflow.indexOf("Promote certified frontend artifact"))
   assert.match(certificationBlock, /for run in 1 2/)
+  assert.match(certificationBlock, /PRODUCT_TRUTH_CERTIFICATION_MODE=full/)
+  assert.match(certificationBlock, /PRODUCT_TRUTH_FRONTEND_URL/)
+  assert.match(certificationBlock, /PRODUCT_TRUTH_API_URL/)
   assert.match(certificationBlock, /refresh-product-truth-auth\.mjs/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_AUTH_BEARER/)
   assert.match(certificationBlock, /export PRODUCT_TRUTH_OTHER_AUTH_BEARER/)
@@ -135,6 +138,18 @@ test("the post-deploy Product Truth tail is preflighted before spend and has no 
   assert.match(githubRole, /ecs:UpdateService/)
   assert.match(githubRole, /ecs:ListTasks/)
   assert.match(githubRole, /ecs:DescribeServices/)
+
+  const stagedAt = workflow.indexOf("Certify the staged production-equivalent environment twice")
+  const promoteAt = workflow.indexOf("Promote certified frontend artifact")
+  const smokeAt = workflow.indexOf("Run bounded five-minute production smoke")
+  const rollbackAt = workflow.indexOf("Automatic rollback after any post-mutation gate failure")
+  assert.ok(stagedAt < promoteAt && promoteAt < smokeAt && smokeAt < rollbackAt)
+  const smokeBlock = workflow.slice(smokeAt, rollbackAt)
+  assert.match(smokeBlock, /PRODUCT_TRUTH_CERTIFICATION_MODE=smoke/)
+  assert.match(smokeBlock, /timeout 300s/)
+  assert.doesNotMatch(smokeBlock, /for run in 1 2/)
+  assert.match(workflow, /capture-production-state\.mjs/)
+  assert.match(workflow, /rollback-production\.mjs/)
 })
 
 test("ECS task role trusts are scoped to this account's ECS source ARNs", () => {

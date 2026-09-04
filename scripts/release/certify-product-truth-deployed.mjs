@@ -19,10 +19,10 @@ assertCanonicalRelease(gitRelease)
 const token = process.env.PRODUCT_TRUTH_AUTH_BEARER?.trim()
 if (!token) throw new Error("PRODUCT_TRUTH_AUTH_BEARER is required for deployed certification")
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET?.trim()
-const frontendUrl = contract.topology.frontend.productionUrl
-const apiUrl = contract.topology.api.productionUrl
+const frontendUrl = (process.env.PRODUCT_TRUTH_FRONTEND_URL?.trim() || contract.topology.frontend.productionUrl).replace(/\/$/, "")
+const apiUrl = (process.env.PRODUCT_TRUTH_API_URL?.trim() || contract.topology.api.productionUrl).replace(/\/$/, "")
 const worker = contract.topology.worker
-const workerUrl = contract.topology.worker.sseGatewayUrl
+const workerUrl = (process.env.PRODUCT_TRUTH_WORKER_URL?.trim() || contract.topology.worker.sseGatewayUrl).replace(/\/$/, "")
 const expectedSha = gitRelease.head
 const commonHeaders = {
   authorization: `Bearer ${token}`,
@@ -30,7 +30,10 @@ const commonHeaders = {
 }
 const fixtureKey = process.env.PRODUCT_TRUTH_CERTIFICATION_KEY?.trim()
 const certificationRun = Number(process.env.PRODUCT_TRUTH_CERTIFICATION_RUN ?? "1")
-if (![1, 2].includes(certificationRun)) throw new Error("PRODUCT_TRUTH_CERTIFICATION_RUN must be 1 or 2")
+const certificationMode = process.env.PRODUCT_TRUTH_CERTIFICATION_MODE?.trim() || "full"
+if (!["full", "smoke"].includes(certificationMode)) throw new Error("PRODUCT_TRUTH_CERTIFICATION_MODE must be full or smoke")
+if (certificationMode === "full" && ![1, 2].includes(certificationRun)) throw new Error("PRODUCT_TRUTH_CERTIFICATION_RUN must be 1 or 2")
+if (certificationMode === "smoke" && certificationRun !== 1) throw new Error("production smoke must use certification run 1")
 
 async function fetchJson(url, init = {}) {
   const response = await fetch(url, {
@@ -270,9 +273,16 @@ async function browserJourney(browser, degradeRealtime) {
     const responseAt = Date.now()
     await page.locator(`[data-thread-document][data-jarvis-work-id="${actionBody.workId}"]`).first().waitFor({ state: "attached", timeout: 30_000 })
     const pixelAt = Date.now()
-    const diagnostics = await page.evaluate(() => window.__PRODUCT_TRUTH_CERT__)
-    const delta = [...diagnostics.deltas].reverse().find((entry) => entry.workId === actionBody.workId) ?? null
-    if (!degradeRealtime && !delta) throw new Error(`browser received no operational delta for Work ${actionBody.workId}`)
+    let delta = null
+    if (!degradeRealtime) {
+      await waitForAsync(
+        () => page.evaluate((workId) => window.__PRODUCT_TRUTH_CERT__?.deltas?.some((entry) => entry.workId === workId) === true, actionBody.workId),
+        `browser received no operational delta for Work ${actionBody.workId}`,
+        30_000,
+      )
+      const diagnostics = await page.evaluate(() => window.__PRODUCT_TRUTH_CERT__)
+      delta = [...diagnostics.deltas].reverse().find((entry) => entry.workId === actionBody.workId) ?? null
+    }
     if (degradeRealtime) {
       await waitFor(() => workFetches.find((entry) => entry.workId === actionBody.workId), `fallback made no active-Work projection request for ${actionBody.workId}`, 5_000)
       const firstFetch = workFetches.find((entry) => entry.workId === actionBody.workId)
@@ -679,13 +689,23 @@ async function browserGoldenJourney(browser, row, index) {
     const canonical = await waitForWorkCase(responseBody.workId)
     const fixtureEvidence = assertGoldenFixture(canonical, row, fixture)
     const pixel = await assertBrowserProjection(page, responseBody.workId, responseBody, canonical, row)
-    const diagnostics = await page.evaluate(() => window.__PRODUCT_TRUTH_CERT__)
-    const delta = [...diagnostics.deltas].reverse().find((entry) => entry.workId === responseBody.workId) ?? null
+    let delta = null
+    if (row.transport !== "polling") {
+      // The browser can paint the canonical Work from the authoritative POST
+      // response before the asynchronous realtime frame crosses the relay. Wait
+      // for the frame explicitly; checking the diagnostics array immediately was
+      // the structural source of the repeated false Human Black-Box failure.
+      await waitForAsync(
+        () => page.evaluate((workId) => window.__PRODUCT_TRUTH_CERT__?.deltas?.some((entry) => entry.workId === workId) === true, responseBody.workId),
+        `${row.id} authenticated realtime delta did not reach the browser`,
+        30_000,
+      )
+      const diagnostics = await page.evaluate(() => window.__PRODUCT_TRUTH_CERT__)
+      delta = [...diagnostics.deltas].reverse().find((entry) => entry.workId === responseBody.workId) ?? null
+    }
     if (row.transport === "polling") {
       const firstFetch = workFetches.find((entry) => entry.workId === responseBody.workId)
       if (!firstFetch || firstFetch.at - responseAt > 2_000) throw new Error(`${row.id} active Work polling did not refresh within 2s`)
-    } else if (!delta) {
-      throw new Error(`${row.id} authenticated realtime delta did not reach the browser`)
     }
     if (row.reconnect && getDisconnected() < 1) throw new Error(`${row.id} did not exercise a real browser realtime disconnect`)
     let control = null
@@ -746,14 +766,16 @@ async function browserGoldenJourney(browser, row, index) {
 async function runGoldenBrowserMatrix(browser) {
   validateGoldenMatrix()
   const results = []
+  const failures = []
   for (const [index, row] of GOLDEN_JOURNEYS.entries()) {
     try {
       results.push(await browserGoldenJourney(browser, row, index))
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`golden journey ${index + 1}/${GOLDEN_JOURNEYS.length} (${row.id}) failed: ${message}`)
+      failures.push(`golden journey ${index + 1}/${GOLDEN_JOURNEYS.length} (${row.id}) failed: ${message}`)
     }
   }
+  if (failures.length) throw new Error(`Product Truth golden browser matrix failures:\n${failures.map((failure) => `- ${failure}`).join("\n")}`)
   if (results.length !== GOLDEN_JOURNEYS.length || results.some((result) => result.status !== "PASS")) throw new Error("Product Truth golden browser matrix did not pass all 30 journeys")
   return results
 }
@@ -844,6 +866,7 @@ async function runHumanOperabilityMatrix(browser, goldenResults) {
   validateHumanOperabilityArtifact()
   const goldenById = new Map(goldenResults.map((result) => [result.id, result]))
   const results = []
+  const failures = []
   for (const [index, row] of HUMAN_OPERABILITY_SCENARIOS.entries()) {
     try {
       if (row.linkedGoldenJourneyId) {
@@ -857,11 +880,42 @@ async function runHumanOperabilityMatrix(browser, goldenResults) {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      throw new Error(`human operability ${index + 1}/${HUMAN_OPERABILITY_SCENARIOS.length} (${row.id}) failed: ${message}`)
+      failures.push(`human operability ${index + 1}/${HUMAN_OPERABILITY_SCENARIOS.length} (${row.id}) failed: ${message}`)
     }
   }
+  if (failures.length) throw new Error(`Human Operability Matrix failures:\n${failures.map((failure) => `- ${failure}`).join("\n")}`)
   if (results.length !== HUMAN_OPERABILITY_SCENARIOS.length || results.some((result) => result.status !== "PASS")) throw new Error("Human Operability Matrix did not pass every executable scenario")
   return results
+}
+
+const PRODUCTION_SMOKE_IDS = Object.freeze([
+  "hello",
+  "deterministic-business-query",
+  "atomic-email",
+  "multi-step-objective",
+  "approval-required",
+  "refresh-mid-objective",
+  "realtime-disconnect-reconnect",
+])
+
+async function runProductionSmoke(browser) {
+  const byId = new Map(GOLDEN_JOURNEYS.map((row) => [row.id, row]))
+  const rows = PRODUCTION_SMOKE_IDS.map((id) => {
+    const row = byId.get(id)
+    if (!row) throw new Error(`production smoke references unknown journey ${id}`)
+    // The production smoke must exercise one approval/control path, while the
+    // complete certification corpus remains the source of truth for the full
+    // pre-promotion gate.
+    return id === "approval-required" ? { ...row, id: "approval-control-smoke", control: "approval" } : row
+  })
+  const startedAt = Date.now()
+  const results = []
+  for (const [index, row] of rows.entries()) {
+    if (Date.now() - startedAt > 300_000) throw new Error("production smoke exceeded its five-minute budget")
+    results.push(await browserGoldenJourney(browser, row, index))
+  }
+  if (results.length !== rows.length || results.some((result) => result.status !== "PASS")) throw new Error("production smoke did not pass every required journey")
+  return { startedAt: new Date(startedAt).toISOString(), durationMs: Date.now() - startedAt, journeys: results }
 }
 
 const [{ body: frontendRelease }, { body: apiRelease }, { body: readiness }, { body: workerHealth }] = await Promise.all([
@@ -877,6 +931,31 @@ if (readiness?.checks?.migrations?.detail !== contract.release.requiredMigration
   throw new Error(`API readiness does not prove migration/worker parity: ${JSON.stringify(readiness)}`)
 }
 if (workerHealth?.realtime !== true || !workerHealth?.capabilities?.includes("sse")) throw new Error("worker gateway does not report realtime+sse capability")
+
+if (certificationMode === "smoke") {
+  const browser = await chromium.launch({ headless: true })
+  let smoke
+  try {
+    smoke = await runProductionSmoke(browser)
+  } finally {
+    await browser.close()
+  }
+  console.log(JSON.stringify({
+    ok: true,
+    certificationStatus: "PRODUCTION_SMOKE_PASS",
+    certificationRun,
+    commitSha: expectedSha,
+    releases: {
+      frontend: frontendRelease,
+      api: apiRelease,
+      workerGateway: workerHealth.release,
+      migrationHead: readiness.checks.migrations.detail,
+    },
+    browser: smoke,
+    target: { frontendUrl, apiUrl, workerUrl },
+  }, null, 2))
+  process.exit(0)
+}
 
 const { body: baseline } = await fetchJson(`${frontendUrl}/api/jarvis/operational-deltas?limit=1`)
 if (!baseline?.cursor) throw new Error("authenticated operational-delta cursor is missing")
