@@ -245,11 +245,13 @@ async function doForward(
     // Keep this byte-preserving: the allowlist includes the tenant-scoped
     // documents endpoint, whose response is a PDF rather than JSON.
     const body = await upstream.arrayBuffer();
+    const retryAfter = upstream.headers.get("retry-after");
     return new Response(body, {
       status: upstream.status,
       headers: {
         "content-type": upstream.headers.get("content-type") ?? "application/json",
         "cache-control": "no-store",
+        ...(retryAfter ? { "retry-after": retryAfter } : {}),
       },
     });
   } catch (error) {
